@@ -1,0 +1,29 @@
+<view class="page">
+  <view class="filters">
+    <text class="filter-label">类别</text>
+    <view class="filter-pills">
+      <view class="pill {{activeCategoryIndex === index ? 'active' : ''}}" wx:for="{{categoryOptions}}" wx:key="label" data-index="{{index}}" bindtap="handleCategoryTap">{{item.label}}</view>
+    </view>
+  </view>
+  <view class="card list-card">
+    <view class="card-header">
+      <text class="card-title">全部负债</text>
+      <text class="card-count">{{liabilities.length}} 项</text>
+    </view>
+    <view class="list-container">
+      <view class="list-item" wx:for="{{liabilities}}" wx:key="id" data-id="{{item.id}}" data-type="liability" bindlongpress="openItemActions">
+        <view class="item-icon liability-item-icon">
+          <image class="icon-image" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
+        </view>
+        <view class="item-content">
+          <view class="item-name">{{item.name}}</view>
+          <view class="item-meta">
+            <text class="item-category">{{item.category}}</text>
+            <text class="item-date">{{item.updated_at}}</text>
+          </view>
+        </view>
+        <view class="item-amount negative">-￥{{item.amount}}</view>
+      </view>
+    </view>
+  </view>
+</view>

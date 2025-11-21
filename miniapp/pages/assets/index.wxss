@@ -1,0 +1,30 @@
+.page { min-height: 100vh; padding: 32rpx 24rpx 120rpx; background: #f7f8fa; }
+
+.card { background: #ffffff; border: 1rpx solid #eef2f7; border-radius: 24rpx; padding: 32rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06); }
+.list-card { margin-bottom: 32rpx; }
+
+.card-header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 24rpx; }
+.card-title { font-size: 32rpx; font-weight: 600; color: #111827; }
+.card-count { font-size: 24rpx; color: #6b7280; background: #F3F4F6; padding: 4rpx 12rpx; border-radius: 12rpx; }
+
+.list-container { display: flex; flex-direction: column; }
+.list-item { display: flex; align-items: center; padding: 24rpx 0; border-bottom: 1rpx solid #e5e7eb; }
+.list-item:last-child { border-bottom: none; }
+.list-item:active { opacity: 0.75; transform: scale(0.98); transition: all 0.2s ease; }
+
+.item-icon { width: 80rpx; height: 80rpx; border-radius: 20rpx; display: flex; align-items: center; justify-content: center; margin-right: 24rpx; flex-shrink: 0; }
+.icon-image { width: 44rpx; height: 44rpx; display: block; }
+.asset-item-icon { color: #43B176; }
+.asset-item-icon { background: linear-gradient(135deg, rgba(67,177,118,0.2), rgba(67,177,118,0.1)); border: 1rpx solid rgba(67,177,118,0.3); }
+
+.item-content { flex: 1; min-width: 0; }
+.item-name { font-size: 28rpx; font-weight: 600; color: #111827; }
+.item-meta { margin-top: 6rpx; display: flex; gap: 14rpx; color: #6b7280; font-size: 22rpx; }
+.item-amount { font-size: 28rpx; font-weight: 700; }
+.positive { color: #43B176; }
+
+.filters { display: flex; align-items: center; margin-bottom: 24rpx; gap: 16rpx; }
+.filter-label { font-size: 26rpx; color: #6b7280; flex-shrink: 0; }
+.filter-pills { display: flex; flex-wrap: wrap; gap: 12rpx; }
+.pill { padding: 12rpx 24rpx; border-radius: 999rpx; border: 1rpx solid #d1d5db; font-size: 24rpx; color: #4b5563; background: #fff; }
+.pill.active { color: #10b981; border-color: #10b981; background: rgba(16,185,129,0.08); font-weight: 600; }

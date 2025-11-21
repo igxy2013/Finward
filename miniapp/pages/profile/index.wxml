@@ -1,0 +1,79 @@
+<view class="page">
+  <view class="card">
+    <view class="icon-btn edit-btn" wx:if="{{isLoggedIn && !editing}}" bindtap="toggleEdit">
+      <image class="icon-btn-img" src="/assets/icons/edit-line.svg" mode="aspectFit"></image>
+    </view>
+    <view class="profile-header">
+      <view class="avatar-col">
+        <block wx:if="{{displayAvatar}}">
+          <image class="avatar" src="{{displayAvatar}}" mode="aspectFill" />
+        </block>
+        <block wx:else>
+          <view class="avatar placeholder-avatar">
+            <image class="avatar-icon" src="/assets/icons/user-3-line.svg" mode="aspectFit"></image>
+          </view>
+        </block>
+        <button class="small-btn change-avatar-btn" wx:if="{{editing}}" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">更换头像</button>
+      </view>
+      <view class="info">
+        <text class="name">{{displayName}}</text>
+        <text class="desc">管理个人资料与设置</text>
+      </view>
+    </view>
+
+    <view class="edit-form" wx:if="{{editing}}">
+      <view class="form-item">
+        <text class="label">昵称</text>
+        <input class="text-input" placeholder="输入昵称" placeholder-style="color:#9CA3AF" value="{{profile.nickname}}" bindinput="onNicknameInput" />
+      </view>
+    </view>
+
+    <view class="actions" wx:if="{{isLoggedIn && editing}}">
+        <button class="small-btn primary compact-btn" bindtap="saveProfile" loading="{{saving}}">保存</button>
+        <button class="small-btn compact-btn" bindtap="toggleEdit">取消</button>
+    </view>
+    <view class="actions" wx:if="{{!isLoggedIn}}">
+        <button class="action-btn primary" bindtap="handleAuthorize" loading="{{authorizing}}">微信快速登录</button>
+    </view>
+  </view>
+
+  <view class="card" wx:if="{{isLoggedIn}}">
+    <view class="section-header">
+      <text class="section-title">家庭成员</text>
+      <button class="small-btn" bindtap="handleCreateInvite" loading="{{inviting}}">生成邀请码</button>
+    </view>
+    
+    <view class="invite-row" wx:if="{{invite.code}}">
+      <text class="invite-code">{{invite.code}}</text>
+      <button class="small-btn" bindtap="copyInvite">复制</button>
+    </view>
+    <view class="expire" wx:if="{{invite.expiresAt}}">有效期至：{{invite.expiresAt}}</view>
+    <view class="members-list">
+      <view class="member-item" wx:for="{{members}}" wx:key="user_id">
+        <view class="member-left">
+          <block wx:if="{{item.avatar_url || (item.user_id === currentUserId && displayAvatar)}}">
+            <image class="member-avatar" src="{{item.avatar_url || (item.user_id === currentUserId ? displayAvatar : '')}}" mode="aspectFill" />
+          </block>
+          <block wx:else>
+            <view class="member-avatar placeholder">
+              <image class="member-avatar-icon" src="/assets/icons/user-3-line.svg" mode="aspectFit"></image>
+            </view>
+          </block>
+          <text class="member-name">{{item.nickname || (item.user_id === currentUserId ? displayName : ('用户' + item.user_id))}}</text>
+        </view>
+        <view class="member-right">
+          <text class="role">{{item.role}}</text>
+          <button class="small-btn danger remove-btn" wx:if="{{household && household.owner_user_id === currentUserId && item.user_id !== household.owner_user_id}}" data-user-id="{{item.user_id}}" bindtap="handleRemoveMember">移除</button>
+        </view>
+      </view>
+      <view class="empty" wx:if="{{members.length === 0}}">暂无成员</view>
+    </view>
+    <view class="join-row">
+      <input class="join-input" placeholder="输入邀请码加入家庭" value="{{joinCode}}" bindinput="onJoinCodeInput"/>
+      <button class="small-btn primary join-btn" bindtap="handleJoin" loading="{{joining}}">加入</button>
+    </view>
+  </view>
+  <view class="footer" wx:if="{{isLoggedIn}}">
+    <button class="small-btn logout-btn" bindtap="handleLogout">退出登录</button>
+  </view>
+</view>

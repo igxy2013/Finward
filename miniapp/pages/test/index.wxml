@@ -1,0 +1,22 @@
+<view class="container">
+  <view class="section">
+    <text class="title">认证测试</text>
+    <view class="content">
+      <text>Token: {{data.token}}</text>
+    </view>
+  </view>
+  
+  <view class="section">
+    <text class="title">内部认证结果</text>
+    <view class="content">
+      <text>{{data.authResult ? JSON.stringify(data.authResult) : '加载中...'}}</text>
+    </view>
+  </view>
+  
+  <view class="section">
+    <text class="title">外部API结果</text>
+    <view class="content">
+      <text>{{data.financeStats ? JSON.stringify(data.financeStats) : '加载中...'}}</text>
+    </view>
+  </view>
+</view>

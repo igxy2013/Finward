@@ -1,0 +1,151 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="login-state">
+    <text class="login-title">登录后查看数据分析</text>
+    <button class="login-btn" bindtap="handleLogin" loading="{{loggingIn}}">微信登录</button>
+  </view>
+  <view wx:elif="{{loading}}" class="loading-state">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">分析中...</text>
+  </view>
+
+  <view wx:elif="{{error}}" class="error-state">
+    <text class="error-text">{{error}}</text>
+    <button class="retry-btn" bindtap="fetchAnalytics">重试</button>
+  </view>
+
+  <scroll-view wx:else scroll-y="true" class="content" enable-back-to-top="true">
+    <view class="hero-card">
+      <view class="hero-row">
+        <view class="hero-metric">
+          <text class="metric-label">净资产</text>
+          <text class="metric-value">￥{{summary.netWorth}}</text>
+        </view>
+        <view class="hero-change {{summary.changeRatioValue >= 0 ? 'positive' : 'negative'}}">
+          <text class="change-value">{{summary.netChange}}</text>
+          <text class="change-ratio">{{summary.changeRatio}}</text>
+          <text class="change-label">区间变化</text>
+        </view>
+      </view>
+      <view class="hero-grid">
+        <view class="hero-stat">
+          <view class="stat-icon positive">
+            <image class="stat-icon-img" src="/assets/icons/wallet-3-line.svg" mode="aspectFit"></image>
+          </view>
+          <text class="stat-label">总资产</text>
+          <text class="stat-value positive">￥{{summary.totalAssets}}</text>
+        </view>
+        <view class="hero-divider"></view>
+        <view class="hero-stat">
+          <view class="stat-icon negative">
+            <image class="stat-icon-img" src="/assets/icons/bill-line-red.svg" mode="aspectFit"></image>
+          </view>
+          <text class="stat-label">总负债</text>
+          <text class="stat-value negative">￥{{summary.totalLiabilities}}</text>
+        </view>
+        <view class="hero-divider"></view>
+        <view class="hero-stat">
+          <view class="stat-icon">
+            <image class="stat-icon-img" src="/assets/icons/scales-line.svg" mode="aspectFit"></image>
+          </view>
+          <text class="stat-label">资产负债率</text>
+          <text class="stat-value">{{summary.debtRatio}}</text>
+        </view>
+      </view>
+    </view>
+
+    <view class="range-selector">
+      <text class="range-label">统计区间</text>
+      <view class="range-pills">
+        <view
+          wx:for="{{rangeOptions}}"
+          wx:key="value"
+          class="range-pill {{activeRangeIndex === index ? 'active' : ''}}"
+          data-index="{{index}}"
+          bindtap="handleRangeTap"
+          hover-class="none"
+          hover-stop-propagation="true"
+        >
+          {{item.label}}
+        </view>
+      </view>
+    </view>
+
+    <view class="card category-card">
+      <view class="card-header">
+        <text class="card-title">分类分布</text>
+        <text class="card-subtitle">Category Breakdown</text>
+      </view>
+      <view class="category-columns">
+        <view class="category-column">
+          <view class="column-title">资产分类</view>
+          <view wx:if="{{assetCategories.length === 0}}" class="empty-line">暂无数据</view>
+          <block wx:for="{{assetCategories}}" wx:key="category">
+            <view class="category-item" bindtap="openCategoryDetail" data-type="asset" data-category="{{item.category}}">
+              <view class="category-row">
+                <view class="category-icon">
+                  <image class="category-icon-img" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
+                </view>
+                <text class="category-name">{{item.category}}</text>
+                <text class="category-amount">{{item.amountText}}</text>
+              </view>
+              <view class="progress">
+                <view class="progress-fill asset" style="width: {{item.percentage}}%;"></view>
+              </view>
+              <text class="category-percentage">{{item.percentageText}}</text>
+            </view>
+          </block>
+        </view>
+        <view class="category-divider"></view>
+        <view class="category-column">
+          <view class="column-title">负债分类</view>
+          <view wx:if="{{liabilityCategories.length === 0}}" class="empty-line">暂无数据</view>
+          <block wx:for="{{liabilityCategories}}" wx:key="category">
+            <view class="category-item" bindtap="openCategoryDetail" data-type="liability" data-category="{{item.category}}">
+              <view class="category-row">
+                <view class="category-icon">
+                  <image class="category-icon-img" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
+                </view>
+                <text class="category-name">{{item.category}}</text>
+                <text class="category-amount">{{item.amountText}}</text>
+              </view>
+              <view class="progress">
+                <view class="progress-fill liability" style="width: {{item.percentage}}%;"></view>
+              </view>
+              <text class="category-percentage">{{item.percentageText}}</text>
+            </view>
+          </block>
+        </view>
+      </view>
+    </view>
+
+    <view class="card highlights-card">
+      <view class="card-header">
+        <text class="card-title">智能洞察</text>
+        <text class="card-subtitle">Insights</text>
+      </view>
+      <view class="insight-list">
+        <view class="insight-item">
+          <view class="insight-icon positive">
+            <image class="insight-icon-img" src="/assets/icons/trophy-line.svg" mode="aspectFit"></image>
+          </view>
+          <view class="insight-label">最高收益分类</view>
+          <view class="insight-value">
+            <text class="insight-name">{{highlights.bestCategory}}</text>
+            <text class="insight-amount positive">{{highlights.bestCategoryAmount}}</text>
+          </view>
+        </view>
+        <view class="insight-item">
+          <view class="insight-icon negative">
+            <image class="insight-icon-img" src="/assets/icons/information-line-red.svg" mode="aspectFit"></image>
+          </view>
+          <view class="insight-label">需注意负债</view>
+          <view class="insight-value">
+            <text class="insight-name">{{highlights.riskCategory}}</text>
+            <text class="insight-amount negative">{{highlights.riskCategoryAmount}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+</view>
+<!--pages/analytics/index.wxml-->

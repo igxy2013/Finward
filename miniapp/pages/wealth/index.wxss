@@ -1,0 +1,94 @@
+.page {
+  min-height: 100vh;
+  padding: 24rpx;
+  background: #f7f8fa;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border: 1rpx solid #e5e7eb;
+  border-radius: 16rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 16rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06);
+}
+.filter-label { color: #374151; font-size: 26rpx; }
+.filter-pills { display: flex; gap: 12rpx; }
+.pill { padding: 8rpx 20rpx; border-radius: 999rpx; border: 1rpx solid #e5e7eb; color: #374151; background: #fff; }
+.pill.active { background: #E8F8EF; color: #43B176; border-color: #43B176; }
+
+.summary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16rpx; margin-bottom: 24rpx; }
+.summary-item { position: relative; overflow: hidden; border-radius: 24rpx; padding: 32rpx 24rpx; border: 1rpx solid #e2e8f0; background: #ffffff; box-shadow: 0 6rpx 16rpx rgba(0,0,0,0.08); }
+.summary-item .card-bg { display: none; }
+.summary-item .card-glow { display: none; }
+.summary-top { display: flex; align-items: center; gap: 16rpx; }
+.summary-icon { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; background: #f8fafc; border: 1rpx solid #e2e8f0; border-radius: 16rpx; }
+.summary-icon-img { width: 32rpx; height: 32rpx; }
+.summary-item.accent-income { background: #ffffff; }
+.summary-item.accent-income .summary-icon { color: #43B176; background: #f8fafc; border-color: #e2e8f0; }
+.summary-item.accent-expense { background: #ffffff; }
+.summary-item.accent-expense .summary-icon { color: #ef4444; background: #f8fafc; border-color: #e2e8f0; }
+.sum-label { color: #374151; font-size: 28rpx; letter-spacing: 1rpx; font-weight: 500; }
+.sum-value { display: flex; align-items: baseline; gap: 8rpx; margin-top: 16rpx; }
+.sum-value .currency { color: #6b7280; font-size: 32rpx; }
+.sum-value .amount { font-size: 48rpx; font-weight: 800; letter-spacing: 1rpx; color: #111827; }
+.positive, .sum-value .amount.positive { color: #43B176; }
+.negative, .sum-value .amount.negative { color: #ef4444; }
+
+.accent-income .card-glow { box-shadow: 0 0 40rpx rgba(67,177,118,0.25); }
+.accent-expense .card-glow { box-shadow: 0 0 40rpx rgba(239,68,68,0.25); }
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+.hero { margin-bottom: 24rpx; }
+.title { font-size: 36rpx; font-weight: 700; color: #111827; }
+.subtitle { margin-top: 8rpx; font-size: 24rpx; color: #6b7280; }
+
+.fab {
+  position: fixed;
+  right: 32rpx;
+  bottom: 32rpx;
+  width: 112rpx;
+  height: 112rpx;
+  background: #43B176;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 24rpx rgba(67, 177, 118, 0.35);
+  z-index: 100;
+  transition: all 0.3s ease;
+}
+.fab:active {
+  transform: scale(0.9);
+  box-shadow: 0 4rpx 12rpx rgba(67, 177, 118, 0.25);
+}
+.fab-icon {
+  font-size: 56rpx;
+  color: #ffffff;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.list { margin-top: 24rpx; }
+.list-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12rpx; }
+.list-title { color: #111827; font-size: 28rpx; font-weight: 600; }
+.list-filters { display: flex; gap: 12rpx; }
+.list-container { display: flex; flex-direction: column; gap: 8rpx; }
+.list-item { display: flex; gap: 12rpx; padding: 16rpx; border-radius: 12rpx; background: #fff; border: 1rpx solid #e5e7eb; }
+.item-left { width: 56rpx; display: flex; align-items: center; justify-content: center; }
+.item-icon { width: 56rpx; height: 56rpx; border-radius: 16rpx; background: #F3F4F6; border: 1rpx solid #e5e7eb; display: flex; align-items: center; justify-content: center; }
+.item-icon-img { width: 32rpx; height: 32rpx; display: block; }
+.item-icon.income-icon { color: #43B176; }
+.item-icon.expense-icon { color: #ef4444; }
+.item-main { flex: 1; }
+.item-top { display: flex; align-items: center; justify-content: space-between; }
+.item-name { color: #111827; font-size: 26rpx; font-weight: 600; }
+.item-amount { font-size: 28rpx; font-weight: 700; }
+.item-meta { margin-top: 4rpx; display: flex; gap: 14rpx; color: #6b7280; font-size: 22rpx; }

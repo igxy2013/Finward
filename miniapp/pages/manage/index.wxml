@@ -1,0 +1,131 @@
+<view class="page">
+  <view class="card form-card">
+    <view class="form-item">
+      <text class="label">名称*</text>
+      <input placeholder="如：招商储蓄卡" data-key="name" value="{{form.name}}" bindinput="handleInput" />
+    </view>
+    <view class="form-item">
+      <text class="label">类型*</text>
+      <picker mode="selector" range="{{typeOptions}}" range-key="label" value="{{typeIndex}}" bindchange="handleTypeChange">
+        <view class="picker-value">
+          {{typeLabel}}
+        </view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="label">分类*</text>
+      <picker mode="selector" range="{{categoryOptions}}" range-key="label" value="{{categoryIndex}}" bindchange="handleCategoryChange">
+        <view class="picker-value">
+          {{categoryDisplay}}
+        </view>
+      </picker>
+    </view>
+    <view class="form-item">
+      <text class="label">期初金额*
+      </text>
+      <input type="number" placeholder="请输入金额" data-key="amount" value="{{form.amount}}" bindinput="handleInput" />
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'liability'}}">
+      <text class="label">还贷期限(月)</text>
+      <input type="number" placeholder="可选" data-key="loan_term_months" value="{{form.loan_term_months}}" bindinput="handleInput" />
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'liability'}}">
+      <text class="label">月供</text>
+      <input type="number" placeholder="可选" data-key="monthly_payment" value="{{form.monthly_payment}}" bindinput="handleInput" />
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'liability'}}">
+      <text class="label">还贷开始时间</text>
+      <picker mode="date" value="{{form.loan_start_date}}" bindchange="handleDateChangeLoan">
+        <view class="picker-value">{{form.loan_start_date || '请选择日期'}}</view>
+      </picker>
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
+      <text class="label">投资期限(月)</text>
+      <input type="number" placeholder="可选" data-key="investment_term_months" value="{{form.investment_term_months}}" bindinput="handleInput" />
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
+      <text class="label">月收益</text>
+      <input type="number" placeholder="可选" data-key="monthly_income" value="{{form.monthly_income}}" bindinput="handleInput" />
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
+      <text class="label">投资起始时间</text>
+      <picker mode="date" value="{{form.invest_start_date}}" bindchange="handleDateChangeAsset">
+        <view class="picker-value">{{form.invest_start_date || '请选择日期'}}</view>
+      </picker>
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
+      <text class="label">折旧率(年%)</text>
+      <input type="number" placeholder="如 10 表示 10%/年" data-key="depreciation_rate" value="{{form.depreciation_rate}}" bindinput="handleInput" />
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'asset'}}">
+      <text class="label">资产现值</text>
+      <view class="readonly-value">￥{{current_value_display}}</view>
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'liability'}}">
+      <text class="label">负债现值</text>
+      <view class="readonly-value">￥{{current_value_display}}</view>
+    </view>
+    <view wx:if="{{form.type === 'asset' && form.category === '房产'}}" class="card rental-card">
+      <view class="form-item row">
+        <text class="label">是否出租</text>
+        <switch checked="{{form.rental_enabled}}" bindchange="handleRentalToggle"></switch>
+      </view>
+      <view wx:if="{{form.rental_enabled}}">
+        <view class="form-item">
+          <text class="label">租客姓名</text>
+          <input placeholder="可选" data-key="tenant_name" value="{{form.tenant_name}}" bindinput="handleInput" />
+        </view>
+        <view class="form-item">
+          <text class="label">月租金</text>
+          <input type="number" placeholder="可选" data-key="tenant_monthly_rent" value="{{form.tenant_monthly_rent}}" bindinput="handleInput" />
+        </view>
+        <view class="form-item">
+          <text class="label">收租方式</text>
+          <picker mode="selector" range="{{tenantFrequencyOptions}}" range-key="label" value="{{tenantFrequencyIndex}}" bindchange="handleTenantFrequencyChange">
+            <view class="picker-value">{{tenantFrequencyLabel}}</view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <text class="label">收租日({{tenantFrequencyLabel}})</text>
+          <picker mode="selector" range="{{tenantDueDays}}" value="{{tenantDueDayIndex}}" bindchange="handleTenantDueDayChange">
+            <view class="picker-value">{{form.tenant_due_day ? (tenantFrequencyLabel + form.tenant_due_day + '日') : '可选'}}</view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <text class="label">出租开始日期</text>
+          <picker mode="date" value="{{form.tenant_start_date}}" bindchange="handleTenantStartDate">
+            <view class="picker-value">{{form.tenant_start_date || '可选'}}
+            </view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <text class="label">合同截止日期</text>
+          <picker mode="date" value="{{form.tenant_end_date}}" bindchange="handleTenantEndDate">
+            <view class="picker-value">{{form.tenant_end_date || '可选'}}
+            </view>
+          </picker>
+        </view>
+        <view class="form-item">
+          <text class="label">合同编号</text>
+          <input placeholder="可选" data-key="tenant_contract_number" value="{{form.tenant_contract_number}}" bindinput="handleInput" />
+        </view>
+        <view class="form-item">
+          <text class="label">合同链接</text>
+          <input placeholder="可选" data-key="tenant_contract_url" value="{{form.tenant_contract_url}}" bindinput="handleInput" />
+        </view>
+        <view class="form-item row">
+          <text class="label">启用收租提醒</text>
+          <switch checked="{{form.tenant_reminder_enabled}}" bindchange="handleTenantReminderToggle"></switch>
+        </view>
+      </view>
+    </view>
+    <view class="form-item">
+      <text class="label">备注</text>
+      <textarea placeholder="可选" data-key="note" value="{{form.note}}" bindinput="handleInput" />
+    </view>
+    <button type="primary" bindtap="submit" loading="{{submitting}}">保存</button>
+  </view>
+</view>
+
+
+

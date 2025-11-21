@@ -1,0 +1,53 @@
+{
+  "pages": [
+    "pages/dashboard/index",
+    "pages/assets/index",
+    "pages/liabilities/index",
+    "pages/wealth/index",
+    "pages/analytics/index",
+    "pages/profile/index",
+    "pages/manage/index",
+    "pages/cashflow/index",
+    "pages/tenants/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "Finward 鲨鱼资产",
+    "navigationBarBackgroundColor": "#43B176",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f7f8fa",
+    "enablePullDownRefresh": false
+  },
+  "tabBar": {
+    "color": "#6B7280",
+    "selectedColor": "#43B176",
+    "backgroundColor": "#EFF0EF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/dashboard/index",
+        "text": "首页",
+        "iconPath": "assets/icons/home-4-line.png",
+        "selectedIconPath": "assets/icons/home-4-fill.png"
+      },
+      {
+        "pagePath": "pages/wealth/index",
+        "text": "收支",
+        "iconPath": "assets/icons/wallet-2-line.png",
+        "selectedIconPath": "assets/icons/wallet-2-fill.png"
+      },
+      {
+        "pagePath": "pages/analytics/index",
+        "text": "数据分析",
+        "iconPath": "assets/icons/pie-chart-2-line.png",
+        "selectedIconPath": "assets/icons/pie-chart-2-fill.png"
+      },
+      {
+        "pagePath": "pages/profile/index",
+        "text": "个人中心",
+        "iconPath": "assets/icons/user-3-line.png",
+        "selectedIconPath": "assets/icons/user-3-fill.png"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

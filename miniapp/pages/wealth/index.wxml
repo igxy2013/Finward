@@ -1,0 +1,101 @@
+<view class="page">
+  <view class="filters">
+    <text class="filter-label">统计区间</text>
+    <view class="filter-pills">
+      <view class="pill {{activeRangeIndex === index ? 'active' : ''}}" wx:for="{{rangeOptions}}" wx:key="value" data-index="{{index}}" bindtap="handleRangeTap">{{item.label}}</view>
+    </view>
+  </view>
+
+  <view class="summary">
+    <view class="summary-item accent-expense">
+      <view class="card-bg"></view>
+      <view class="card-glow"></view>
+      <view class="summary-top">
+        <view class="summary-icon">
+          <image class="summary-icon-img" src="/assets/icons/bill-line-red.svg" mode="aspectFit"></image>
+        </view>
+        <text class="sum-label">预计支出</text>
+      </view>
+      <view class="sum-value">
+        <text class="currency">￥</text>
+        <text class="amount negative">{{summary.expectedExpense}}</text>
+      </view>
+    </view>
+    <view class="summary-item accent-income">
+      <view class="card-bg"></view>
+      <view class="card-glow"></view>
+      <view class="summary-top">
+        <view class="summary-icon">
+          <image class="summary-icon-img" src="/assets/icons/line-chart-line.svg" mode="aspectFit"></image>
+        </view>
+        <text class="sum-label">预计收入</text>
+      </view>
+      <view class="sum-value">
+        <text class="currency">￥</text>
+        <text class="amount positive">{{summary.expectedIncome}}</text>
+      </view>
+    </view>
+    <view class="summary-item accent-expense">
+      <view class="card-bg"></view>
+      <view class="card-glow"></view>
+      <view class="summary-top">
+        <view class="summary-icon">
+          <image class="summary-icon-img" src="/assets/icons/arrow-down-line-red.svg" mode="aspectFit"></image>
+        </view>
+        <text class="sum-label">实际支出</text>
+      </view>
+      <view class="sum-value">
+        <text class="currency">￥</text>
+        <text class="amount negative">{{summary.actualExpense}}</text>
+      </view>
+    </view>
+    <view class="summary-item accent-income">
+      <view class="card-bg"></view>
+      <view class="card-glow"></view>
+      <view class="summary-top">
+        <view class="summary-icon">
+          <image class="summary-icon-img" src="/assets/icons/arrow-up-line.svg" mode="aspectFit"></image>
+        </view>
+        <text class="sum-label">实际收入</text>
+      </view>
+      <view class="sum-value">
+        <text class="currency">￥</text>
+        <text class="amount positive">{{summary.actualIncome}}</text>
+      </view>
+    </view>
+  </view>
+
+  <view class="fab" bindtap="goToCashflowManage">
+    <text class="fab-icon">+</text>
+  </view>
+
+  <view class="list">
+    <view class="list-header">
+      <text class="list-title">收支记录</text>
+      <view class="list-filters">
+        <view class="pill {{activeType === item.value ? 'active' : ''}}" wx:for="{{typeTabs}}" wx:key="value" data-value="{{item.value}}" bindtap="handleTypeTab">{{item.label}}</view>
+      </view>
+    </view>
+    <view class="list-container">
+      <view class="list-item" wx:for="{{cashflows}}" wx:key="id" data-id="{{item.id}}" bindtap="viewCashflow" bindlongpress="openCashflowActions">
+        <view class="item-left">
+          <view class="item-icon {{item.type === 'income' ? 'income-icon' : 'expense-icon'}}">
+            <image class="item-icon-img" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
+          </view>
+        </view>
+        <view class="item-main">
+          <view class="item-top">
+            <text class="item-name">{{item.name || item.category}}</text>
+            <text class="item-amount {{item.type === 'income' ? 'positive' : 'negative'}}">{{item.type === 'income' ? '+' : '-'}}￥{{item.amount}}</text>
+          </view>
+          <view class="item-meta">
+            <text>{{item.date}}</text>
+            <text>{{item.planned ? '预计' : '实际'}}</text>
+            <text>{{item.recurring_monthly ? '每月重复' : ''}}</text>
+            <text wx:if="{{item.account_name}}">{{item.account_name}}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

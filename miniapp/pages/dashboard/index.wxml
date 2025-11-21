@@ -1,0 +1,150 @@
+<view class="page">
+  <view wx:if="{{needLogin}}" class="login-state">
+    <text class="login-title">登录后查看资产总览</text>
+    <button class="login-btn" bindtap="handleLogin" loading="{{loggingIn}}">微信登录</button>
+  </view>
+  <view wx:elif="{{loading}}" class="loading-container">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+  <view wx:else class="content">
+    <view class="top-refresh" wx:if="{{refreshing}}">
+      <view class="refresh-spinner"></view>
+      <text class="refresh-text">数据更新中</text>
+    </view>
+    <!-- 顶部英雄区域 -->
+    <view class="hero-section fade-in-up">
+      <view class="hero-card">
+        <view class="hero-bg"></view>
+        <view class="hero-content">
+          <view class="hero-label">净资产</view>
+          <view class="hero-value">
+            <text class="currency">￥</text>
+            <text class="amount">{{overview.net_worth}}</text>
+          </view>
+          <view class="hero-stats">
+            <view class="stat-item">
+              <text class="stat-label">总资产</text>
+              <text class="stat-value positive">￥{{overview.total_assets}}</text>
+            </view>
+            <view class="stat-divider"></view>
+            <view class="stat-item">
+              <text class="stat-label">总负债</text>
+              <text class="stat-value negative">￥{{overview.total_liabilities}}</text>
+            </view>
+            <view class="stat-divider"></view>
+            <view class="stat-item">
+              <text class="stat-label">流动资金</text>
+              <text class="stat-value positive">￥{{overview.liquid_assets}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 统计卡片 -->
+    <view class="stats-grid fade-in-up">
+      <view class="stat-card asset-card" bindtap="goToAssets">
+        <view class="stat-icon">
+          <image class="stat-icon-img" src="/assets/icons/wallet-2-fill.svg" mode="aspectFit"></image>
+        </view>
+        <view class="stat-info">
+          <view class="stat-title">资产</view>
+          <view class="stat-amount positive">{{assets.length}} 项</view>
+        </view>
+        <view class="stat-total positive">￥{{overview.total_assets}}</view>
+      </view>
+      <view class="stat-card liability-card" bindtap="goToLiabilities">
+        <view class="stat-icon">
+          <image class="stat-icon-img" src="/assets/icons/scales-fill-red.svg" mode="aspectFit"></image>
+        </view>
+        <view class="stat-info">
+          <view class="stat-title">负债</view>
+          <view class="stat-amount negative">{{liabilities.length}} 项</view>
+        </view>
+        <view class="stat-total negative">￥{{overview.total_liabilities}}</view>
+      </view>
+    </view>
+
+    
+
+
+    <!-- 资产分布图表 -->
+    <view class="card chart-card fade-in-up" wx:if="{{assets.length > 0 || liabilities.length > 0}}">
+      <view class="card-header">
+        <text class="card-title">资产分布</text>
+        <text class="card-subtitle">Assets Distribution</text>
+      </view>
+      <view class="chart-container">
+        <canvas type="2d" id="pieChart" canvas-id="pieChart" class="pie-chart"></canvas>
+      </view>
+      <view class="chart-legend">
+        <view class="legend-item" wx:for="{{chartData}}" wx:key="name">
+          <view class="legend-color" style="background: {{item.color}}"></view>
+          <text class="legend-label">{{item.name}}</text>
+          <text class="legend-value">{{item.percentage}}%</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 资产列表 -->
+    <view class="card list-card fade-in-up" wx:if="{{assets.length > 0}}">
+      <view class="card-header">
+        <text class="card-title">资产明细</text>
+        <text class="card-link" bindtap="goToAssets">显示全部</text>
+      </view>
+      <view class="list-container">
+        <view class="list-item" wx:for="{{assetsPreview}}" wx:key="id" data-id="{{item.id}}" data-type="asset" bindlongpress="openItemActions">
+          <view class="item-icon asset-item-icon">
+            <image class="icon-image" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
+          </view>
+          <view class="item-content">
+            <view class="item-name">{{item.name}}</view>
+            <view class="item-meta">
+              <text class="item-category">{{item.category}}</text>
+              <text class="item-date">{{item.updated_at}}</text>
+            </view>
+          </view>
+          <view class="item-amount positive">+￥{{item.amount}}</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 负债列表 -->
+    <view class="card list-card fade-in-up" wx:if="{{liabilities.length > 0}}">
+      <view class="card-header">
+        <text class="card-title">负债明细</text>
+        <text class="card-link" bindtap="goToLiabilities">显示全部</text>
+      </view>
+      <view class="list-container">
+        <view class="list-item" wx:for="{{liabilitiesPreview}}" wx:key="id" data-id="{{item.id}}" data-type="liability" bindlongpress="openItemActions">
+          <view class="item-icon liability-item-icon">
+            <image class="icon-image" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
+          </view>
+          <view class="item-content">
+            <view class="item-name">{{item.name}}</view>
+            <view class="item-meta">
+              <text class="item-category">{{item.category}}</text>
+              <text class="item-date">{{item.updated_at}}</text>
+            </view>
+          </view>
+          <view class="item-amount negative">-￥{{item.amount}}</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 空状态 -->
+    <view class="empty-state fade-in-up" wx:if="{{assets.length === 0 && liabilities.length === 0}}">
+      <view class="empty-icon">
+        <image class="empty-icon-img" src="/assets/icons/pie-chart-2-line.svg" mode="aspectFit"></image>
+      </view>
+      <view class="empty-text">暂无资产记录</view>
+      <view class="empty-hint">点击下方按钮开始记录</view>
+    </view>
+
+    <!-- 浮动操作按钮 -->
+    <view class="fab" bindtap="goToManage">
+      <text class="fab-icon">+</text>
+    </view>
+  </view>
+</view>
