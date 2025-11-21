@@ -1,1 +1,12 @@
-/.env
+# 忽略环境变量文件
+.env
+
+# 忽略虚拟环境目录
+backend/.venv/
+
+# 忽略编译后的Python文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
