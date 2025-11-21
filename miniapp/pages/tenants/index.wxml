@@ -75,7 +75,6 @@
           </view>
         </view>
         <view class="item-actions">
-          <button size="mini" bindtap="editTenant" data-id="{{item.id}}">编辑</button>
           <button size="mini" type="warn" bindtap="removeTenant" data-id="{{item.id}}">删除</button>
         </view>
       </view>
