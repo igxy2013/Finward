@@ -1,2 +1,17 @@
+<<<<<<< HEAD
 /.env
 backend/app/__pycache__/crud.cpython-310.pyc
+=======
+# 忽略环境变量文件
+.env
+
+# 忽略虚拟环境目录
+backend/.venv/
+
+# 忽略编译后的Python文件
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+>>>>>>> 5b190a5cf9b50e738177d83bd6316bf51344fa43
