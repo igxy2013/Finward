@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >NUL
+git pull
 setlocal enabledelayedexpansion
 
 REM Enter script directory
