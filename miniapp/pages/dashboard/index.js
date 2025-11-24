@@ -174,8 +174,8 @@ Page({
         }
       } catch (e) {}
 
-      // 计算资产分布（按分类）
-      const chartData = this.calculateAssetDistribution(assets);
+      // 计算资产分布（按分类，基于格式化后的类别更稳定）
+      const chartData = this.calculateAssetDistribution(formattedAssets);
       const assetsPreview = formattedAssets.slice(0, 5);
       const liabilitiesPreview = formattedLiabilities.slice(0, 5);
 
@@ -242,18 +242,30 @@ Page({
   },
   calculateAssetDistribution(assetList = []) {
     const toHalfWidth = (s) => String(s || "").replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
+    const baseLabels = ["现金","储蓄卡","活期","定期","基金","股票","理财","房产","车辆","应收款","其他"];
     const normalizeCat = (raw) => {
       const half = toHalfWidth(String(raw || "其他"));
       let s = half.replace(/\s+/g, " ").trim();
       s = s.replace(/其它/g, "其他");
-      s = s.toLowerCase();
       s = s.replace(/[()（）［］\[\]【】,，.;；:：\-—_/]/g, "");
-      return s || "其他";
+      if (!s) return "其他";
+      if (baseLabels.includes(s)) return s;
+      const rules = [
+        { re: /现金|cash/i, label: "现金" },
+        { re: /储蓄卡|银行卡|借记卡|储蓄|存款|debit|saving|bank/i, label: "储蓄卡" },
+        { re: /活期|current/i, label: "活期" },
+        { re: /定期|存单|fixed|time/i, label: "定期" },
+        { re: /基金|fund/i, label: "基金" },
+        { re: /股票|证券|股|stock|equity/i, label: "股票" },
+        { re: /理财|理财产品|wealth|financial/i, label: "理财" },
+        { re: /房产|房屋|房地产|不动产|公寓|住宅|real\s*estate|property/i, label: "房产" },
+        { re: /车辆|汽车|车|vehicle|car/i, label: "车辆" },
+        { re: /应收款|应收|receivable/i, label: "应收款" }
+      ];
+      const hit = rules.find(r => r.re.test(s));
+      return hit ? hit.label : "其他";
     };
-    const cleanDisplay = (raw) => {
-      const text = toHalfWidth(String(raw || "其他")).replace(/\s+/g, " ").trim();
-      return text || "其他";
-    };
+    const cleanDisplay = (raw) => normalizeCat(raw);
     const extractCategory = (item) => {
       if (!item) return "其他";
       if (typeof item.category === "string" && item.category.trim()) return item.category;
@@ -263,7 +275,7 @@ Page({
       if (typeof item.category_name === "string" && item.category_name.trim()) return item.category_name;
       if (typeof item.category_label === "string" && item.category_label.trim()) return item.category_label;
       if (typeof item.category_display === "string" && item.category_display.trim()) return item.category_display;
-      return item.type || "其他";
+      return "其他";
     };
     const parseValue = (val) => {
       if (typeof val === "number" && !Number.isNaN(val)) return val;
@@ -286,24 +298,41 @@ Page({
       if (!(norm in display)) display[norm] = cleanDisplay(raw);
     });
     const entries = Object.keys(buckets).map((norm) => ({ norm, name: display[norm], value: buckets[norm] }));
-    entries.sort((a, b) => b.value - a.value);
-    if (!entries.length) return [];
+    // 二次按显示名聚合，防止极端情况下出现重复名称拆分
+    const nameBuckets = {};
+    entries.forEach(e => { nameBuckets[e.name] = (nameBuckets[e.name] || 0) + e.value; });
+    const merged = Object.keys(nameBuckets).map(name => ({ name, value: nameBuckets[name] }));
+    merged.sort((a, b) => b.value - a.value);
+    if (!merged.length) return [];
     const MAX_SEGMENTS = 6;
-    let processed = entries.slice();
-    if (entries.length > MAX_SEGMENTS) {
-      const major = entries.slice(0, MAX_SEGMENTS - 1);
-      const others = entries.slice(MAX_SEGMENTS - 1);
+    let processed = merged.slice();
+    if (merged.length > MAX_SEGMENTS) {
+      const major = merged.slice(0, MAX_SEGMENTS - 1);
+      const others = merged.slice(MAX_SEGMENTS - 1);
       const othersValue = others.reduce((sum, item) => sum + item.value, 0);
-      processed = [...major, { norm: "__others__", name: "其他", value: othersValue }];
+      processed = [...major, { name: "其他", value: othersValue }];
     }
     const total = processed.reduce((sum, item) => sum + item.value, 0);
     if (!total) return [];
     const palette = ["#43B176", "#DBA637", "#6FC298", "#95D3B4", "#BFE6D0", "#E3F5EC"];
+    const COLOR_MAP = {
+      "现金": "#22C55E",
+      "储蓄卡": "#16A34A",
+      "活期": "#10B981",
+      "定期": "#059669",
+      "基金": "#DBA637",
+      "股票": "#F59E0B",
+      "理财": "#34D399",
+      "房产": "#4ADE80",
+      "车辆": "#FB923C",
+      "应收款": "#A78BFA",
+      "其他": "#E5E7EB"
+    };
     return processed.map((entry, idx) => ({
       name: entry.name,
       value: entry.value,
       percentage: ((entry.value / total) * 100).toFixed(1),
-      color: palette[idx % palette.length]
+      color: COLOR_MAP[entry.name] || palette[idx % palette.length]
     }));
   },
   drawChart() {
@@ -345,14 +374,6 @@ Page({
         ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + angle);
         ctx.closePath();
         ctx.fill();
-        if (percentage > 0.1) {
-          ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-          ctx.beginPath();
-          ctx.moveTo(centerX, centerY);
-          ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + angle * 0.3);
-          ctx.closePath();
-          ctx.fill();
-        }
         currentAngle += angle;
       });
       ctx.fillStyle = '#ffffff';
