@@ -100,8 +100,9 @@ Page({
   onLoad(options) {
     const edit = options?.edit;
     const id = options?.id ? Number(options.id) : null;
+    const tenancyId = options?.tenancy_id ? Number(options.tenancy_id) : null;
     if (edit && id) {
-      this.setData({ editId: id });
+      this.setData({ editId: id, incomingTenancyId: tenancyId || null });
       this.prefillFromServer(id);
     }
   },
@@ -147,7 +148,7 @@ Page({
         try {
           const tenants = await api.listTenants(id);
           if (tenants && tenants.length > 0) {
-            const t = tenants[0];
+            const t = (this.data.incomingTenancyId ? tenants.find(x => Number(x.id) === Number(this.data.incomingTenancyId)) : null) || tenants[0];
             const idx = Math.max(0, this.data.tenantDueDays.findIndex((d) => Number(d) === Number(t.due_day)));
             this.setData({
               tenantDueDayIndex: idx,
@@ -341,29 +342,29 @@ Page({
       }
       if (this.data.form.type === "asset" && this.data.form.category === "房产" && accountId && this.data.form.rental_enabled) {
         const tf = this.data.form;
-        const hasCore = !!(tf.tenant_name || tf.tenant_monthly_rent || tf.tenant_start_date);
-        if (hasCore) {
-          try {
-            const tenantPayload = {
-              account_id: accountId,
-              tenant_name: tf.tenant_name || "",
-              monthly_rent: tf.tenant_monthly_rent !== "" ? Number(tf.tenant_monthly_rent) : 0,
-              frequency: tf.tenant_frequency || (this.data.tenantFrequencyOptions[this.data.tenantFrequencyIndex]?.value || "monthly"),
-              due_day: Number(tf.tenant_due_day || 0),
-              start_date: tf.tenant_start_date || null,
-              end_date: tf.tenant_end_date || null,
-              contract_number: tf.tenant_contract_number || null,
-              contract_url: tf.tenant_contract_url || null,
-              reminder_enabled: !!tf.tenant_reminder_enabled,
-              note: tf.note || null
-            };
-            if (this.data.currentTenancyId) {
-              await api.updateTenant(this.data.currentTenancyId, tenantPayload);
-            } else {
+        const tenantPayload = {
+          account_id: accountId,
+          tenant_name: tf.tenant_name || "",
+          monthly_rent: tf.tenant_monthly_rent !== "" ? Number(tf.tenant_monthly_rent) : 0,
+          frequency: tf.tenant_frequency || (this.data.tenantFrequencyOptions[this.data.tenantFrequencyIndex]?.value || "monthly"),
+          due_day: Number(tf.tenant_due_day || 0),
+          start_date: tf.tenant_start_date || null,
+          end_date: tf.tenant_end_date || null,
+          contract_number: tf.tenant_contract_number || null,
+          contract_url: tf.tenant_contract_url || null,
+          reminder_enabled: !!tf.tenant_reminder_enabled,
+          note: tf.note || null
+        };
+        try {
+          if (this.data.currentTenancyId) {
+            await api.updateTenant(this.data.currentTenancyId, tenantPayload);
+          } else {
+            const hasCore = !!(tf.tenant_name || tf.tenant_monthly_rent || tf.tenant_start_date);
+            if (hasCore) {
               await api.createTenant(tenantPayload);
             }
-          } catch (e) {}
-        }
+          }
+        } catch (e) {}
       }
       if (this.data.editId) {
         wx.navigateBack();

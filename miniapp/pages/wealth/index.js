@@ -37,7 +37,7 @@ const CATEGORY_ICON_MAP = {
   
   // 默认图标
   "其他收入": "add-circle-line.svg",
-  "其他支出": "add-circle-line.svg"
+  "其他支出": "add-circle-line-red.svg"
 };
 
 // 获取类别对应的图标
@@ -51,7 +51,7 @@ const getCategoryIcon = (category, type) => {
   if (type === 'income') {
     return "arrow-up-s-line.svg";
   } else {
-    return "arrow-down-s-line.svg";
+    return "arrow-down-s-line-red.svg";
   }
 };
 
@@ -69,6 +69,7 @@ Page({
       actualExpense: "0.00",
       actualIncome: "0.00"
     },
+    summaryReady: false,
     typeTabs: [
       { label: "全部", value: "all" },
       { label: "收入", value: "income" },
@@ -78,15 +79,16 @@ Page({
     cashflows: []
   },
   onShow() {
-    this.fetchSummary();
-    this.fetchList();
+    this.setData({ summaryReady: false });
+    this.fetchSummary(true);
+    this.fetchList(false);
   },
   handleRangeTap(e) {
     const index = Number(e.currentTarget.dataset.index);
     if (index === this.data.activeRangeIndex) return;
-    this.setData({ activeRangeIndex: index }, () => this.fetchSummary());
+    this.setData({ activeRangeIndex: index }, () => { this.fetchSummary(true); this.fetchList(false); });
   },
-  async fetchSummary() {
+  async fetchSummary(skipIncomeUpdate = false) {
     const now = new Date();
     const sel = this.data.rangeOptions[this.data.activeRangeIndex].value;
     const end = this.formatDate(now);
@@ -103,7 +105,7 @@ Page({
     try {
       const res = await api.fetchWealthSummary(start, end, sel);
       
-      // 获取设计服务收入并添加到预计收入中
+      // 获取设计服务收入（作为实际收入的一部分，仅本月）
       let designServiceIncome = 0;
       if (sel === 'month') {
         try {
@@ -116,13 +118,77 @@ Page({
         }
       }
       
+      let expectedRentIncomeSum = 0;
+      let assetMonthlyIncomeSum = 0;
+      try {
+        const primaryDays = sel === 'month' ? 45 : 90;
+        let reminders = [];
+        let assets = [];
+        try {
+          const res = await Promise.all([
+            api.listRentReminders(primaryDays),
+            api.listAccounts("asset")
+          ]);
+          reminders = res[0] || [];
+          assets = res[1] || [];
+        } catch (err1) {
+          try {
+            const res2 = await Promise.all([
+              api.listRentReminders(45),
+              api.listAccounts("asset")
+            ]);
+            reminders = res2[0] || [];
+            assets = res2[1] || [];
+          } catch (err2) {
+            try {
+              assets = await api.listAccounts("asset");
+              reminders = [];
+            } catch (err3) {
+              assets = [];
+              reminders = [];
+            }
+          }
+        }
+        const rangeStart = start ? new Date(String(start).replace(/-/g, "/")) : null;
+        const rangeEnd = end ? new Date(String(end).replace(/-/g, "/")) : null;
+        const inRange = (ds) => {
+          if (!rangeStart || !rangeEnd) return true;
+          const d = new Date(String(ds).replace(/-/g, "/"));
+          return d >= rangeStart && d <= rangeEnd;
+        };
+        const rentedAssetIds = new Set();
+        (reminders || []).forEach((r) => {
+          if (inRange(r.next_due_date)) {
+            expectedRentIncomeSum += Number(r.monthly_rent || 0);
+            if (r.account_id) rentedAssetIds.add(Number(r.account_id));
+          }
+        });
+        (assets || []).forEach((acc) => {
+          if (!rentedAssetIds.has(Number(acc.id))) {
+            const mi = Number(acc.monthly_income || 0);
+            if (mi > 0) assetMonthlyIncomeSum += mi;
+          }
+        });
+      } catch (err) {}
+
+      let plannedIncomeSum = 0;
+      try {
+        const query = { end };
+        if (start) query.start = start;
+        const cfList = await api.listCashflows(query);
+        plannedIncomeSum = (cfList || []).reduce((sum, x) => sum + (x && x.type === 'income' && !!x.planned ? Number(x.amount || 0) : 0), 0);
+      } catch (err) {}
+
+      const expectedIncomeVal = skipIncomeUpdate ? this.data.summary.expectedIncome : this.formatNumber(plannedIncomeSum + expectedRentIncomeSum + assetMonthlyIncomeSum + designServiceIncome);
+      const actualIncomeVal = skipIncomeUpdate ? this.data.summary.actualIncome : this.formatNumber(Number(res.actual_income));
       this.setData({
         summary: {
           expectedExpense: this.formatNumber(res.expected_expense),
-          expectedIncome: this.formatNumber(Number(res.expected_income) + designServiceIncome),
+          expectedIncome: expectedIncomeVal,
           actualExpense: this.formatNumber(res.actual_expense),
-          actualIncome: this.formatNumber(res.actual_income)
-        }
+          actualIncome: actualIncomeVal
+        },
+        summaryReady: !skipIncomeUpdate ? true : this.data.summaryReady
       });
     } catch (e) {
       // 游客模式下不显示演示数据
@@ -136,7 +202,7 @@ Page({
       });
     }
   },
-  async fetchList() {
+  async fetchList(skipSummary = false) {
     const sel = this.data.rangeOptions[this.data.activeRangeIndex].value;
     const now = new Date();
     const end = this.formatDate(now);
@@ -307,7 +373,7 @@ Page({
               category: '其他收入',
               amount: this.formatNumber(stats.data.total_revenue),
               date: end,
-              planned: false,
+              planned: true,
               recurring_monthly: false,
               _synthetic: 'design-service',
               name: '设计服务',
@@ -320,14 +386,40 @@ Page({
         console.error('获取设计服务收入失败:', err);
       }
       const activeType = this.data.activeType;
-      const combined = [...rents, ...assetIncomes, ...debts, ...formatted, ...designServiceIncome]
-        .filter((x) => activeType === 'all' || x.type === activeType)
+      const combinedAll = [...rents, ...assetIncomes, ...debts, ...formatted, ...designServiceIncome]
         .sort((a, b) => String(b.date).localeCompare(String(a.date)))
         .map(item => ({
           ...item,
           icon: item.icon || getCategoryIcon(item.category, item.type)
         }));
+      const combined = combinedAll.filter((x) => activeType === 'all' || x.type === activeType);
       this.setData({ cashflows: combined });
+
+      // 用全部记录重算预计/实际收入，确保与列表来源一致但不受过滤影响
+      if (!skipSummary) {
+        const toNum = (s) => {
+          const n = Number(String(s).replace(/,/g, ''));
+          return Number.isNaN(n) ? 0 : n;
+        };
+        const totalExpectedIncome = combinedAll
+          .filter(i => i.type === 'income' && !!i.planned)
+          .reduce((sum, i) => sum + toNum(i.amount), 0);
+        const totalActualIncome = combinedAll
+          .filter(i => i.type === 'income' && !i.planned)
+          .reduce((sum, i) => sum + toNum(i.amount), 0);
+        this.setData({
+          summary: {
+            ...this.data.summary,
+            expectedIncome: this.formatNumber(totalExpectedIncome),
+            actualIncome: this.formatNumber(totalActualIncome)
+          },
+          summaryReady: true
+        });
+      }
+
+      // 汇总数值仅在 fetchSummary 中计算，这里不覆盖以避免受过滤器影响
+
+      
     } catch (e) {
       // 游客模式下不显示演示数据
       this.setData({ cashflows: [] });
@@ -336,7 +428,7 @@ Page({
   handleTypeTab(e) {
     const val = String(e.currentTarget.dataset.value || "all");
     if (val === this.data.activeType) return;
-    this.setData({ activeType: val }, () => this.fetchList());
+    this.setData({ activeType: val }, () => this.fetchList(true));
   },
   openCashflowActions(e) {
     const rawId = String(e.currentTarget.dataset.id || "");
@@ -345,7 +437,7 @@ Page({
       const tenancyId = Number(rawId.split(':')[1] || 0);
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       const accountId = item?.account_id || 0;
-      wx.navigateTo({ url: `/pages/tenants/index?account_id=${accountId}&tenancy_id=${tenancyId}` });
+      wx.navigateTo({ url: `/pages/manage/index?edit=1&id=${accountId}&tenancy_id=${tenancyId}` });
       return;
     }
     if (rawId.startsWith('loan:')) {
@@ -383,7 +475,7 @@ Page({
       const tenancyId = Number(rawId.split(':')[1] || 0);
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       const accountId = item?.account_id || 0;
-      wx.navigateTo({ url: `/pages/tenants/index?account_id=${accountId}&tenancy_id=${tenancyId}` });
+      wx.navigateTo({ url: `/pages/manage/index?edit=1&id=${accountId}&tenancy_id=${tenancyId}` });
       return;
     }
     if (rawId.startsWith('loan:')) {
