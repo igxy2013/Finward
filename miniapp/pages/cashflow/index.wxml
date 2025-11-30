@@ -30,6 +30,14 @@
       <text class="label">每月重复</text>
       <switch checked="{{form.recurring_monthly}}" bindchange="handleRecurringChange"></switch>
     </view>
+    <view class="form-item" wx:if="{{form.type === 'income' && form.category === '租金收入'}}">
+      <text class="label">资产名称*</text>
+      <input placeholder="请输入资产名称" value="{{hidden.account_name}}" data-key="account_name" bindinput="handleHiddenInput" />
+    </view>
+    <view class="form-item" wx:if="{{form.type === 'income' && form.category === '租金收入'}}">
+      <text class="label">租客姓名*</text>
+      <input placeholder="请输入租客姓名" value="{{hidden.tenant_name}}" data-key="tenant_name" bindinput="handleHiddenInput" />
+    </view>
     <view class="form-item">
       <text class="label">备注</text>
       <textarea placeholder="可选" data-key="note" value="{{form.note}}" bindinput="handleInput" />

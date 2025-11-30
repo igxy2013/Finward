@@ -106,6 +106,55 @@ def ensure_schema_upgrade():
                     if not (result4.scalar() or 0):
                         conn.execute(text("ALTER TABLE cashflows ADD COLUMN recurring_monthly TINYINT(1) NOT NULL DEFAULT 0"))
                         conn.commit()
+                    # Add relational reference columns if missing
+                    cf_acc = conn.execute(
+                        text(
+                            """
+                            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'cashflows' AND COLUMN_NAME = 'account_id'
+                            """
+                        ),
+                        {"db": settings.db_name},
+                    ).scalar() or 0
+                    if not cf_acc:
+                        conn.execute(text("ALTER TABLE cashflows ADD COLUMN account_id INT NULL"))
+                        conn.commit()
+                    cf_ten = conn.execute(
+                        text(
+                            """
+                            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'cashflows' AND COLUMN_NAME = 'tenancy_id'
+                            """
+                        ),
+                        {"db": settings.db_name},
+                    ).scalar() or 0
+                    if not cf_ten:
+                        conn.execute(text("ALTER TABLE cashflows ADD COLUMN tenancy_id INT NULL"))
+                        conn.commit()
+                    cf_aname = conn.execute(
+                        text(
+                            """
+                            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'cashflows' AND COLUMN_NAME = 'account_name'
+                            """
+                        ),
+                        {"db": settings.db_name},
+                    ).scalar() or 0
+                    if not cf_aname:
+                        conn.execute(text("ALTER TABLE cashflows ADD COLUMN account_name VARCHAR(80) NULL"))
+                        conn.commit()
+                    cf_tname = conn.execute(
+                        text(
+                            """
+                            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'cashflows' AND COLUMN_NAME = 'tenant_name'
+                            """
+                        ),
+                        {"db": settings.db_name},
+                    ).scalar() or 0
+                    if not cf_tname:
+                        conn.execute(text("ALTER TABLE cashflows ADD COLUMN tenant_name VARCHAR(80) NULL"))
+                        conn.commit()
             except OperationalError:
                 pass
 

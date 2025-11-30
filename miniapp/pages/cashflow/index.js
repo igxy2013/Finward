@@ -11,6 +11,11 @@ Page({
       date: "",
       note: ""
     },
+    hidden: {
+      account_id: null,
+      tenancy_id: null,
+      account_name: ""
+    },
     submitting: false,
     typeOptions: [
       { label: "支出", value: "expense" },
@@ -21,6 +26,7 @@ Page({
     categoryIndex: -1,
     categoryDisplay: "请选择类别",
     incomeCategoryOptions: [
+      { label: "租金收入" },
       { label: "工资" },
       { label: "奖金" },
       { label: "理财收益" },
@@ -45,6 +51,12 @@ Page({
     ],
     categoryOptions: []
   },
+  handleHiddenInput(e) {
+    const key = String(e.currentTarget.dataset.key || "");
+    const val = e.detail.value;
+    if (!key) return;
+    this.setData({ [`hidden.${key}`]: val });
+  },
   onLoad(options) {
     const edit = options?.edit;
     const id = options?.id ? Number(options.id) : null;
@@ -60,6 +72,37 @@ Page({
     if (edit && id) {
       this.setData({ editId: id });
       this.prefill(id);
+    }
+    if (options && options.preset === 'rent') {
+      const type = String(options.type || 'income');
+      const category = decodeURIComponent(String(options.category || '租金收入'));
+      const amount = String(options.amount || '');
+      const date = String(options.date || today);
+      const note = decodeURIComponent(String(options.note || ''));
+      const account_id = options.account_id ? Number(options.account_id) : null;
+      const tenancy_id = options.tenancy_id ? Number(options.tenancy_id) : null;
+      const account_name = options.account_name ? decodeURIComponent(String(options.account_name)) : "";
+      const tenant_name = options.tenant_name ? decodeURIComponent(String(options.tenant_name)) : "";
+      const typeIndex = type === 'income' ? 1 : 0;
+      const categoryOptions = type === 'income' ? this.data.incomeCategoryOptions : this.data.expenseCategoryOptions;
+      const catIndex = Math.max(0, categoryOptions.findIndex(opt => opt.label === category));
+      this.setData({
+        form: {
+          type,
+          category,
+          amount,
+          planned: false,
+          recurring_monthly: false,
+          date,
+          note
+        },
+        hidden: { account_id, tenancy_id, account_name, tenant_name },
+        typeIndex,
+        typeLabel: type === 'income' ? '收入' : '支出',
+        categoryOptions,
+        categoryIndex: catIndex,
+        categoryDisplay: category
+      });
     }
   },
   async prefill(id) {
@@ -78,6 +121,7 @@ Page({
           date: item.date,
           note: item.note || ""
         },
+        hidden: { account_id: item.account_id || null, tenancy_id: item.tenancy_id || null, account_name: item.account_name || "", tenant_name: item.tenant_name || "" },
         typeIndex,
         typeLabel: item.type === "income" ? "收入" : "支出",
         categoryOptions,
@@ -128,9 +172,14 @@ Page({
       wx.showToast({ title: "请完善必填项", icon: "none" });
       return;
     }
+    const isRent = String(this.data.form.type || '') === 'income' && String(this.data.form.category || '') === '租金收入';
+    if (isRent && !(this.data.hidden.account_id || String(this.data.hidden.account_name || '').trim())) {
+      wx.showToast({ title: "请选择资产或填写资产名称", icon: "none" });
+      return;
+    }
     this.setData({ submitting: true });
     try {
-      const payload = { ...this.data.form, amount: Number(this.data.form.amount) };
+      const payload = { ...this.data.form, amount: Number(this.data.form.amount), account_id: this.data.hidden.account_id, tenancy_id: this.data.hidden.tenancy_id, account_name: this.data.hidden.account_name, tenant_name: this.data.hidden.tenant_name };
       if (this.data.editId) {
         await api.updateCashflow(this.data.editId, payload);
         wx.showToast({ title: "更新成功", icon: "success" });

@@ -94,7 +94,7 @@
         <text class="card-link" bindtap="goToAssets">显示全部</text>
       </view>
       <view class="list-container">
-        <view class="list-item" wx:for="{{assetsPreview}}" wx:key="id" data-id="{{item.id}}" data-type="asset" bindlongpress="openItemActions">
+        <view class="list-item" wx:for="{{assetsPreview}}" wx:key="id" data-id="{{item.id}}" data-type="asset" bindtap="openAssetDetail" bindlongpress="openItemActions">
           <view class="item-icon asset-item-icon">
             <image class="icon-image" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
           </view>

@@ -51,6 +51,11 @@ Page({
     liabilities: [],
     chartData: []
   },
+  openAssetDetail(e) {
+    const id = Number(e.currentTarget.dataset.id);
+    if (!id) return;
+    wx.navigateTo({ url: `/pages/asset-detail/index?id=${id}` });
+  },
   onLoad() {
     const app = getApp();
     const token = app?.globalData?.token || wx.getStorageSync('fw_token');

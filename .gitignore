@@ -15,3 +15,6 @@ __pycache__/
 *.pyd
 .Python
 >>>>>>> 5b190a5cf9b50e738177d83bd6316bf51344fa43
+backend/app/__pycache__/database.cpython-310.pyc
+backend/app/__pycache__/models.cpython-310.pyc
+backend/app/__pycache__/schemas.cpython-310.pyc

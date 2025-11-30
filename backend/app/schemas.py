@@ -247,6 +247,10 @@ class CashflowCreate(BaseModel):
     recurring_monthly: bool = False
     date: date
     note: str | None = None
+    account_id: int | None = None
+    tenancy_id: int | None = None
+    account_name: str | None = None
+    tenant_name: str | None = None
 
 
 class CashflowOut(BaseModel):
@@ -258,8 +262,15 @@ class CashflowOut(BaseModel):
     recurring_monthly: bool
     date: date
     note: str | None = None
+    account_id: int | None = None
+    tenancy_id: int | None = None
+    account_name: str | None = None
+    tenant_name: str | None = None
     created_at: datetime
     updated_at: datetime
+
+    class Config:
+        from_attributes = True
 
 
 
@@ -271,6 +282,10 @@ class CashflowUpdate(BaseModel):
     recurring_monthly: bool | None = None
     date: Optional[date] = None
     note: str | None = None
+    account_id: int | None = None
+    tenancy_id: int | None = None
+    account_name: str | None = None
+    tenant_name: str | None = None
 
     @field_validator('type', mode='before')
     @classmethod

@@ -112,6 +112,11 @@ class Cashflow(Base):
     recurring_monthly: Mapped[bool] = mapped_column(Boolean, default=False)
     date: Mapped[date] = mapped_column(Date())
     note: Mapped[str | None] = mapped_column(Text())
+    # 关联字段（可选）：用于标识所属资产与租客，避免依赖备注
+    account_id: Mapped[int | None] = mapped_column(Integer)
+    tenancy_id: Mapped[int | None] = mapped_column(Integer)
+    account_name: Mapped[str | None] = mapped_column(String(80))
+    tenant_name: Mapped[str | None] = mapped_column(String(80))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow
