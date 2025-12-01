@@ -9,7 +9,8 @@
     "pages/analytics/index",
     "pages/profile/index",
     "pages/manage/index",
-    "pages/cashflow/index"
+    "pages/cashflow/index",
+    "pages/cashflow-detail/index"
   ],
   "window": {
     "navigationBarTitleText": "Finward 鲨鱼资产",

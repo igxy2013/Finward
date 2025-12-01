@@ -1,0 +1,23 @@
+.page { min-height: 100vh; padding: 32rpx 24rpx; background: #f7f8fa; }
+.loading-container { display: flex; align-items: center; justify-content: center; padding: 80rpx 0; }
+.loading-spinner { width: 48rpx; height: 48rpx; border: 6rpx solid #e5e7eb; border-top-color: #43B176; border-radius: 50%; animation: spin 1s linear infinite; }
+.loading-text { margin-left: 16rpx; color: #6b7280; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.card { background: #ffffff; border: 1rpx solid #eef2f7; border-radius: 24rpx; padding: 28rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06); }
+.card-header { display: flex; align-items: center; gap: 16rpx; margin-bottom: 16rpx; }
+.icon { width: 56rpx; height: 56rpx; display: flex; align-items: center; justify-content: center; }
+.icon-img { width: 100%; height: 100%; }
+.title-wrap { flex: 1; display: flex; align-items: baseline; gap: 8rpx; }
+.title { font-size: 32rpx; font-weight: 600; color: #111827; }
+.subtitle { font-size: 24rpx; color: #6b7280; }
+.amount { font-size: 28rpx; font-weight: 600; }
+.positive { color: #43B176; }
+.negative { color: #ef4444; }
+.detail-list { display: flex; flex-direction: column; gap: 12rpx; }
+.row { display: flex; justify-content: space-between; align-items: center; padding: 8rpx 0; }
+.label { color: #6b7280; font-size: 26rpx; }
+.value { color: #111827; font-size: 28rpx; }
+.actions { display: flex; gap: 16rpx; margin-top: 20rpx; }
+.btn { flex: 1; }
+.btn.primary { background: #43B176; color: #0f172a; }
+.btn.danger { background: #ef4444; color: #fff; }

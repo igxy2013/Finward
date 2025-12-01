@@ -57,12 +57,6 @@ const getCategoryIcon = (category, type) => {
 
 Page({
   data: {
-    rangeOptions: [
-      { label: "本月", value: "month" },
-      { label: "本年", value: "year" },
-      { label: "全部", value: "all" }
-    ],
-    activeRangeIndex: 0,
     summary: {
       expectedExpense: "0.00",
       expectedIncome: "0.00",
@@ -78,50 +72,43 @@ Page({
     activeType: "all",
     cashflows: []
   },
-  onShow() {
-    this.setData({ summaryReady: false });
-    this.fetchSummary(true);
-    this.fetchList(false);
-  },
-  handleRangeTap(e) {
-    const index = Number(e.currentTarget.dataset.index);
-    if (index === this.data.activeRangeIndex) return;
-    this.setData({ activeRangeIndex: index }, () => { this.fetchSummary(true); this.fetchList(false); });
+  async onShow() {
+    const app = getApp();
+    try {
+      const token = app?.globalData?.token || wx.getStorageSync('fw_token');
+      if (token && !app?.globalData?.token) {
+        app.globalData.token = token;
+      }
+      if (!app?.globalData?.token && typeof app?.ensureLogin === 'function') {
+        await app.ensureLogin();
+      }
+    } catch (e) {}
+    this.skipFilterOnce = true;
+    this.setData({ summaryReady: false, activeType: 'all' }, () => {
+      this.fetchSummary(true);
+      this.fetchList(false);
+    });
   },
   async fetchSummary(skipIncomeUpdate = false) {
     const now = new Date();
-    const sel = this.data.rangeOptions[this.data.activeRangeIndex].value;
+    const sel = 'month';
     const end = this.formatDate(now);
-    let start = "";
-    if (sel === "month") {
-      const d = new Date(now.getFullYear(), now.getMonth(), 1);
-      start = this.formatDate(d);
-    } else if (sel === "year") {
-      const d = new Date(now.getFullYear(), 0, 1);
-      start = this.formatDate(d);
-    } else if (sel === "all") {
-      start = "";
-    }
+    const start = this.formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
     try {
       const res = await api.fetchWealthSummary(start, end, sel);
       
-      // 获取设计服务收入（作为实际收入的一部分，仅本月）
       let designServiceIncome = 0;
-      if (sel === 'month') {
-        try {
-          const stats = await api.getFinanceStats('month');
-          if (stats.success) {
-            designServiceIncome = Number(stats.data.total_revenue || 0);
-          }
-        } catch (err) {
-          console.error('获取设计服务收入失败:', err);
+      try {
+        const stats = await api.getFinanceStats('month');
+        if (stats.success) {
+          designServiceIncome = Number(stats.data.total_revenue || 0);
         }
-      }
+      } catch (err) {}
       
       let expectedRentIncomeSum = 0;
       let assetMonthlyIncomeSum = 0;
       try {
-        const primaryDays = sel === 'month' ? 45 : 90;
+        const primaryDays = 45;
         let reminders = [];
         let assets = [];
         try {
@@ -202,22 +189,34 @@ Page({
       });
     }
   },
-  async fetchList(skipSummary = false) {
-    const sel = this.data.rangeOptions[this.data.activeRangeIndex].value;
+  async fetchList(skipSummary = false, forceAll = false) {
+    const sel = 'month';
     const now = new Date();
-    const end = this.formatDate(now);
-    let start = "";
-    if (sel === "month") {
-      start = this.formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
-    } else if (sel === "year") {
-      start = this.formatDate(new Date(now.getFullYear(), 0, 1));
-    }
+    const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const start = this.formatDate(startDate);
+    const end = this.formatDate(endDate);
     const query = { end };
     if (start) query.start = start;
-    if (this.data.activeType !== "all") query.type = this.data.activeType;
+    if (!forceAll && !this.skipFilterOnce && this.data.activeType !== "all") query.type = this.data.activeType;
     try {
-      const list = await api.listCashflows(query);
-      const formatted = list.map((x) => ({
+      let list = [];
+      try {
+        list = await api.listCashflows(query);
+      } catch (e0) {
+        list = [];
+      }
+      let plannedList = [];
+      let plannedExpenseList = [];
+      try {
+        plannedList = await api.listCashflows({ ...query, planned: true });
+      } catch (e) {}
+      try {
+        plannedExpenseList = await api.listCashflows({ ...query, planned: true, type: 'expense' });
+      } catch (e2) {}
+      const normalized = (arr) => (arr || []).map((x) => ({ ...x, id: x.id || `${x.type || 'unknown'}:${x.planned ? 'planned' : 'actual'}:${x.category}:${x.date}` }));
+      const mergedRaw = [...normalized(list), ...normalized(plannedList), ...normalized(plannedExpenseList)];
+      const formatted = mergedRaw.map((x) => ({
         ...x,
         amount: this.formatNumber(x.amount),
         name: x.note ? x.note : x.category,
@@ -292,7 +291,24 @@ Page({
       
       let debts = [];
       try {
-        const liabilities = await api.listAccounts("liability");
+        let liabilities = [];
+        try {
+          liabilities = await api.listAccounts("liability");
+          if (Array.isArray(liabilities) && liabilities.length > 0) {
+            try { wx.setStorageSync('fw_liabilities_cache', liabilities); } catch (e) {}
+          }
+        } catch (errFetch) {
+          try {
+            const cached = wx.getStorageSync('fw_liabilities_cache');
+            if (Array.isArray(cached) && cached.length > 0) {
+              liabilities = cached;
+            } else {
+              liabilities = [];
+            }
+          } catch (e) {
+            liabilities = [];
+          }
+        }
         const rangeStart = start ? new Date(String(start).replace(/-/g, "/")) : null;
         const rangeEnd = end ? new Date(String(end).replace(/-/g, "/")) : null;
         const clampDay = (yy, mm, dd) => {
@@ -312,7 +328,7 @@ Page({
             _synthetic: 'loan',
             account_id: acc.id,
             account_name: acc.name,
-            name: acc.name || ((acc.category || '负债') + '月供'),
+            name: acc.name ? `${acc.name}月供` : ((acc.category || '负债') + '月供'),
             icon: getCategoryIcon((acc.category || '负债') + '月供', 'expense')
           });
         };
@@ -320,7 +336,15 @@ Page({
           const mp = Number(acc.monthly_payment || 0);
           const startStr = acc.loan_start_date;
           const term = Number(acc.loan_term_months || 0);
-          if (!mp || !startStr) return;
+          if (!mp) return;
+          if (!startStr) {
+            if (!rangeStart || !rangeEnd) return;
+            const y = rangeStart.getFullYear();
+            const m = rangeStart.getMonth() + 1;
+            const d = clampDay(y, m, 1);
+            pushPayment(acc, y, m, d);
+            return;
+          }
           const s = new Date(String(startStr).replace(/-/g, "/"));
           const dueDay = s.getDate();
           if (sel === 'all') {
@@ -386,14 +410,43 @@ Page({
         console.error('获取设计服务收入失败:', err);
       }
       const activeType = this.data.activeType;
-      const combinedAll = [...rents, ...assetIncomes, ...debts, ...formatted, ...designServiceIncome]
+
+      let expectedExpenseFallback = [];
+      try {
+        const plannedExpenseCount = mergedRaw.filter(x => x && x.type === 'expense' && !!x.planned).length + (debts || []).length;
+        const toNum = (s) => {
+          const n = Number(String(s).replace(/,/g, ''));
+          return Number.isNaN(n) ? 0 : n;
+        };
+        const expectedExpNum = toNum(this.data.summary.expectedExpense);
+        if (plannedExpenseCount === 0 && expectedExpNum > 0) {
+          expectedExpenseFallback = [{
+            id: 'expected-expense-total',
+            type: 'expense',
+            category: '预计支出',
+            amount: this.formatNumber(expectedExpNum),
+            date: end,
+            planned: true,
+            recurring_monthly: false,
+            _synthetic: 'expected-expense-total',
+            name: '本月预计支出合计',
+            icon: getCategoryIcon('其他支出', 'expense')
+          }];
+        }
+      } catch (e) {}
+
+      const combinedAll = [...rents, ...assetIncomes, ...debts, ...formatted, ...designServiceIncome, ...expectedExpenseFallback]
         .sort((a, b) => String(b.date).localeCompare(String(a.date)))
         .map(item => ({
           ...item,
           icon: item.icon || getCategoryIcon(item.category, item.type)
         }));
-      const combined = combinedAll.filter((x) => activeType === 'all' || x.type === activeType);
+      let combined = (forceAll || this.skipFilterOnce) ? combinedAll : combinedAll.filter((x) => activeType === 'all' || x.type === activeType);
+      if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
+        combined = combinedAll;
+      }
       this.setData({ cashflows: combined });
+      this.skipFilterOnce = false;
 
       // 用全部记录重算预计/实际收入，确保与列表来源一致但不受过滤影响
       if (!skipSummary) {
@@ -472,30 +525,40 @@ Page({
     const rawId = String(e.currentTarget.dataset.id || "");
     if (!rawId) return;
     if (rawId.startsWith('tenancy:')) {
-      const tenancyId = Number(rawId.split(':')[1] || 0);
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
-      const accountId = item?.account_id || 0;
-      wx.navigateTo({ url: `/pages/manage/index?edit=1&id=${accountId}&tenancy_id=${tenancyId}` });
+      if (item) {
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}`;
+        wx.navigateTo({ url });
+        return;
+      }
+      wx.navigateTo({ url: `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}` });
       return;
     }
     if (rawId.startsWith('loan:')) {
-      const parts = rawId.split(':');
-      const accountId = Number(parts[1] || 0);
-      if (accountId) wx.navigateTo({ url: `/pages/manage/index?edit=1&id=${accountId}` });
+      const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
+      if (item) {
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}`;
+        wx.navigateTo({ url });
+        return;
+      }
+      wx.navigateTo({ url: `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}` });
       return;
     }
     
-    // 处理资产收益点击事件
     if (rawId.startsWith('asset-income:')) {
-      const parts = rawId.split(':');
-      const accountId = Number(parts[2] || 0);
-      if (accountId) wx.navigateTo({ url: `/pages/assets/index?edit=1&id=${accountId}` });
+      const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
+      if (item) {
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}`;
+        wx.navigateTo({ url });
+        return;
+      }
+      wx.navigateTo({ url: `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}` });
       return;
     }
     
     const id = Number(rawId);
     if (!id) return;
-    wx.navigateTo({ url: `/pages/cashflow/index?edit=1&id=${id}` });
+    wx.navigateTo({ url: `/pages/cashflow-detail/index?id=${id}` });
   },
   async deleteCashflow(id) {
     wx.showModal({

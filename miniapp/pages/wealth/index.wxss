@@ -4,19 +4,9 @@
   background: #f7f8fa;
 }
 
-.filters {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #ffffff;
-  border: 1rpx solid #e5e7eb;
-  border-radius: 16rpx;
-  padding: 16rpx 20rpx;
-  margin-bottom: 16rpx;
-  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06);
-}
-.filter-label { color: #374151; font-size: 26rpx; }
-.filter-pills { display: flex; gap: 12rpx; }
+.filters {}
+.filter-label {}
+.filter-pills {}
 .pill { padding: 8rpx 20rpx; border-radius: 999rpx; border: 1rpx solid #e5e7eb; color: #374151; background: #fff; }
 .pill.active { background: #E8F8EF; color: #43B176; border-color: #43B176; }
 

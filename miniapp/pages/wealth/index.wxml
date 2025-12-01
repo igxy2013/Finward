@@ -1,10 +1,5 @@
 <view class="page">
-  <view class="filters">
-    <text class="filter-label">统计区间</text>
-    <view class="filter-pills">
-      <view class="pill {{activeRangeIndex === index ? 'active' : ''}}" wx:for="{{rangeOptions}}" wx:key="value" data-index="{{index}}" bindtap="handleRangeTap">{{item.label}}</view>
-    </view>
-  </view>
+  
 
   <view class="summary" wx:if="{{summaryReady}}">
     <view class="summary-item accent-expense">
@@ -14,7 +9,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/bill-line-red.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">预计支出</text>
+        <text class="sum-label">本月预计支出</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>
@@ -28,7 +23,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/line-chart-line.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">预计收入</text>
+        <text class="sum-label">本月预计收入</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>
@@ -42,7 +37,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/arrow-down-line-red.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">实际支出</text>
+        <text class="sum-label">本月实际支出</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>
@@ -56,7 +51,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/arrow-up-line.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">实际收入</text>
+        <text class="sum-label">本月实际收入</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>

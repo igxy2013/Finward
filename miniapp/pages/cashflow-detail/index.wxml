@@ -1,0 +1,39 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading-container">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+
+  <view wx:elif="{{error}}" class="error-state">
+    <text class="error-text">{{error}}</text>
+  </view>
+
+  <view wx:else class="content">
+    <view class="card">
+      <view class="card-header">
+        <view class="icon">
+          <image class="icon-img" src="{{display.icon}}" mode="aspectFit"></image>
+        </view>
+        <view class="title-wrap">
+          <text class="title">{{display.title}}</text>
+          <text class="subtitle">{{display.typeLabel}} · {{display.statusLabel}}</text>
+        </view>
+        <text class="amount {{item.type === 'income' ? 'positive' : 'negative'}}">{{item.type === 'income' ? '+' : '-'}}￥{{display.amount}}</text>
+      </view>
+
+      <view class="detail-list">
+        <view class="row"><text class="label">类别</text><text class="value">{{display.category}}</text></view>
+        <view class="row"><text class="label">日期</text><text class="value">{{display.date}}</text></view>
+        <view class="row" wx:if="{{display.recurringLabel}}"><text class="label">重复</text><text class="value">{{display.recurringLabel}}</text></view>
+        <view class="row" wx:if="{{display.accountName}}"><text class="label">关联账户</text><text class="value">{{display.accountName}}</text></view>
+        <view class="row" wx:if="{{display.tenantName}}"><text class="label">租户</text><text class="value">{{display.tenantName}}</text></view>
+        <view class="row" wx:if="{{display.note}}"><text class="label">备注</text><text class="value">{{display.note}}</text></view>
+      </view>
+
+      <view class="actions" wx:if="{{!synthetic}}">
+        <button class="btn primary" bindtap="edit">编辑</button>
+        <button class="btn danger" bindtap="remove">删除</button>
+      </view>
+    </view>
+  </view>
+</view>
