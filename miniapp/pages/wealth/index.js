@@ -206,22 +206,55 @@ Page({
       } catch (e0) {
         list = [];
       }
-      let plannedList = [];
-      let plannedExpenseList = [];
-      try {
-        plannedList = await api.listCashflows({ ...query, planned: true });
-      } catch (e) {}
-      try {
-        plannedExpenseList = await api.listCashflows({ ...query, planned: true, type: 'expense' });
-      } catch (e2) {}
       const normalized = (arr) => (arr || []).map((x) => ({ ...x, id: x.id || `${x.type || 'unknown'}:${x.planned ? 'planned' : 'actual'}:${x.category}:${x.date}` }));
-      const mergedRaw = [...normalized(list), ...normalized(plannedList), ...normalized(plannedExpenseList)];
+      const mergedRaw = [...normalized(list)];
       const formatted = mergedRaw.map((x) => ({
         ...x,
         amount: this.formatNumber(x.amount),
         name: x.note ? x.note : x.category,
         icon: getCategoryIcon(x.category, x.type)
       }));
+
+      // 自动生成本月缺失的每月重复收入（例如工资）
+      let recurringSynth = [];
+      try {
+        const prevStartDate = new Date(startDate.getFullYear(), startDate.getMonth() - 1, 1);
+        const prevEndDate = new Date(startDate.getFullYear(), startDate.getMonth(), 0);
+        const prevStart = this.formatDate(prevStartDate);
+        const prevEnd = this.formatDate(prevEndDate);
+        const prevQuery = { start: prevStart, end: prevEnd, type: 'income', planned: true };
+        let prevList = [];
+        try { prevList = await api.listCashflows(prevQuery); } catch (ePrev) { prevList = []; }
+        const currKeys = new Set((formatted || [])
+          .filter(i => i.type === 'income' && !!i.planned && !!i.recurring_monthly)
+          .map(i => `${i.type}:${i.category}:${i.name}`));
+        (prevList || [])
+          .filter(i => i && i.type === 'income' && !!i.planned && !!i.recurring_monthly)
+          .forEach(t => {
+            const key = `${t.type}:${t.category}:${t.note ? t.note : t.category}`;
+            if (!currKeys.has(key)) {
+              const prevDay = (() => { const d = new Date(String(t.date).replace(/-/g, '/')); return d.getDate(); })();
+              const y = endDate.getFullYear();
+              const m = endDate.getMonth() + 1;
+              const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, prevDay)); })();
+              const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
+              recurringSynth.push({
+                id: `recurring:${t.id}:${y}${String(m).padStart(2, '0')}`,
+                type: 'income',
+                category: t.category || '其他收入',
+                amount: this.formatNumber(t.amount),
+                date: dt,
+                planned: true,
+                recurring_monthly: true,
+                _synthetic: 'recurring-income',
+                account_id: t.account_id,
+                account_name: t.account_name,
+                name: t.note ? t.note : (t.category || '收入'),
+                icon: getCategoryIcon(t.category || '其他收入', 'income')
+              });
+            }
+          });
+      } catch (e) {}
       let rents = [];
       try {
         const [reminders, assets] = await Promise.all([
@@ -435,7 +468,15 @@ Page({
         }
       } catch (e) {}
 
-      const combinedAll = [...rents, ...assetIncomes, ...debts, ...formatted, ...designServiceIncome, ...expectedExpenseFallback]
+      const dedupeById = (arr) => {
+        const m = new Map();
+        for (const x of arr) {
+          const k = String(x.id);
+          if (!m.has(k)) m.set(k, x);
+        }
+        return Array.from(m.values());
+      };
+      const combinedAll = dedupeById([...rents, ...assetIncomes, ...debts, ...formatted, ...recurringSynth, ...designServiceIncome, ...expectedExpenseFallback])
         .sort((a, b) => String(b.date).localeCompare(String(a.date)))
         .map(item => ({
           ...item,
@@ -486,35 +527,24 @@ Page({
   openCashflowActions(e) {
     const rawId = String(e.currentTarget.dataset.id || "");
     if (!rawId) return;
-    if (rawId.startsWith('tenancy:')) {
-      const tenancyId = Number(rawId.split(':')[1] || 0);
+    if (rawId.startsWith('tenancy:') || rawId.startsWith('loan:') || rawId.startsWith('asset-income:')) {
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
-      const accountId = item?.account_id || 0;
-      wx.navigateTo({ url: `/pages/manage/index?edit=1&id=${accountId}&tenancy_id=${tenancyId}` });
-      return;
-    }
-    if (rawId.startsWith('loan:')) {
-      const parts = rawId.split(':');
-      const accountId = Number(parts[1] || 0);
-      if (accountId) wx.navigateTo({ url: `/pages/manage/index?edit=1&id=${accountId}` });
-      return;
-    }
-    
-    // 处理资产收益点击事件
-    if (rawId.startsWith('asset-income:')) {
-      const parts = rawId.split(':');
-      const accountId = Number(parts[2] || 0);
-      if (accountId) wx.navigateTo({ url: `/pages/assets/index?edit=1&id=${accountId}` });
+      const url = item ? `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}` : `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}`;
+      wx.showActionSheet({
+        itemList: ["查看详情"],
+        success: (res) => { if (res.tapIndex === 0) wx.navigateTo({ url }); }
+      });
       return;
     }
     
     const id = Number(rawId);
     if (!id) return;
     wx.showActionSheet({
-      itemList: ["编辑", "删除"],
+      itemList: ["查看详情", "编辑", "删除"],
       success: (res) => {
-        if (res.tapIndex === 0) this.editCashflow(id);
-        if (res.tapIndex === 1) this.deleteCashflow(id);
+        if (res.tapIndex === 0) wx.navigateTo({ url: `/pages/cashflow-detail/index?id=${id}` });
+        if (res.tapIndex === 1) this.editCashflow(id);
+        if (res.tapIndex === 2) this.deleteCashflow(id);
       }
     });
   },

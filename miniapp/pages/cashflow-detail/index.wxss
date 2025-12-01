@@ -17,7 +17,7 @@
 .row { display: flex; justify-content: space-between; align-items: center; padding: 8rpx 0; }
 .label { color: #6b7280; font-size: 26rpx; }
 .value { color: #111827; font-size: 28rpx; }
-.actions { display: flex; gap: 16rpx; margin-top: 20rpx; }
-.btn { flex: 1; }
+.actions { display: flex; justify-content: flex-end; gap: 16rpx; margin-top: 18rpx; }
+.btn { display: inline-flex; align-items: center; justify-content: center; padding: 12rpx 22rpx; border-radius: 14rpx; font-size: 26rpx; min-width: 220rpx; line-height: 1.2; }
 .btn.primary { background: #43B176; color: #0f172a; }
 .btn.danger { background: #ef4444; color: #fff; }
