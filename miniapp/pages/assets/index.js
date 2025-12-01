@@ -89,6 +89,11 @@ Page({
       filterCategory: selected?.value || ""
     }, () => this.applyCategoryFilter());
   },
+  openAssetDetail(e) {
+    const id = Number(e.currentTarget.dataset.id);
+    if (!id) return;
+    wx.navigateTo({ url: `/pages/asset-detail/index?id=${id}` });
+  },
   openItemActions(e) {
     const id = Number(e.currentTarget.dataset.id);
     if (!id) return;

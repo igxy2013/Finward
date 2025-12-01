@@ -68,6 +68,56 @@
   box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06);
 }
 
+.monthly-card {
+  background: #ffffff;
+  border: 1rpx solid #eef2f7;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  margin-bottom: 32rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06);
+}
+
+.chart-block {
+  width: 100%;
+  height: 260rpx;
+  border-radius: 16rpx;
+  background: rgba(255,255,255,0.04);
+  border: 1rpx solid #e5e7eb;
+  margin-top: 12rpx;
+}
+
+.chart-legend {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24rpx;
+  margin-bottom: 12rpx;
+  padding-right: 12rpx;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.legend-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+}
+
+.legend-text {
+  font-size: 22rpx;
+  color: #6b7280;
+}
+
+.chart-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .hero-row {
   display: flex;
   justify-content: space-between;

@@ -149,6 +149,7 @@ module.exports = {
   deleteAccount: (id) => request(`/accounts/${id}`, { method: "DELETE" }),
   fetchOverview: () => request(`/overview`),
   fetchAnalytics: (days = 30) => request(`/analytics`, { data: { days } }),
+  fetchMonthlyAnalytics: (months = 12) => request(`/analytics/monthly`, { data: { months } }),
   getHousehold: () => request(`/households`),
   listMembers: () => request(`/households/members`),
   createInvitation: () => request(`/households/invitations`, { method: "POST" }),
@@ -172,6 +173,5 @@ module.exports = {
   ,getFinanceStats: (timeRange) => externalRequest(`https://acbim.cn/api/public/finance/stats`, { data: { time_range: timeRange } })
   ,testAuth: () => request(`/auth/me`)
 };
-
 
 

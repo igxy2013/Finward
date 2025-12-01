@@ -36,21 +36,14 @@ const getLiabilityCategoryIcon = (category) => {
   return LIABILITY_CATEGORY_ICONS[category] || "bill-line.svg";
 };
 
-const RANGE_OPTIONS = [
-  { label: "本月", value: "month" },
-  { label: "本年", value: "year" },
-  { label: "全部", value: "all" }
-];
+ 
 
 Page({
   data: {
     loading: true,
     error: "",
-    rangeLoading: false,
     needLogin: false,
     loggingIn: false,
-    rangeOptions: RANGE_OPTIONS,
-    activeRangeIndex: 0,
     summary: {
       netWorth: "0.00",
       totalAssets: "0.00",
@@ -62,6 +55,11 @@ Page({
       debtRatioValue: 0
     },
     trend: [],
+    monthly: [],
+    monthlyValueW: 0,
+    monthlyValueH: 0,
+    monthlyRatioW: 0,
+    monthlyRatioH: 0,
     assetCategories: [],
     liabilityCategories: [],
     cashflow: [],
@@ -79,20 +77,7 @@ Page({
     const url = `${target}?category=${encodeURIComponent(category)}`;
     wx.navigateTo({ url });
   },
-  calcDays(value) {
-    const now = new Date();
-    if (value === "month") {
-      const first = new Date(now.getFullYear(), now.getMonth(), 1);
-      const days = Math.floor((now - first) / (1000 * 60 * 60 * 24)) + 1;
-      return Math.min(365, Math.max(1, days));
-    }
-    if (value === "year") {
-      const first = new Date(now.getFullYear(), 0, 1);
-      const days = Math.floor((now - first) / (1000 * 60 * 60 * 24)) + 1;
-      return Math.min(365, Math.max(1, days));
-    }
-    return 365;
-  },
+ 
   onLoad() {
     const app = getApp();
     if (!app?.globalData?.token) {
@@ -107,22 +92,10 @@ Page({
     if (this.data.needLogin) this.setData({ needLogin: false });
     this.fetchAnalytics(true);
   },
-  handleRangeTap(e) {
-    const index = Number(e.currentTarget.dataset.index);
-    if (index === this.data.activeRangeIndex) return;
-    if (this.data.rangeLoading) return;
-    this.setData({ activeRangeIndex: index }, () => {
-      this.fetchAnalytics(true);
-    });
-  },
+ 
   async fetchAnalytics(quiet = false) {
-    const rangeVal = this.data.rangeOptions[this.data.activeRangeIndex].value;
-    const days = this.calcDays(rangeVal);
-    if (quiet) {
-      this.setData({ rangeLoading: true, error: "" });
-    } else {
-      this.setData({ loading: true, error: "" });
-    }
+    const days = 365;
+    this.setData({ loading: !quiet, error: "" });
     try {
       const res = await api.fetchAnalytics(days);
       const summary = this.formatSummary(res.summary || {});
@@ -132,7 +105,6 @@ Page({
       this.setData(
         {
           loading: false,
-          rangeLoading: false,
           summary,
           trend: res.trend || [],
           assetCategories,
@@ -145,11 +117,18 @@ Page({
           this.drawCashflowChart();
         }
       );
+      try {
+        const monthlyRes = await api.fetchMonthlyAnalytics(12);
+        this.setData({ monthly: monthlyRes.points || [] }, () => {
+          this.drawMonthlyCharts();
+        });
+      } catch (e2) {
+        this.setData({ monthly: [] }, () => this.drawMonthlyCharts());
+      }
     } catch (error) {
       // 游客模式下不显示演示数据
       this.setData({
         loading: false,
-        rangeLoading: false,
         summary: {
           netWorth: this.formatNumber(0),
           totalAssets: this.formatNumber(0),
@@ -164,6 +143,7 @@ Page({
         assetCategories: [],
         liabilityCategories: [],
         cashflow: [],
+        monthly: [],
         highlights: {
           bestCategory: "-",
           bestCategoryAmount: "￥0.00",
@@ -173,6 +153,338 @@ Page({
         error: ""
       });
     }
+  },
+  drawMonthlyCharts() {
+    const points = this.data.monthly || [];
+    const win = (typeof wx.getWindowInfo === 'function') ? wx.getWindowInfo() : wx.getSystemInfoSync();
+    const dpr = win.pixelRatio || 1;
+    const query = wx.createSelectorQuery().in(this);
+    wx.nextTick(() => {
+      query
+        .select('#monthlyValueCanvas').node()
+        .select('#monthlyValueCanvas').boundingClientRect()
+        .select('#monthlyRatioCanvas').node()
+        .select('#monthlyRatioCanvas').boundingClientRect()
+        .exec((res) => {
+          const valueCanvas = res && res[0] && res[0].node;
+          const valueRect = res && res[1];
+          const ratioCanvas = res && res[2] && res[2].node;
+          const ratioRect = res && res[3];
+          if (!valueCanvas || !valueRect || !ratioCanvas || !ratioRect) return;
+          valueCanvas.width = Math.floor(valueRect.width * dpr);
+          valueCanvas.height = Math.floor(valueRect.height * dpr);
+          const ctx1 = valueCanvas.getContext('2d');
+          ctx1.scale(dpr, dpr);
+          ratioCanvas.width = Math.floor(ratioRect.width * dpr);
+          ratioCanvas.height = Math.floor(ratioRect.height * dpr);
+          const ctx2 = ratioCanvas.getContext('2d');
+          ctx2.scale(dpr, dpr);
+
+          const w1 = valueRect.width, h1 = valueRect.height;
+          const w2 = ratioRect.width, h2 = ratioRect.height;
+          const padL = 48, padR = 20, padT = 16, padB = 26;
+          const iw1 = w1 - padL - padR, ih1 = h1 - padT - padB;
+          const iw2 = w2 - padL - padR, ih2 = h2 - padT - padB;
+
+          const drawEmpty = (ctx, w, h, text) => {
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = 'rgba(255,255,255,0.04)';
+            ctx.fillRect(0, 0, w, h);
+            ctx.fillStyle = 'rgba(17,24,39,0.4)';
+            ctx.font = '14px sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, w / 2, h / 2);
+          };
+
+          ctx1.clearRect(0, 0, w1, h1);
+          ctx2.clearRect(0, 0, w2, h2);
+          ctx1.fillStyle = 'rgba(255,255,255,0.04)';
+          ctx1.fillRect(0, 0, w1, h1);
+          ctx2.fillStyle = 'rgba(255,255,255,0.04)';
+          ctx2.fillRect(0, 0, w2, h2);
+
+          if (!points || points.length === 0) {
+            drawEmpty(ctx1, w1, h1, '暂无月度数据');
+            drawEmpty(ctx2, w2, h2, '暂无月度数据');
+            return;
+          }
+
+          // 过滤掉没有数据的月份（资产、负债、净资产都为0）
+          const filteredPoints = points.filter(p => {
+            const a = Number(p.total_assets || 0);
+            const l = Number(p.total_liabilities || 0);
+            const n = Number(p.net_worth || 0);
+            return Math.abs(a) > 0.01 || Math.abs(l) > 0.01 || Math.abs(n) > 0.01;
+          });
+
+          if (filteredPoints.length === 0) {
+            drawEmpty(ctx1, w1, h1, '暂无月度数据');
+            drawEmpty(ctx2, w2, h2, '暂无月度数据');
+            return;
+          }
+
+          const assets = filteredPoints.map(p => Number(p.total_assets || 0));
+          const liabilities = filteredPoints.map(p => Number(p.total_liabilities || 0));
+          const net = filteredPoints.map(p => Number(p.net_worth || 0));
+          const allVals = assets.concat(liabilities).concat(net);
+          const maxVal = Math.max(...allVals);
+          const minVal = Math.min(...allVals);
+          const range = maxVal - minVal || 1;
+          const toXY = (arr, idx) => {
+            const x = padL + (idx / Math.max(filteredPoints.length - 1, 1)) * iw1;
+            const y = padT + (1 - ((arr[idx] - minVal) / range)) * ih1;
+            return { x, y };
+          };
+          const series = [
+            { data: assets, color: '#10b981' },
+            { data: liabilities, color: '#ef4444' },
+            { data: net, color: '#6366f1' }
+          ];
+          ctx1.strokeStyle = 'rgba(17,24,39,0.15)';
+          ctx1.lineWidth = 1;
+          ctx1.beginPath();
+          ctx1.moveTo(padL, h1 - padB);
+          ctx1.lineTo(w1 - padR, h1 - padB);
+          ctx1.stroke();
+          ctx1.beginPath();
+          ctx1.moveTo(padL, padT);
+          ctx1.lineTo(padL, h1 - padB);
+          ctx1.stroke();
+          const tickCount1 = 4;
+          ctx1.strokeStyle = 'rgba(17,24,39,0.08)';
+          for (let i = 0; i <= tickCount1; i++) {
+            const y = padT + (i / tickCount1) * ih1;
+            ctx1.beginPath();
+            ctx1.moveTo(padL, y);
+            ctx1.lineTo(w1 - padR, y);
+            ctx1.stroke();
+            const val = maxVal - (i / tickCount1) * range;
+            ctx1.fillStyle = 'rgba(17,24,39,0.6)';
+            ctx1.font = '12px sans-serif';
+            ctx1.textAlign = 'right';
+            ctx1.textBaseline = 'middle';
+            ctx1.fillText(this.formatAxisValue(val), padL - 6, y);
+          }
+          series.forEach(s => {
+            ctx1.strokeStyle = s.color;
+            ctx1.lineWidth = 3;
+            ctx1.beginPath();
+            for (let i = 0; i < filteredPoints.length; i++) {
+              const pt = toXY(s.data, i);
+              if (i === 0) ctx1.moveTo(pt.x, pt.y); else ctx1.lineTo(pt.x, pt.y);
+            }
+            ctx1.stroke();
+          });
+          // 点标记（净资产）
+          ctx1.fillStyle = '#10b981';
+          for (let i = 0; i < filteredPoints.length; i++) {
+            const pt = toXY(assets, i);
+            ctx1.beginPath();
+            ctx1.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+            ctx1.fill();
+          }
+          ctx1.fillStyle = '#ef4444';
+          for (let i = 0; i < filteredPoints.length; i++) {
+            const pt = toXY(liabilities, i);
+            ctx1.beginPath();
+            ctx1.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+            ctx1.fill();
+          }
+          ctx1.fillStyle = '#6366f1';
+          for (let i = 0; i < filteredPoints.length; i++) {
+            const pt = toXY(net, i);
+            ctx1.beginPath();
+            ctx1.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+            ctx1.fill();
+          }
+          ctx1.fillStyle = 'rgba(17,24,39,0.5)';
+          ctx1.font = '12px sans-serif';
+          ctx1.textAlign = 'center';
+          for (let i = 0; i < filteredPoints.length; i++) {
+            const x = padL + (i / Math.max(filteredPoints.length - 1, 1)) * iw1;
+            ctx1.fillText(this.getMonthLabel(filteredPoints[i].month), x, h1 - 6);
+          }
+          // 选中高亮（资产图）
+          const selV = typeof this._monthlyValueSelectedIdx === 'number' ? this._monthlyValueSelectedIdx : -1;
+          if (selV >= 0 && selV < filteredPoints.length) {
+            const x = padL + (selV / Math.max(filteredPoints.length - 1, 1)) * iw1;
+            const toY1 = (v) => padT + (1 - ((v - minVal) / (range || 1))) * ih1;
+            const ya = toY1(assets[selV]);
+            const yl = toY1(liabilities[selV]);
+            const yn = toY1(net[selV]);
+            ctx1.strokeStyle = 'rgba(17,24,39,0.25)';
+            ctx1.lineWidth = 1;
+            ctx1.beginPath();
+            ctx1.moveTo(x, padT);
+            ctx1.lineTo(x, h1 - padB);
+            ctx1.stroke();
+            const drawDot1 = (y, color) => { ctx1.fillStyle = color; ctx1.beginPath(); ctx1.arc(x, y, 4, 0, Math.PI * 2); ctx1.fill(); };
+            drawDot1(ya, '#10b981');
+            drawDot1(yl, '#ef4444');
+            drawDot1(yn, '#6366f1');
+            const boxW = 140, boxH = 78;
+            const bx = Math.min(x + 8, w1 - padR - boxW);
+            const by = padT + 8;
+            ctx1.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx1.strokeStyle = 'rgba(17,24,39,0.15)';
+            ctx1.lineWidth = 1;
+            ctx1.beginPath();
+            ctx1.rect(bx, by, boxW, boxH);
+            ctx1.fill();
+            ctx1.stroke();
+            ctx1.fillStyle = '#374151';
+            ctx1.textAlign = 'left';
+            ctx1.textBaseline = 'top';
+            ctx1.fillText(this.getMonthLabel(filteredPoints[selV].month), bx + 8, by + 6);
+            ctx1.fillStyle = '#10b981';
+            ctx1.fillText(`资产 ${this.formatAxisValue(assets[selV])}`, bx + 8, by + 24);
+            ctx1.fillStyle = '#ef4444';
+            ctx1.fillText(`负债 ${this.formatAxisValue(liabilities[selV])}`, bx + 8, by + 40);
+            ctx1.fillStyle = '#6366f1';
+            ctx1.fillText(`净值 ${this.formatAxisValue(net[selV])}`, bx + 8, by + 56);
+          }
+
+          const ratios = filteredPoints.map(p => Number(p.debt_ratio || 0));
+          const maxR = Math.max(100, Math.max(...ratios));
+          const minR = Math.min(0, Math.min(...ratios));
+          const rangeR = maxR - minR || 1;
+          const toXY2 = (idx) => {
+            const x = padL + (idx / Math.max(filteredPoints.length - 1, 1)) * iw2;
+            const y = padT + (1 - ((ratios[idx] - minR) / rangeR)) * ih2;
+            return { x, y };
+          };
+          ctx2.strokeStyle = 'rgba(17,24,39,0.15)';
+          ctx2.lineWidth = 1;
+          ctx2.beginPath();
+          ctx2.moveTo(padL, h2 - padB);
+          ctx2.lineTo(w2 - padR, h2 - padB);
+          ctx2.stroke();
+          ctx2.beginPath();
+          ctx2.moveTo(padL, padT);
+          ctx2.lineTo(padL, h2 - padB);
+          ctx2.stroke();
+          const tickCount2 = 4;
+          ctx2.strokeStyle = 'rgba(17,24,39,0.08)';
+          for (let i = 0; i <= tickCount2; i++) {
+            const y = padT + (i / tickCount2) * ih2;
+            ctx2.beginPath();
+            ctx2.moveTo(padL, y);
+            ctx2.lineTo(w2 - padR, y);
+            ctx2.stroke();
+            const val = maxR - (i / tickCount2) * rangeR;
+            ctx2.fillStyle = 'rgba(17,24,39,0.6)';
+            ctx2.font = '12px sans-serif';
+            ctx2.textAlign = 'right';
+            ctx2.textBaseline = 'middle';
+            ctx2.fillText(`${Math.round(val)}%`, padL - 6, y);
+          }
+          ctx2.strokeStyle = '#8b5cf6';
+          ctx2.lineWidth = 3;
+          ctx2.beginPath();
+          for (let i = 0; i < filteredPoints.length; i++) {
+            const pt = toXY2(i);
+            if (i === 0) ctx2.moveTo(pt.x, pt.y); else ctx2.lineTo(pt.x, pt.y);
+          }
+          ctx2.stroke();
+          // 点标记（负债率）
+          ctx2.fillStyle = '#8b5cf6';
+          for (let i = 0; i < filteredPoints.length; i++) {
+            const pt = toXY2(i);
+            ctx2.beginPath();
+            ctx2.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+            ctx2.fill();
+          }
+          ctx2.fillStyle = 'rgba(17,24,39,0.5)';
+          ctx2.font = '12px sans-serif';
+          ctx2.textAlign = 'center';
+          for (let i = 0; i < filteredPoints.length; i++) {
+            const x = padL + (i / Math.max(filteredPoints.length - 1, 1)) * iw2;
+            ctx2.fillText(this.getMonthLabel(filteredPoints[i].month), x, h2 - 6);
+          }
+          // 选中高亮（负债率图）
+          const selR = typeof this._monthlyRatioSelectedIdx === 'number' ? this._monthlyRatioSelectedIdx : -1;
+          if (selR >= 0 && selR < filteredPoints.length) {
+            const x = padL + (selR / Math.max(filteredPoints.length - 1, 1)) * iw2;
+            const y = padT + (1 - ((ratios[selR] - minR) / (rangeR || 1))) * ih2;
+            ctx2.strokeStyle = 'rgba(17,24,39,0.25)';
+            ctx2.lineWidth = 1;
+            ctx2.beginPath();
+            ctx2.moveTo(x, padT);
+            ctx2.lineTo(x, h2 - padB);
+            ctx2.stroke();
+            ctx2.fillStyle = '#8b5cf6';
+            ctx2.beginPath();
+            ctx2.arc(x, y, 4, 0, Math.PI * 2);
+            ctx2.fill();
+            const boxW = 120, boxH = 54;
+            const bx = Math.min(x + 8, w2 - padR - boxW);
+            const by = padT + 8;
+            ctx2.fillStyle = 'rgba(255,255,255,0.9)';
+            ctx2.strokeStyle = 'rgba(17,24,39,0.15)';
+            ctx2.lineWidth = 1;
+            ctx2.beginPath();
+            ctx2.rect(bx, by, boxW, boxH);
+            ctx2.fill();
+            ctx2.stroke();
+            ctx2.fillStyle = '#374151';
+            ctx2.textAlign = 'left';
+            ctx2.textBaseline = 'top';
+            ctx2.fillText(this.getMonthLabel(filteredPoints[selR].month), bx + 8, by + 6);
+            ctx2.fillStyle = '#8b5cf6';
+            ctx2.fillText(`负债率 ${Number(ratios[selR]).toFixed(1)}%`, bx + 8, by + 24);
+          }
+
+          // 交互元数据保存
+          this._monthlyValueMeta = {
+            padL, padR, padT, padB, iw: iw1, ih: ih1, w: w1, h: h1,
+            minVal, range, assets, liabilities, net, points: filteredPoints,
+            rect: valueRect, ctx: ctx1
+          };
+          this._monthlyRatioMeta = {
+            padL, padR, padT, padB, iw: iw2, ih: ih2, w: w2, h: h2,
+            minR, rangeR, ratios, points: filteredPoints,
+            rect: ratioRect, ctx: ctx2
+          };
+        });
+    });
+  },
+  onMonthlyValueTouch(e) {
+    const meta = this._monthlyValueMeta;
+    if (!meta) return;
+    const touch = (e && e.touches && e.touches[0]) || e.detail;
+    if (!touch) return;
+    const localX = touch.x - (meta.rect.left || 0);
+    const n = Math.max(meta.points.length - 1, 1);
+    const ratio = Math.min(1, Math.max(0, (localX - meta.padL) / meta.iw));
+    const idx = Math.round(ratio * n);
+    this._monthlyValueSelectedIdx = idx;
+    this.drawMonthlyCharts();
+  },
+  onMonthlyRatioTouch(e) {
+    const meta = this._monthlyRatioMeta;
+    if (!meta) return;
+    const touch = (e && e.touches && e.touches[0]) || e.detail;
+    if (!touch) return;
+    const localX = touch.x - (meta.rect.left || 0);
+    const n = Math.max(meta.points.length - 1, 1);
+    const ratio = Math.min(1, Math.max(0, (localX - meta.padL) / meta.iw));
+    const idx = Math.round(ratio * n);
+    this._monthlyRatioSelectedIdx = idx;
+    this.drawMonthlyCharts();
+  },
+  getMonthLabel(dateStr) {
+    if (!dateStr) return "";
+    const parts = String(dateStr).split("-");
+    if (parts.length < 2) return dateStr;
+    return `${parseInt(parts[1])}月`;
+  },
+  formatAxisValue(value) {
+    const v = Math.abs(Number(value || 0));
+    const sign = Number(value || 0) < 0 ? '-' : '';
+    if (v >= 1e8) return `${sign}${(v / 1e8).toFixed(1)}亿`;
+    if (v >= 1e4) return `${sign}${(v / 1e4).toFixed(1)}万`;
+    return `${sign}${Math.round(v)}`;
   },
   async handleLogin() {
     const app = getApp();

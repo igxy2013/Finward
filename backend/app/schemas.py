@@ -185,6 +185,19 @@ class AnalyticsOut(BaseModel):
     highlights: AnalyticsHighlights
 
 
+class MonthlyPoint(BaseModel):
+    month: date
+    total_assets: Decimal
+    total_liabilities: Decimal
+    net_worth: Decimal
+    debt_ratio: float
+
+
+class MonthlyOut(BaseModel):
+    months: int
+    points: list[MonthlyPoint]
+
+
 class WechatLoginIn(BaseModel):
     js_code: str
 

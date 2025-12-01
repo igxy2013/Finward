@@ -11,7 +11,7 @@
       <text class="card-count">{{liabilities.length}} 项</text>
     </view>
     <view class="list-container">
-      <view class="list-item" wx:for="{{liabilities}}" wx:key="id" data-id="{{item.id}}" data-type="liability" bindlongpress="openItemActions">
+      <view class="list-item" wx:for="{{liabilities}}" wx:key="id" data-id="{{item.id}}" data-type="liability" bindtap="openLiabilityDetail" bindlongpress="openItemActions">
         <view class="item-icon liability-item-icon">
           <image class="icon-image" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
         </view>

@@ -11,7 +11,7 @@
       <text class="card-count">{{assets.length}} 项</text>
     </view>
     <view class="list-container">
-      <view class="list-item" wx:for="{{assets}}" wx:key="id" data-id="{{item.id}}" data-type="asset" bindlongpress="openItemActions">
+      <view class="list-item" wx:for="{{assets}}" wx:key="id" data-id="{{item.id}}" data-type="asset" bindtap="openAssetDetail" bindlongpress="openItemActions">
         <view class="item-icon asset-item-icon">
           <image class="icon-image" src="/assets/icons/{{item.icon}}" mode="aspectFit"></image>
         </view>

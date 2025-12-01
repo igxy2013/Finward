@@ -549,3 +549,59 @@ def analytics(session: Session, days: int, user_id: int) -> schemas.AnalyticsOut
     )
 
 
+def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.MonthlyOut:
+    months = max(1, min(months, 36))
+    hh_id = get_or_create_household_id(session, user_id)
+    stmt = select(models.Account).where(models.Account.household_id == hh_id).order_by(models.Account.created_at.asc())
+    accounts = session.scalars(stmt).all()
+    points: list[schemas.MonthlyPoint] = []
+    if not accounts:
+        return schemas.MonthlyOut(months=months, points=points)
+    from calendar import monthrange
+    today = datetime.now(timezone.utc).date()
+    start_year = today.year
+    start_month = today.month
+    for i in range(months - 1, -1, -1):
+        y = start_year
+        m = start_month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        last_day = monthrange(y, m)[1]
+        end_of_month = date(y, m, last_day)
+        assets_total = Decimal(0)
+        liabilities_total = Decimal(0)
+        for a in accounts:
+            base_amt = Decimal(a.amount)
+            t = a.type.value if hasattr(a.type, "value") else a.type
+            val = base_amt
+            if t == "liability" and a.monthly_payment and a.monthly_payment > 0:
+                start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else end_of_month)
+                months_elapsed = 0 if end_of_month < start_base else ((end_of_month.year - start_base.year) * 12 + (end_of_month.month - start_base.month))
+                payments_possible = int((base_amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
+                limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+                paid_months = min(months_elapsed, limit, payments_possible)
+                val = max(Decimal(0), base_amt - Decimal(a.monthly_payment) * Decimal(paid_months))
+            elif t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
+                start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else end_of_month)
+                days = 0 if end_of_month < start_date else (end_of_month - start_date).days
+                years = Decimal(days) / Decimal(365.25)
+                rate = Decimal(a.depreciation_rate)
+                val = max(Decimal(0), base_amt * (Decimal(1) - rate * years))
+            if t == "asset":
+                assets_total += val
+            else:
+                liabilities_total += val
+        net = assets_total - liabilities_total
+        debt_ratio = float((liabilities_total / assets_total * 100) if assets_total else 0.0)
+        points.append(
+            schemas.MonthlyPoint(
+                month=date(y, m, 1),
+                total_assets=assets_total,
+                total_liabilities=liabilities_total,
+                net_worth=net,
+                debt_ratio=round(debt_ratio, 2),
+            )
+        )
+    return schemas.MonthlyOut(months=months, points=points)
+

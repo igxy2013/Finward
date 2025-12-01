@@ -1,0 +1,73 @@
+<view class="page">
+  <view wx:if="{{loading}}" class="loading-container">
+    <view class="loading-spinner"></view>
+    <text class="loading-text">加载中...</text>
+  </view>
+  <view wx:elif="{{error}}" class="error-state">
+    <text class="error-text">{{error}}</text>
+  </view>
+  <view wx:else>
+    <view class="card hero-card">
+      <view class="card-header">
+        <view class="item-icon asset-item-icon">
+          <image class="icon-image" src="/assets/icons/{{icon}}" mode="aspectFit"></image>
+        </view>
+        <view class="header-info">
+          <text class="asset-name">{{detail.name}}</text>
+          <view class="tags">
+            <text class="tag">负债</text>
+            <text class="tag">{{detail.category}}</text>
+          </view>
+          <view class="value-row">
+            <text class="value-label">负债现值</text>
+            <view class="value">
+              <text class="currency">￥</text>
+              <text class="amount">{{detail.current_value_display}}</text>
+            </view>
+          </view>
+          <view class="metrics">
+            <view class="metric">
+              <text class="metric-label">期初金额</text>
+              <text class="metric-value">￥{{detail.initial_amount_display}}</text>
+            </view>
+            <view class="metric">
+              <text class="metric-label">变化</text>
+              <text class="metric-value {{change_positive ? 'positive' : (change_negative ? 'negative' : '')}}">{{change_sign}}{{detail.change_display}}</text>
+            </view>
+            <view class="metric">
+              <text class="metric-label">最近更新</text>
+              <text class="metric-value">{{detail.updated_at_display}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <view class="card info-card">
+      <view class="card-header">
+        <text class="card-title">基本信息</text>
+      </view>
+      <view class="info-list">
+        <view class="info-item"><text class="info-label">币种</text><text class="info-value">{{detail.currency}}</text></view>
+        <view class="info-item"><text class="info-label">创建时间</text><text class="info-value">{{detail.created_at_display}}</text></view>
+        <view class="info-item" wx:if="{{detail.next_due_date_display}}"><text class="info-label">到期日</text><text class="info-value">{{detail.next_due_date_display}}</text></view>
+      </view>
+    </view>
+
+    <view class="card schedule-card" wx:if="{{detail.monthly_payment || detail.loan_term_months || detail.loan_start_date}}">
+      <view class="card-header">
+        <text class="card-title">还款计划</text>
+      </view>
+      <view class="info-list">
+        <view class="info-item" wx:if="{{detail.monthly_payment}}"><text class="info-label">月供</text><text class="info-value">￥{{detail.monthly_payment_display}}</text></view>
+        <view class="info-item" wx:if="{{detail.loan_term_months}}"><text class="info-label">期限</text><text class="info-value">{{detail.loan_term_months}} 个月</text></view>
+        <view class="info-item" wx:if="{{detail.loan_start_date_display}}"><text class="info-label">开始日期</text><text class="info-value">{{detail.loan_start_date_display}}</text></view>
+      </view>
+    </view>
+
+    <view class="card note-card" wx:if="{{detail.note}}">
+      <view class="card-header"><text class="card-title">备注</text></view>
+      <view class="note-content">{{detail.note}}</view>
+    </view>
+  </view>
+</view>

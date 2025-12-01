@@ -1,0 +1,41 @@
+.page { min-height: 100vh; padding: 32rpx 24rpx 120rpx; background: #f7f8fa; }
+.loading-container { display: flex; align-items: center; justify-content: center; padding: 80rpx 0; }
+.loading-spinner { width: 48rpx; height: 48rpx; border: 6rpx solid #e5e7eb; border-top-color: #ef4444; border-radius: 50%; animation: spin 1s linear infinite; }
+.loading-text { margin-left: 16rpx; color: #6b7280; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+.card { background: #ffffff; border: 1rpx solid #eef2f7; border-radius: 24rpx; padding: 28rpx; box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06); margin-bottom: 28rpx; }
+.card-header { display: flex; align-items: center; gap: 16rpx; margin-bottom: 16rpx; }
+.card-title { font-size: 32rpx; font-weight: 600; color: #111827; }
+.card-count { font-size: 24rpx; color: #6b7280; background: #F3F4F6; padding: 4rpx 12rpx; border-radius: 12rpx; margin-left: auto; }
+.card-subtitle { font-size: 22rpx; color: #6b7280; margin-left: 8rpx; }
+
+.hero-card { position: relative; overflow: hidden; }
+.header-info { flex: 1; min-width: 0; }
+.asset-name { font-size: 34rpx; font-weight: 700; color: #111827; }
+.tags { margin-top: 8rpx; display: flex; gap: 12rpx; }
+.tag { font-size: 22rpx; color: #374151; background: #F3F4F6; padding: 4rpx 12rpx; border-radius: 12rpx; }
+.value-row { margin-top: 8rpx; }
+.value-label { font-size: 26rpx; color: #6b7280; }
+.value { display: flex; align-items: baseline; gap: 8rpx; }
+.currency { font-size: 28rpx; color: #374151; }
+.amount { font-size: 42rpx; font-weight: 800; color: #111827; }
+.metrics { display: flex; gap: 20rpx; margin-top: 16rpx; }
+.metric { flex: 1; min-width: 0; }
+.metric-label { font-size: 22rpx; color: #6b7280; }
+.metric-value { font-size: 26rpx; font-weight: 600; color: #111827; }
+.positive { color: #10B981; }
+.negative { color: #ef4444; }
+
+.info-list { display: flex; flex-direction: column; gap: 18rpx; }
+.info-item { display: flex; justify-content: space-between; align-items: center; }
+.info-label { font-size: 26rpx; color: #6b7280; }
+.info-value { font-size: 26rpx; color: #111827; }
+
+.item-icon { width: 80rpx; height: 80rpx; border-radius: 20rpx; display: flex; align-items: center; justify-content: center; margin-right: 24rpx; flex-shrink: 0; }
+.icon-image { width: 44rpx; height: 44rpx; display: block; }
+.asset-item-icon { background: linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.1)); border: 1rpx solid rgba(239,68,68,0.28); color: #ef4444; }
+
+.note-card .note-content { font-size: 26rpx; color: #374151; line-height: 1.6; background: #f9fafb; padding: 20rpx; border-radius: 16rpx; border: 1rpx dashed #e5e7eb; }
+.error-state { padding: 40rpx; text-align: center; }
+.error-text { color: #ef4444; font-size: 26rpx; }

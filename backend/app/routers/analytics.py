@@ -16,3 +16,12 @@ def get_analytics(
 ) -> schemas.AnalyticsOut:
     return crud.analytics(session, days, user.id)
 
+
+@router.get("/monthly", response_model=schemas.MonthlyOut)
+def get_analytics_monthly(
+    months: int = Query(12, ge=1, le=36, description="统计月份数"),
+    session: Session = Depends(get_session),
+    user = Depends(get_current_user),
+) -> schemas.MonthlyOut:
+    return crud.analytics_monthly(session, months, user.id)
+
