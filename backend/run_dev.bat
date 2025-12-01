@@ -26,7 +26,7 @@ if not exist ".env" (
 )
 
 echo [INFO] Starting Uvicorn server on port 5085...
-uvicorn app.main:app --host 0.0.0.0 --port 5085 --reload
+uvicorn app.main:app --host 0.0.0.0 --port 5085 --reload --no-use-colors
 
 popd
 endlocal
