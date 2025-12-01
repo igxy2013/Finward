@@ -454,10 +454,21 @@ Page({
     if (!meta) return;
     const touch = (e && e.touches && e.touches[0]) || e.detail;
     if (!touch) return;
-    const localX = touch.x - (meta.rect.left || 0);
-    const n = Math.max(meta.points.length - 1, 1);
-    const ratio = Math.min(1, Math.max(0, (localX - meta.padL) / meta.iw));
-    const idx = Math.round(ratio * n);
+    const localX = (typeof touch.x === 'number') ? touch.x : ((touch.clientX || 0) - (meta.rect.left || 0));
+    const localY = (typeof touch.y === 'number') ? touch.y : ((touch.clientY || 0) - (meta.rect.top || 0));
+    const inside = localX >= meta.padL && localX <= meta.padL + meta.iw && localY >= meta.padT && localY <= meta.padT + meta.ih;
+    if (!inside) {
+      this._monthlyValueSelectedIdx = -1;
+      this.drawMonthlyCharts();
+      return;
+    }
+    const len = meta.points.length;
+    const xs = new Array(len).fill(0).map((_, i) => meta.padL + (i / Math.max(len - 1, 1)) * meta.iw);
+    let idx = 0, best = Infinity;
+    for (let i = 0; i < len; i++) {
+      const d = Math.abs(localX - xs[i]);
+      if (d < best) { best = d; idx = i; }
+    }
     this._monthlyValueSelectedIdx = idx;
     this.drawMonthlyCharts();
   },
@@ -466,13 +477,30 @@ Page({
     if (!meta) return;
     const touch = (e && e.touches && e.touches[0]) || e.detail;
     if (!touch) return;
-    const localX = touch.x - (meta.rect.left || 0);
-    const n = Math.max(meta.points.length - 1, 1);
-    const ratio = Math.min(1, Math.max(0, (localX - meta.padL) / meta.iw));
-    const idx = Math.round(ratio * n);
+    const localX = (typeof touch.x === 'number') ? touch.x : ((touch.clientX || 0) - (meta.rect.left || 0));
+    const localY = (typeof touch.y === 'number') ? touch.y : ((touch.clientY || 0) - (meta.rect.top || 0));
+    const inside = localX >= meta.padL && localX <= meta.padL + meta.iw && localY >= meta.padT && localY <= meta.padT + meta.ih;
+    if (!inside) {
+      this._monthlyRatioSelectedIdx = -1;
+      this.drawMonthlyCharts();
+      return;
+    }
+    const len = meta.points.length;
+    const xs = new Array(len).fill(0).map((_, i) => meta.padL + (i / Math.max(len - 1, 1)) * meta.iw);
+    let idx = 0, best = Infinity;
+    for (let i = 0; i < len; i++) {
+      const d = Math.abs(localX - xs[i]);
+      if (d < best) { best = d; idx = i; }
+    }
     this._monthlyRatioSelectedIdx = idx;
     this.drawMonthlyCharts();
   },
+  clearMonthlySelection() {
+    this._monthlyValueSelectedIdx = -1;
+    this._monthlyRatioSelectedIdx = -1;
+    this.drawMonthlyCharts();
+  },
+  noop() {},
   getMonthLabel(dateStr) {
     if (!dateStr) return "";
     const parts = String(dateStr).split("-");

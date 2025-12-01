@@ -55,7 +55,7 @@
 
     
 
-    <view class="card monthly-card">
+    <view class="card monthly-card" bindtap="clearMonthlySelection">
       <view class="card-header">
         <text class="card-title">资产走势</text>
         <text class="card-subtitle">Asset Trend</text>
@@ -75,7 +75,7 @@
         </view>
       </view>
       <view class="chart-block">
-        <canvas type="2d" id="monthlyValueCanvas" canvas-id="monthlyValueChart" class="chart-canvas" bindtouchstart="onMonthlyValueTouch"></canvas>
+        <canvas type="2d" id="monthlyValueCanvas" canvas-id="monthlyValueChart" class="chart-canvas" catchtap="noop" bindtouchstart="onMonthlyValueTouch"></canvas>
       </view>
       <view class="chart-legend">
         <view class="legend-item">
@@ -84,7 +84,7 @@
         </view>
       </view>
       <view class="chart-block">
-        <canvas type="2d" id="monthlyRatioCanvas" canvas-id="monthlyRatioChart" class="chart-canvas" bindtouchstart="onMonthlyRatioTouch"></canvas>
+        <canvas type="2d" id="monthlyRatioCanvas" canvas-id="monthlyRatioChart" class="chart-canvas" catchtap="noop" bindtouchstart="onMonthlyRatioTouch"></canvas>
       </view>
     </view>
 
