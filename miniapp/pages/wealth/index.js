@@ -84,10 +84,19 @@ Page({
       }
     } catch (e) {}
     this.skipFilterOnce = true;
-    this.setData({ summaryReady: false, activeType: 'all' }, () => {
-      this.fetchSummary(true);
-      this.fetchList(false);
-    });
+    let cached = null;
+    try { cached = wx.getStorageSync('fw_summary_cache'); } catch (e) {}
+    if (cached && typeof cached === 'object') {
+      this.setData({ summary: cached, summaryReady: true, activeType: 'all' }, () => {
+        this.fetchSummary(true);
+        this.fetchList(false);
+      });
+    } else {
+      this.setData({ summaryReady: false, activeType: 'all' }, () => {
+        this.fetchSummary(true);
+        this.fetchList(false);
+      });
+    }
   },
   async fetchSummary(skipIncomeUpdate = false) {
     const now = new Date();
@@ -96,6 +105,13 @@ Page({
     const start = this.formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
     try {
       const res = await api.fetchWealthSummary(start, end, sel);
+      const quickSummary = {
+        expectedExpense: this.formatNumber(res.expected_expense),
+        expectedIncome: this.data.summary.expectedIncome,
+        actualExpense: this.formatNumber(res.actual_expense),
+        actualIncome: this.formatNumber(Number(res.actual_income))
+      };
+      this.setData({ summary: quickSummary, summaryReady: true });
       
       let designServiceIncome = 0;
       try {
@@ -177,6 +193,7 @@ Page({
         },
         summaryReady: !skipIncomeUpdate ? true : this.data.summaryReady
       });
+      try { wx.setStorageSync('fw_summary_cache', this.data.summary); } catch (e) {}
     } catch (e) {
       // 游客模式下不显示演示数据
       this.setData({

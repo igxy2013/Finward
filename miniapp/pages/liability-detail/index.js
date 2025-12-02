@@ -49,12 +49,48 @@ Page({
         created_at_display: this.formatDate(data.created_at),
         next_due_date_display: data.next_due_date ? this.formatDate(data.next_due_date) : "",
         monthly_payment_display: data.monthly_payment ? this.formatNumber(data.monthly_payment) : "",
-        loan_start_date_display: data.loan_start_date ? this.formatDate(data.loan_start_date) : ""
+        loan_start_date_display: data.loan_start_date ? this.formatDate(data.loan_start_date) : "",
+        annual_interest_rate_display: (data.annual_interest_rate != null && data.annual_interest_rate !== "") ? Number(data.annual_interest_rate * 100).toFixed(2) : ""
       };
       this.setData({ detail, icon, change_positive, change_negative, change_sign, loading: false });
     } catch (error) {
       this.setData({ loading: false, error: "加载失败" });
     }
+  },
+  openEditMenu() {
+    wx.showActionSheet({
+      itemList: ["编辑", "删除"],
+      success: (res) => {
+        if (res.tapIndex === 0) this.editAccount();
+        if (res.tapIndex === 1) this.deleteAccount();
+      }
+    });
+  },
+  editAccount() {
+    const id = Number(this.data.id || this.data.detail?.id || 0);
+    if (!id) return;
+    wx.navigateTo({ url: `/pages/manage/index?edit=1&id=${id}` });
+  },
+  async deleteAccount() {
+    const id = Number(this.data.id || this.data.detail?.id || 0);
+    if (!id) return;
+    wx.showModal({
+      title: "确认删除",
+      content: "删除后不可恢复，是否确认删除该负债？",
+      confirmText: "删除",
+      cancelText: "取消",
+      success: async (res) => {
+        if (res.confirm) {
+          try {
+            await api.deleteAccount(id);
+            wx.showToast({ title: "已删除", icon: "success" });
+            setTimeout(() => wx.navigateBack(), 400);
+          } catch (e) {
+            wx.showToast({ title: "删除失败", icon: "none" });
+          }
+        }
+      }
+    });
   },
   getIcon(category) {
     return LIABILITY_CATEGORY_ICONS[category] || "bill-line-red.svg";

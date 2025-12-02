@@ -11,11 +11,11 @@
 .card-subtitle { font-size: 22rpx; color: #6b7280; margin-left: 8rpx; }
 
 .hero-card { position: relative; overflow: hidden; }
-.header-info { flex: 1; min-width: 0; }
-.asset-name { font-size: 34rpx; font-weight: 700; color: #111827; }
+.header-info { flex: 1; min-width: 0; display: flex; flex-direction: column; padding-top: 4rpx; }
+.asset-name { font-size: 34rpx; font-weight: 700; color: #111827; margin-top: 0; display: block; }
 .tags { margin-top: 8rpx; display: flex; gap: 12rpx; }
 .tag { font-size: 22rpx; color: #374151; background: #F3F4F6; padding: 4rpx 12rpx; border-radius: 12rpx; }
-.value-row { margin-top: 8rpx; }
+.value-row { margin-top: 14rpx; }
 .value-label { font-size: 26rpx; color: #6b7280; }
 .value { display: flex; align-items: baseline; gap: 8rpx; }
 .currency { font-size: 28rpx; color: #374151; }
@@ -35,6 +35,13 @@
 .item-icon { width: 80rpx; height: 80rpx; border-radius: 20rpx; display: flex; align-items: center; justify-content: center; margin-right: 24rpx; flex-shrink: 0; }
 .icon-image { width: 44rpx; height: 44rpx; display: block; }
 .asset-item-icon { background: linear-gradient(135deg, rgba(239,68,68,0.18), rgba(239,68,68,0.1)); border: 1rpx solid rgba(239,68,68,0.28); color: #ef4444; }
+
+.action-icon { width: 36rpx; height: 36rpx; display: block; margin-left: auto; margin-top: 4rpx; }
+.action-icon:active { opacity: 0.7; }
+
+.hero-card { padding-top: 16rpx; }
+.hero-card .card-header { align-items: flex-start; }
+.hero-card .item-icon { margin-top: 4rpx; }
 
 .note-card .note-content { font-size: 26rpx; color: #374151; line-height: 1.6; background: #f9fafb; padding: 20rpx; border-radius: 16rpx; border: 1rpx dashed #e5e7eb; }
 .error-state { padding: 40rpx; text-align: center; }

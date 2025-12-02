@@ -10,6 +10,7 @@ Page({
       note: "",
       loan_term_months: "",
       monthly_payment: "",
+      annual_interest_rate: "",
       loan_start_date: "",
       investment_term_months: "",
       monthly_income: "",
@@ -122,6 +123,7 @@ Page({
           note: item.note || "",
           loan_term_months: item.loan_term_months != null ? String(item.loan_term_months) : "",
           monthly_payment: item.monthly_payment != null ? String(item.monthly_payment) : "",
+          annual_interest_rate: item.annual_interest_rate != null ? String(Number(item.annual_interest_rate) * 100) : "",
           loan_start_date: item.loan_start_date || "",
           investment_term_months: item.investment_term_months != null ? String(item.investment_term_months) : "",
           monthly_income: item.monthly_income != null ? String(item.monthly_income) : "",
@@ -188,6 +190,7 @@ Page({
           note: item.note || "",
           loan_term_months: item.loan_term_months != null ? String(item.loan_term_months) : "",
           monthly_payment: item.monthly_payment != null ? String(item.monthly_payment) : "",
+          annual_interest_rate: item.annual_interest_rate != null ? String(Number(item.annual_interest_rate) * 100) : "",
           loan_start_date: item.loan_start_date || "",
           investment_term_months: item.investment_term_months != null ? String(item.investment_term_months) : "",
           monthly_income: item.monthly_income != null ? String(item.monthly_income) : "",
@@ -225,7 +228,7 @@ Page({
     let v = e.detail.value;
     if (key === "amount") v = this.clipTwoDecimals(v);
     this.setData({ [`form.${key}`]: v });
-    if (key === "amount" || key === "depreciation_rate") this.recomputeCurrentValue();
+    if (key === "amount" || key === "depreciation_rate" || key === "annual_interest_rate" || key === "monthly_payment" || key === "loan_term_months") this.recomputeCurrentValue();
   },
   handleTenantDueDayChange(e) {
     const idx = Number(e.detail.value || 0);
@@ -269,6 +272,7 @@ Page({
       const mp = Number(this.data.form.monthly_payment || 0);
       const startStr = this.data.form.loan_start_date;
       const term = Number(this.data.form.loan_term_months || 0);
+      const ratePct = Number(this.data.form.annual_interest_rate || 0);
       if (!startStr || !base || !mp) {
         this.setData({ current_value_display: this.clipTwoDecimals(String(base || 0)) });
         return;
@@ -279,7 +283,14 @@ Page({
       const paymentsPossible = Math.floor(base / mp);
       const limit = term > 0 ? term : monthsElapsed;
       const paidMonths = Math.min(monthsElapsed, limit, paymentsPossible);
-      const current = Math.max(0, base - mp * paidMonths);
+      const remainingMonths = Math.max(0, (limit || 0) - paidMonths);
+      const r = ratePct > 0 ? (ratePct / 100) / 12 : 0;
+      let current = 0;
+      if (r > 0 && remainingMonths > 0) {
+        current = mp * (1 - Math.pow(1 + r, -remainingMonths)) / r;
+      } else {
+        current = Math.max(0, base - mp * paidMonths);
+      }
       this.setData({ current_value_display: this.clipTwoDecimals(String(current)) });
     }
   },
@@ -325,6 +336,7 @@ Page({
         loan_term_months: f.loan_term_months !== "" ? Number(f.loan_term_months) : null,
         monthly_payment: f.monthly_payment !== "" ? Number(f.monthly_payment) : null,
         loan_start_date: f.loan_start_date || null,
+        annual_interest_rate: f.annual_interest_rate !== "" ? Number(f.annual_interest_rate) / 100 : null,
         investment_term_months: f.investment_term_months !== "" ? Number(f.investment_term_months) : null,
         monthly_income: f.monthly_income !== "" ? Number(f.monthly_income) : null,
         invest_start_date: f.invest_start_date || null,
@@ -378,6 +390,7 @@ Page({
             note: "",
             loan_term_months: "",
             monthly_payment: "",
+            annual_interest_rate: "",
             investment_term_months: "",
             monthly_income: "",
             invest_start_date: "",

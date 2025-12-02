@@ -26,6 +26,7 @@ class Account(Base):
     next_due_date: Mapped[date | None] = mapped_column(Date())
     loan_term_months: Mapped[int | None] = mapped_column()
     monthly_payment: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    annual_interest_rate: Mapped[float | None] = mapped_column(Numeric(6, 4))
     loan_start_date: Mapped[date | None] = mapped_column(Date())
     investment_term_months: Mapped[int | None] = mapped_column()
     monthly_income: Mapped[float | None] = mapped_column(Numeric(18, 2))

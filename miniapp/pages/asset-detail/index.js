@@ -75,6 +75,41 @@ Page({
       this.fetchRentRecords();
     }
   },
+  openEditMenu() {
+    wx.showActionSheet({
+      itemList: ["编辑", "删除"],
+      success: (res) => {
+        if (res.tapIndex === 0) this.editAccount();
+        if (res.tapIndex === 1) this.deleteAccount();
+      }
+    });
+  },
+  editAccount() {
+    const id = Number(this.data.id || this.data.detail?.id || 0);
+    if (!id) return;
+    wx.navigateTo({ url: `/pages/manage/index?edit=1&id=${id}` });
+  },
+  async deleteAccount() {
+    const id = Number(this.data.id || this.data.detail?.id || 0);
+    if (!id) return;
+    wx.showModal({
+      title: "确认删除",
+      content: "删除后不可恢复，是否确认删除该资产？",
+      confirmText: "删除",
+      cancelText: "取消",
+      success: async (res) => {
+        if (res.confirm) {
+          try {
+            await api.deleteAccount(id);
+            wx.showToast({ title: "已删除", icon: "success" });
+            setTimeout(() => wx.navigateBack(), 400);
+          } catch (e) {
+            wx.showToast({ title: "删除失败", icon: "none" });
+          }
+        }
+      }
+    });
+  },
   async fetchDetail(id) {
     try {
       const data = await api.getAccount(id);
@@ -96,7 +131,8 @@ Page({
         monthly_payment_display: data.monthly_payment ? this.formatNumber(data.monthly_payment) : "",
         monthly_income_display: data.monthly_income ? this.formatNumber(data.monthly_income) : "",
         loan_start_date_display: data.loan_start_date ? this.formatDate(data.loan_start_date) : "",
-        invest_start_date_display: data.invest_start_date ? this.formatDate(data.invest_start_date) : ""
+        invest_start_date_display: data.invest_start_date ? this.formatDate(data.invest_start_date) : "",
+        depreciation_rate_display: (data.depreciation_rate != null && data.depreciation_rate !== "") ? Number(data.depreciation_rate * 100).toFixed(2) : ""
       };
       this.setData({
         detail,

@@ -175,13 +175,26 @@ def ensure_schema_upgrade():
                 text(
                     """
                     SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-                    WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'monthly_payment'
+                    WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'depreciation_rate'
                     """
                 ),
                 {"db": settings.db_name},
             )
             if not (result5.scalar() or 0):
-                conn.execute(text("ALTER TABLE accounts ADD COLUMN monthly_payment DECIMAL(18,2) NULL"))
+                conn.execute(text("ALTER TABLE accounts ADD COLUMN depreciation_rate DECIMAL(6,4) NULL"))
+                conn.commit()
+
+            result6 = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'annual_interest_rate'
+                    """
+                ),
+                {"db": settings.db_name},
+            )
+            if not (result6.scalar() or 0):
+                conn.execute(text("ALTER TABLE accounts ADD COLUMN annual_interest_rate DECIMAL(6,4) NULL"))
                 conn.commit()
 
             # loan_start_date
