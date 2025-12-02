@@ -104,6 +104,36 @@ Page({
         categoryDisplay: category
       });
     }
+    // 通用预填：支持从详情页传入参数(type, category, amount, date, note, account_name, tenant_name)
+    if (options && !edit && !this.data.editId && (options.type || options.category || options.amount || options.date || options.note)) {
+      const type = String(options.type || 'expense');
+      const category = decodeURIComponent(String(options.category || ''));
+      const amount = String(options.amount || '');
+      const date = String(options.date || today);
+      const note = decodeURIComponent(String(options.note || ''));
+      const account_name = options.account_name ? decodeURIComponent(String(options.account_name)) : "";
+      const tenant_name = options.tenant_name ? decodeURIComponent(String(options.tenant_name)) : "";
+      const typeIndex = type === 'income' ? 1 : 0;
+      const categoryOptions = type === 'income' ? this.data.incomeCategoryOptions : this.data.expenseCategoryOptions;
+      const catIndex = category ? Math.max(0, categoryOptions.findIndex(opt => opt.label === category)) : -1;
+      this.setData({
+        form: {
+          type,
+          category,
+          amount,
+          planned: false,
+          recurring_monthly: false,
+          date,
+          note
+        },
+        hidden: { account_id: null, tenancy_id: null, account_name, tenant_name },
+        typeIndex,
+        typeLabel: type === 'income' ? '收入' : '支出',
+        categoryOptions,
+        categoryIndex: catIndex,
+        categoryDisplay: category || '请选择类别'
+      });
+    }
   },
   async prefill(id) {
     try {

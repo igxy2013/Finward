@@ -602,6 +602,16 @@ Page({
       wx.navigateTo({ url: `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}` });
       return;
     }
+    const nonNumeric = Number.isNaN(Number(rawId));
+    if (nonNumeric) {
+      const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
+      if (item) {
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&note=${encodeURIComponent(String(item.note || ''))}`;
+        wx.navigateTo({ url });
+        return;
+      }
+      return;
+    }
     
     const id = Number(rawId);
     if (!id) return;
