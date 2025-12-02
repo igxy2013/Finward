@@ -18,29 +18,29 @@
             <text class="tag">负债</text>
             <text class="tag">{{detail.category}}</text>
           </view>
-          <view class="value-row">
-            <text class="value-label">负债现值</text>
-            <view class="value">
-              <text class="currency">￥</text>
-              <text class="amount">{{detail.current_value_display}}</text>
-            </view>
-          </view>
-          <view class="metrics">
-            <view class="metric">
-              <text class="metric-label">期初金额</text>
-              <text class="metric-value">￥{{detail.initial_amount_display}}</text>
-            </view>
-            <view class="metric">
-              <text class="metric-label">变化</text>
-              <text class="metric-value {{change_positive ? 'positive' : (change_negative ? 'negative' : '')}}">{{change_sign}}{{detail.change_display}}</text>
-            </view>
-            <view class="metric">
-              <text class="metric-label">最近更新</text>
-              <text class="metric-value">{{detail.updated_at_display}}</text>
-            </view>
-          </view>
         </view>
         <image class="action-icon" src="/assets/icons/edit-line.svg" mode="aspectFit" bindtap="openEditMenu"></image>
+      </view>
+      <view class="value-row">
+        <text class="value-label">负债现值</text>
+        <view class="value">
+          <text class="currency">￥</text>
+          <text class="amount">{{detail.current_value_display}}</text>
+        </view>
+      </view>
+      <view class="metrics">
+        <view class="metric">
+          <text class="metric-label">期初金额</text>
+          <text class="metric-value">￥{{detail.initial_amount_display}}</text>
+        </view>
+        <view class="metric">
+          <text class="metric-label">变化</text>
+          <text class="metric-value {{change_positive ? 'positive' : (change_negative ? 'negative' : '')}}">{{change_sign}}{{detail.change_display}}</text>
+        </view>
+        <view class="metric">
+          <text class="metric-label">最近更新</text>
+          <text class="metric-value">{{detail.updated_at_display}}</text>
+        </view>
       </view>
     </view>
 

@@ -26,10 +26,10 @@
 .value { display: flex; align-items: baseline; gap: 8rpx; }
 .currency { font-size: 28rpx; color: #374151; }
 .amount { font-size: 42rpx; font-weight: 800; color: #111827; }
-.metrics { display: flex; gap: 20rpx; margin-top: 16rpx; }
-.metric { flex: 1; min-width: 0; }
-.metric-label { font-size: 22rpx; color: #6b7280; }
-.metric-value { font-size: 26rpx; font-weight: 600; color: #111827; }
+.metrics { display: flex; gap: 12rpx; margin-top: 12rpx; }
+.metric { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.metric-label { font-size: 22rpx; color: #6b7280; display: block; }
+.metric-value { font-size: 26rpx; font-weight: 600; color: #111827; display: block; margin-top: 6rpx; }
 .positive { color: #10B981; }
 .negative { color: #ef4444; }
 
