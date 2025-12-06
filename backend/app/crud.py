@@ -283,7 +283,7 @@ def backfill_accounts_to_household(session: Session, household_id: int) -> int:
     return int(updated or 0)
 
 
-def wealth_summary(session: Session, user_id: int, start: date | None, end: date | None, scope: str | None = None) -> schemas.WealthSummaryOut:
+def wealth_summary(session: Session, user_id: int, start: date | None, end: date | None, scope: str | None) -> schemas.WealthSummaryOut:
     hh_id = get_or_create_household_id(session, user_id)
     if scope and scope.lower() == "month" and start and end and start.year == end.year and start.month == end.month:
         y = start.year
@@ -368,7 +368,10 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
             else:
                 act_inc += amt * Decimal(months)
     scope_key = (scope or "").lower()
-    if scope_key in {"month", "year"}:
+    # 推断有效统计范围：当未显式提供 scope，但提供了同月的 start/end，则视为按月统计
+    is_same_month = bool(start and end and start.year == end.year and start.month == end.month)
+    effective_scope_key = scope_key if scope_key in {"month", "year", "all"} else ("month" if is_same_month else "")
+    if effective_scope_key in {"month", "year"}:
         hh_id2 = hh_id
         stmt_acc = select(models.Account).where(models.Account.household_id == hh_id2)
         accs = session.scalars(stmt_acc).all()
@@ -390,7 +393,7 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
                 months_eff2 = 0 if end_date < s_eff2 else ((end_date.year - s_eff2.year) * 12 + (end_date.month - s_eff2.month) + 1)
                 limit2 = a.investment_term_months if a.investment_term_months is not None else months_eff2
                 exp_inc += Decimal(a.monthly_income) * Decimal(min(months_eff2, limit2))
-    elif scope_key == "all":
+    elif effective_scope_key == "all":
         # 全部范围：账号的月供/月收益按各自起始日至“end”进行月度累加，并受期限限制
         hh_id2 = hh_id
         stmt_acc = select(models.Account).where(models.Account.household_id == hh_id2)
@@ -407,6 +410,18 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
                 months_elapsed2 = max(1, (end_date.year - start_base2.year) * 12 + (end_date.month - start_base2.month) + 1)
                 limit2 = a.investment_term_months if a.investment_term_months is not None else months_elapsed2
                 exp_inc += Decimal(a.monthly_income) * Decimal(min(months_elapsed2, limit2))
+    # 若为“按月”统计，叠加快照中的 external_income 以与前端列表保持一致
+    # 仅在显式 scope=month 时叠加快照 external_income（避免快照计算时重复计入）
+    if scope_key == "month" and start and end and start.year == end.year and start.month == end.month:
+        try:
+            snap = get_monthly_snapshot(session, user_id, start.year, start.month)
+            if snap and snap.external_income:
+                ext = Decimal(snap.external_income or 0)
+                if ext > 0:
+                    exp_inc += ext
+        except Exception:
+            pass
+
     return schemas.WealthSummaryOut(
         expected_expense=exp_exp,
         expected_income=exp_inc,
@@ -421,7 +436,7 @@ def upsert_monthly_snapshot(session: Session, user_id: int, year: int, month: in
     from calendar import monthrange
     last_day = monthrange(year, month)[1]
     end = date(year, month, last_day)
-    summary = wealth_summary(session, user_id, start, end, scope="month")
+    summary = wealth_summary(session, user_id, start, end, scope=None)
     ext = Decimal(external_income or 0)
     snap = (
         session.query(models.MonthlySnapshot)
@@ -966,3 +981,328 @@ def analytics_stats(session: Session, months: int, user_id: int) -> schemas.Stat
         expense_distribution=expense_distribution,
         summary=current_summary,
     )
+
+
+def wealth_items(session: Session, user_id: int, start: date, end: date, type_filter: str | None = None) -> list[schemas.WealthItemOut]:
+    hh_id = get_or_create_household_id(session, user_id)
+    from calendar import monthrange
+
+    def clamp_day(yy: int, mm: int, dd: int) -> int:
+        dim = monthrange(yy, mm)[1]
+        return max(1, min(dim, int(dd or 1)))
+
+    def month_bounds(d: date) -> tuple[int, int]:
+        return d.year, d.month
+
+    y, m = month_bounds(start)
+    # 1. 当月真实现金流
+    q = (
+        session.query(models.Cashflow)
+        .filter(models.Cashflow.household_id == hh_id)
+        .filter(models.Cashflow.date >= start)
+        .filter(models.Cashflow.date <= end)
+        .order_by(models.Cashflow.date.asc())
+    )
+    rows = q.all()
+    recorded: list[schemas.WealthItemOut] = []
+    for r in rows:
+        tval = r.type.value if hasattr(r.type, "value") else r.type
+        if type_filter and type_filter in {"income", "expense"} and tval != type_filter:
+            continue
+        recorded.append(
+            schemas.WealthItemOut(
+                id=str(r.id),
+                type=tval,
+                category=r.category or ("其他收入" if tval == "income" else "其他支出"),
+                amount=Decimal(r.amount or 0),
+                planned=bool(r.planned),
+                recurring_monthly=bool(getattr(r, "recurring_monthly", False)),
+                date=r.date,
+                note=r.note,
+                account_id=r.account_id,
+                tenancy_id=r.tenancy_id,
+                account_name=r.account_name,
+                tenant_name=r.tenant_name,
+                name=r.note or r.category,
+            )
+        )
+
+    # 2. 计算当月租金提醒（Tenancy）
+    ten_stmt = session.query(models.Tenancy).filter(
+        models.Tenancy.household_id == hh_id,
+        models.Tenancy.reminder_enabled == True,
+    )
+    tenancies = ten_stmt.all()
+
+    def compute_next_due(start_dt: date, due_day: int, frequency: str = "monthly", ref_date: date | None = None) -> date:
+        today2 = ref_date or datetime.now(timezone.utc).date()
+        y2 = today2.year
+        m2 = today2.month
+        d2 = clamp_day(y2, m2, due_day)
+        candidate = date(y2, m2, d2)
+        if candidate < today2:
+            interval = 1
+            if frequency == "quarterly":
+                interval = 3
+            elif frequency == "semiannual":
+                interval = 6
+            elif frequency == "annual":
+                interval = 12
+            m3 = m2 + interval
+            y3 = y2 + (1 if m3 > 12 else 0)
+            m3 = 1 if m3 > 12 else m3
+            d3 = clamp_day(y3, m3, due_day)
+            candidate = date(y3, m3, d3)
+        if candidate < start_dt:
+            candidate = start_dt
+        return candidate
+
+    def in_range(ds: date | None) -> bool:
+        return bool(ds and (start <= ds <= end))
+
+    rent_items: list[schemas.WealthItemOut] = []
+    rented_asset_ids: set[int] = set()
+    for t in tenancies:
+        if t.end_date and t.end_date < start:
+            continue
+        nd = t.next_due_date or compute_next_due(t.start_date, t.due_day, t.frequency or "monthly", ref_date=start)
+        if in_range(nd):
+            if t.account_id:
+                rented_asset_ids.add(int(t.account_id))
+            if not type_filter or type_filter == "income":
+                rent_items.append(
+                    schemas.WealthItemOut(
+                        id=f"tenancy:{t.id}",
+                        type="income",
+                        category="租金收入",
+                        amount=Decimal(t.monthly_rent or 0),
+                        planned=True,
+                        recurring_monthly=False,
+                        date=nd,
+                        account_id=t.account_id,
+                        tenancy_id=t.id,
+                        tenant_name=t.tenant_name,
+                        name="租金收入",
+                        synthetic_kind="rent",
+                    )
+                )
+
+    # 3. 资产月收益（排除出租资产）
+    acc_stmt = select(models.Account).where(models.Account.household_id == hh_id)
+    accounts = session.scalars(acc_stmt).all()
+    asset_income_items: list[schemas.WealthItemOut] = []
+    for a in accounts:
+        tval = a.type.value if hasattr(a.type, "value") else a.type
+        if tval != "asset":
+            continue
+        mi = Decimal(a.monthly_income or 0)
+        if mi <= 0:
+            continue
+        if a.id and int(a.id) in rented_asset_ids:
+            continue
+        # 起止限定
+        started = True
+        months_elapsed = 0
+        if a.invest_start_date:
+            sdt = a.invest_start_date
+            si = sdt.year * 12 + sdt.month
+            mi_idx = y * 12 + m
+            months_elapsed = mi_idx - si
+            if months_elapsed < 0:
+                started = False
+        if not started:
+            continue
+        term = int(a.investment_term_months or 0)
+        if term > 0 and months_elapsed >= term:
+            continue
+        if not type_filter or type_filter == "income":
+            asset_income_items.append(
+                schemas.WealthItemOut(
+                    id=f"asset-income:{a.id}:{y}{str(m).zfill(2)}",
+                    type="income",
+                    category=a.category or "资产收益",
+                    amount=mi,
+                    planned=True,
+                    recurring_monthly=True,
+                    date=end,
+                    account_id=a.id,
+                    account_name=a.name,
+                    name=a.category or "资产收益",
+                    synthetic_kind="asset-income",
+                )
+            )
+
+    # 4. 负债月供（当前月内）
+    debt_items: list[schemas.WealthItemOut] = []
+    for a in accounts:
+        tval = a.type.value if hasattr(a.type, "value") else a.type
+        if tval != "liability":
+            continue
+        mp = Decimal(a.monthly_payment or 0)
+        if mp <= 0:
+            continue
+        start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else start)
+        due_day = start_base.day
+        yy, mm = y, m
+        while True:
+            dd = clamp_day(yy, mm, due_day)
+            cand = date(yy, mm, dd)
+            if cand < start_base:
+                mm += 1
+                if mm > 12:
+                    mm = 1
+                    yy += 1
+                continue
+            if cand > end:
+                break
+            term = int(a.loan_term_months or 0)
+            months_elapsed = max(0, (yy - start_base.year) * 12 + (mm - start_base.month))
+            if term > 0 and months_elapsed >= term:
+                break
+            if not type_filter or type_filter == "expense":
+                debt_items.append(
+                    schemas.WealthItemOut(
+                        id=f"loan:{a.id}:{yy}{str(mm).zfill(2)}",
+                        type="expense",
+                        category=(a.category or "负债") + "月供",
+                        amount=mp,
+                        planned=True,
+                        recurring_monthly=True,
+                        date=cand,
+                        account_id=a.id,
+                        account_name=a.name,
+                        name=(a.category or "负债") + "月供",
+                        synthetic_kind="loan-payment",
+                    )
+                )
+            mm += 1
+            if mm > 12:
+                mm = 1
+                yy += 1
+
+    # 5. 上月的循环计划项补齐（收入/支出），若当前月未记录
+    prev_y = y if m > 1 else y - 1
+    prev_m = (m - 1) if m > 1 else 12
+    from calendar import monthrange as mr
+    prev_start = date(prev_y, prev_m, 1)
+    prev_end = date(prev_y, prev_m, mr(prev_y, prev_m)[1])
+    prev_rows = (
+        session.query(models.Cashflow)
+        .filter(models.Cashflow.household_id == hh_id)
+        .filter(models.Cashflow.date >= prev_start)
+        .filter(models.Cashflow.date <= prev_end)
+        .order_by(models.Cashflow.date.asc())
+        .all()
+    )
+    recorded_keys = set(
+        f"{i.type}:{(i.category or '')}:{(i.name or i.category or '')}"
+        for i in recorded
+        if i.recurring_monthly and i.planned
+    )
+    synth_items: list[schemas.WealthItemOut] = []
+    for r in prev_rows:
+        if not r.planned or not getattr(r, "recurring_monthly", False):
+            continue
+        key = f"{r.type.value}:{(r.category or '')}:{(r.note or r.category or '')}"
+        if key in recorded_keys:
+            continue
+        prev_day = r.date.day
+        dnum = clamp_day(y, m, prev_day)
+        cand = date(y, m, dnum)
+        if start <= cand <= end:
+            tval2 = r.type.value if hasattr(r.type, "value") else r.type
+            if not type_filter or type_filter == tval2:
+                synth_items.append(
+                    schemas.WealthItemOut(
+                        id=f"recurring:{r.id}:{y}{str(m).zfill(2)}",
+                        type=tval2,
+                        category=r.category or ("其他收入" if tval2 == "income" else "其他支出"),
+                        amount=Decimal(r.amount or 0),
+                        planned=True,
+                        recurring_monthly=True,
+                        date=cand,
+                        account_id=r.account_id,
+                        account_name=r.account_name,
+                        name=r.note or r.category,
+                        synthetic_kind=f"recurring-{tval2}",
+                    )
+                )
+
+    # 5a. 基于主数据的循环计划项（按起止日期生成历史月份条目）
+    recurring_master_items: list[schemas.WealthItemOut] = []
+    master_rows = (
+        session.query(models.Cashflow)
+        .filter(models.Cashflow.household_id == hh_id)
+        .filter(models.Cashflow.planned == True)
+        .filter(getattr(models.Cashflow, "recurring_monthly") == True)
+        .all()
+    )
+    for r in master_rows:
+        # 限定在起止范围内
+        rsd = getattr(r, "recurring_start_date", None) or r.date
+        red = getattr(r, "recurring_end_date", None)
+        if rsd and rsd > end:
+            continue
+        if red and red < start:
+            continue
+        # 本月计划发生日：沿用起始日的 day（或原记录日），并做月末夹紧
+        base_day = (rsd if rsd else r.date).day
+        dnum = clamp_day(y, m, base_day)
+        cand = date(y, m, dnum)
+        if not (start <= cand <= end):
+            continue
+        tval2 = r.type.value if hasattr(r.type, "value") else r.type
+        if type_filter and type_filter in {"income", "expense"} and tval2 != type_filter:
+            continue
+        # 若当月已有同类循环计划记录，则不重复生成
+        key = f"{tval2}:{(r.category or '')}:{(r.note or r.category or '')}"
+        if key in recorded_keys:
+            continue
+        recurring_master_items.append(
+            schemas.WealthItemOut(
+                id=f"recurring:{r.id}:{y}{str(m).zfill(2)}",
+                type=tval2,
+                category=r.category or ("其他收入" if tval2 == "income" else "其他支出"),
+                amount=Decimal(r.amount or 0),
+                planned=True,
+                recurring_monthly=True,
+                date=cand,
+                account_id=r.account_id,
+                account_name=r.account_name,
+                name=r.note or r.category,
+                synthetic_kind=f"recurring-{tval2}",
+            )
+        )
+
+    # 6. 外部统计（如有），从快照取 external_income 合成设计服务条目
+    snap = get_monthly_snapshot(session, user_id, y, m)
+    external_items: list[schemas.WealthItemOut] = []
+    if snap and snap.external_income and (not type_filter or type_filter == "income"):
+        ext_amt = Decimal(snap.external_income or 0)
+        if ext_amt > 0:
+            external_items.append(
+                schemas.WealthItemOut(
+                    id=f"design-service:{y}{str(m).zfill(2)}",
+                    type="income",
+                    category="设计服务",
+                    amount=ext_amt,
+                    planned=True,
+                    recurring_monthly=False,
+                    date=end,
+                    name="设计服务",
+                    synthetic_kind="design-service",
+                )
+            )
+
+    items = recorded + rent_items + asset_income_items + debt_items + synth_items + recurring_master_items + external_items
+    # 去重（以 id 唯一）
+    seen: set[str] = set()
+    result: list[schemas.WealthItemOut] = []
+    for it in items:
+        if it.id in seen:
+            continue
+        seen.add(it.id)
+        result.append(it)
+    # 排序：日期倒序
+    result.sort(key=lambda x: str(x.date), reverse=True)
+    return result

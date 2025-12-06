@@ -24,7 +24,6 @@
       <view class="detail-list">
         <view class="row"><text class="label">类别</text><text class="value">{{display.category}}</text></view>
         <view class="row"><text class="label">日期</text><text class="value">{{display.date}}</text></view>
-        <view class="row" wx:if="{{!(item.recurring_monthly && item.planned)}}"><text class="label">日期</text><text class="value">{{display.date}}</text></view>
         <view class="row" wx:if="{{item.recurring_monthly && display.recurringStartDate}}"><text class="label">开始日期</text><text class="value">{{display.recurringStartDate}}</text></view>
         <view class="row" wx:if="{{item.recurring_monthly && display.recurringEndDate}}"><text class="label">结束日期</text><text class="value">{{display.recurringEndDate}}</text></view>
         <view class="row" wx:if="{{display.recurringLabel}}"><text class="label">重复</text><text class="value">{{display.recurringLabel}}</text></view>
@@ -33,7 +32,7 @@
         <view class="row" wx:if="{{display.note}}"><text class="label">备注</text><text class="value">{{display.note}}</text></view>
       </view>
 
-      <view class="actions" wx:if="{{!synthetic || (synthetic && (item._synthetic === 'recurring-expense' || item._synthetic === 'recurring-income'))}}">
+      <view class="actions" wx:if="{{!synthetic || (synthetic && (item._synthetic === 'recurring-expense' || item._synthetic === 'recurring-income' || item._synthetic === 'loan-payment' || item._synthetic === 'asset-income'))}}">
         <button class="btn primary" bindtap="edit">编辑</button>
         <button class="btn danger" bindtap="remove">删除</button>
       </view>

@@ -278,9 +278,10 @@ Page({
       const incomeChartData = decorate(stats.income_distribution || [], 'income');
       const expenseChartData = decorate(stats.expense_distribution || [], 'expense');
       const labels = Array.isArray(stats.labels) ? stats.labels : [];
+      const monthLabels = labels.map(l => this.getMonthLabel(l));
       const incomeSeries = Array.isArray(stats.income_trend) ? stats.income_trend.map(n => Number(n || 0)) : [];
       const expenseSeries = Array.isArray(stats.expense_trend) ? stats.expense_trend.map(n => Number(n || 0)) : [];
-      this.setData({ incomeChartData, expenseChartData, incomeTrendLabels: labels, incomeTrendSeries: incomeSeries, expenseTrendSeries: expenseSeries }, () => {
+      this.setData({ incomeChartData, expenseChartData, incomeTrendLabels: monthLabels, expenseTrendLabels: monthLabels, incomeTrendSeries: incomeSeries, expenseTrendSeries: expenseSeries }, () => {
         this.drawIncomePie();
         this.drawExpensePie();
         this.drawIncomeTrend();
@@ -639,12 +640,6 @@ Page({
         }
       } catch (e4) {}
     }
-    const incomeSeries = results.map(r => Number(r.income || 0));
-    const expenseSeries = results.map(r => Number(r.expense || 0));
-    const labels = months.map(p => this.getMonthLabel(p.month));
-    this.setData({ incomeTrendSeries: incomeSeries, expenseTrendSeries: expenseSeries, incomeTrendLabels: labels, expenseTrendLabels: labels }, () => {
-      this.drawIncomeTrend();
-    });
   },
   calculateCashflowDistribution(items = [], kind = 'income') {
     const buckets = {};

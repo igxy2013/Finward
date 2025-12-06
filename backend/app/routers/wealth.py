@@ -27,3 +27,18 @@ def get_summary(
     user = Depends(get_current_user),
 ):
     return crud.wealth_summary(session, user.id, parse_date(start), parse_date(end), scope)
+
+
+@router.get("/items", response_model=list[schemas.WealthItemOut])
+def get_items(
+    start: str = Query(..., description="开始日期 YYYY-MM-DD"),
+    end: str = Query(..., description="结束日期 YYYY-MM-DD"),
+    type: str | None = Query(None, pattern="^(income|expense)$", description="可选过滤：income/expense"),
+    session: Session = Depends(get_session),
+    user = Depends(get_current_user),
+):
+    s = parse_date(start)
+    e = parse_date(end)
+    if not s or not e:
+        return []
+    return crud.wealth_items(session, user.id, s, e, type)

@@ -287,6 +287,50 @@ class CashflowCreate(BaseModel):
     account_name: str | None = None
     tenant_name: str | None = None
 
+    @field_validator('type', mode='before')
+    @classmethod
+    def normalize_type(cls, v):
+        if isinstance(v, str):
+            if v == '收入':
+                return 'income'
+            if v == '支出':
+                return 'expense'
+        return v
+
+    @field_validator('amount', mode='before')
+    @classmethod
+    def parse_amount(cls, v):
+        if v is None or v == "":
+            return None
+        try:
+            return Decimal(str(v))
+        except Exception:
+            return None
+
+    @field_validator('date', mode='before')
+    @classmethod
+    def parse_date_field(cls, v):
+        if not v:
+            return None
+        if isinstance(v, date):
+            return v
+        try:
+            return datetime.strptime(str(v), "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    @field_validator('recurring_start_date', 'recurring_end_date', mode='before')
+    @classmethod
+    def parse_optional_date_field(cls, v):
+        if v is None or v == "":
+            return None
+        if isinstance(v, date):
+            return v
+        try:
+            return datetime.strptime(str(v), "%Y-%m-%d").date()
+        except Exception:
+            return None
+
 
 class CashflowOut(BaseModel):
     id: int
@@ -380,3 +424,20 @@ class StatsOut(BaseModel):
     income_distribution: list[CategorySlice]
     expense_distribution: list[CategorySlice]
     summary: WealthSummaryOut
+
+
+class WealthItemOut(BaseModel):
+    id: str
+    type: CashflowTypeLiteral
+    category: str
+    amount: Decimal
+    planned: bool = True
+    recurring_monthly: bool = False
+    date: date
+    note: str | None = None
+    account_id: int | None = None
+    tenancy_id: int | None = None
+    account_name: str | None = None
+    tenant_name: str | None = None
+    name: str | None = None
+    synthetic_kind: str | None = None

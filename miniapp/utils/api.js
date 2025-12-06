@@ -157,6 +157,11 @@ module.exports = {
   joinHousehold: (code) => request(`/households/join`, { method: "POST", data: { code } })
   ,backfillHousehold: () => request(`/households/backfill`, { method: "POST" })
   ,fetchWealthSummary: (start, end, scope) => request(`/wealth/summary`, { data: { start, end, scope } })
+  ,listWealthItems: (start, end, type) => {
+    const data = { start, end };
+    if (type && (type === 'income' || type === 'expense')) data.type = type;
+    return request(`/wealth/items`, { data });
+  }
   ,createCashflow: (data) => request(`/cashflows`, { method: "POST", data })
   ,listCashflows: (query) => request(`/cashflows`, { data: query || {} })
   ,getCashflow: (id) => request(`/cashflows/${id}`)

@@ -50,7 +50,7 @@ Page({
       const amountText = d(options.amount_display || '0.00');
       const title = d(options.name || options.category || '记录');
       const icon = this.getIcon({ type });
-      const recurringStartDate = d(options.recurring_start_date || '');
+      const recurringStartDate = d(options.recurring_start_date || options.date || '');
       const recurringEndDate = d(options.recurring_end_date || '');
       this.setData({
         item: {
@@ -111,7 +111,7 @@ Page({
           date: item.date || "",
           category: item.category || "",
           recurringLabel,
-          recurringStartDate: item.recurring_start_date || "",
+          recurringStartDate: item.recurring_start_date || item.date || "",
           recurringEndDate: item.recurring_end_date || "",
           accountName: item.account_name || "",
           note: item.note || "",
@@ -157,6 +157,20 @@ Page({
       wx.navigateTo({ url: `/pages/cashflow/index?${q}` });
       return;
     }
+    if (isSynthetic && it._synthetic === 'loan-payment') {
+      const aid = Number(it.account_id || 0);
+      if (aid) {
+        wx.navigateTo({ url: `/pages/liability-detail/index?id=${aid}` });
+        return;
+      }
+    }
+    if (isSynthetic && it._synthetic === 'asset-income') {
+      const aid = Number(it.account_id || 0);
+      if (aid) {
+        wx.navigateTo({ url: `/pages/asset-detail/index?id=${aid}` });
+        return;
+      }
+    }
     const id = Number(it.id || 0);
     if (!id) return;
     wx.navigateTo({ url: `/pages/cashflow/index?edit=1&id=${id}` });
@@ -164,7 +178,7 @@ Page({
   async remove() {
     const isSynthetic = !!this.data.synthetic;
     const it = this.data.item || {};
-    if (isSynthetic && (it._synthetic === 'recurring-expense' || it._synthetic === 'recurring-income')) {
+    if (isSynthetic && (it._synthetic === 'recurring-expense' || it._synthetic === 'recurring-income' || it._synthetic === 'loan-payment' || it._synthetic === 'asset-income')) {
       const sid = String(it.id || '');
       wx.showModal({
         title: "删除确认",
