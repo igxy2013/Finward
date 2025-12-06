@@ -722,3 +722,247 @@ def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.Mo
             )
         )
     return schemas.MonthlyOut(months=months, points=points)
+
+
+def analytics_stats(session: Session, months: int, user_id: int) -> schemas.StatsOut:
+    months = max(1, min(months, 36))
+    from calendar import monthrange
+    hh_id = get_or_create_household_id(session, user_id)
+
+    today = datetime.now(timezone.utc).date()
+    start_year = today.year
+    start_month = today.month
+
+    labels: list[str] = []
+    income_trend: list[Decimal] = []
+    expense_trend: list[Decimal] = []
+
+    def ym_at(index: int) -> tuple[int, int]:
+        y = start_year
+        m = start_month - index
+        while m <= 0:
+            m += 12
+            y -= 1
+        return y, m
+
+    def month_range(y: int, m: int) -> tuple[date, date]:
+        first = date(y, m, 1)
+        last = date(y, m, monthrange(y, m)[1])
+        return first, last
+
+    # 构建趋势（按月的预计收入/预计支出），优先使用快照
+    for i in range(months - 1, -1, -1):
+        y, m = ym_at(i)
+        start, end = month_range(y, m)
+        summary = wealth_summary(session, user_id, start, end, scope="month")
+        labels.append(f"{y}-{str(m).zfill(2)}")
+        income_trend.append(Decimal(summary.expected_income or 0))
+        expense_trend.append(Decimal(summary.expected_expense or 0))
+
+    # 当前月分布（收入/支出）
+    cur_y, cur_m = ym_at(0)
+    cur_start, cur_end = month_range(cur_y, cur_m)
+
+    # 记录的现金流（限定在当前月）
+    cf_stmt = (
+        session.query(models.Cashflow)
+        .filter(models.Cashflow.household_id == hh_id)
+        .filter(models.Cashflow.date >= cur_start)
+        .filter(models.Cashflow.date <= cur_end)
+    )
+    cfs = cf_stmt.order_by(models.Cashflow.date.asc()).all()
+    recorded_income = [r for r in cfs if r.type.value == "income" and r.planned]
+    recorded_expense = [r for r in cfs if r.type.value == "expense" and r.planned]
+
+    # 资产与负债账户
+    acc_stmt = select(models.Account).where(models.Account.household_id == hh_id)
+    accounts = session.scalars(acc_stmt).all()
+    assets = [a for a in accounts if (a.type.value if hasattr(a.type, "value") else a.type) == "asset"]
+    liabilities = [a for a in accounts if (a.type.value if hasattr(a.type, "value") else a.type) == "liability"]
+
+    # 计算租金提醒（当前月）
+    ten_stmt = session.query(models.Tenancy).filter(models.Tenancy.household_id == hh_id, models.Tenancy.reminder_enabled == True)
+    tenancies = ten_stmt.all()
+
+    def clamp_day(yy: int, mm: int, dd: int) -> int:
+        dim = monthrange(yy, mm)[1]
+        return max(1, min(dim, int(dd or 1)))
+
+    def compute_next_due(start_dt: date, due_day: int, frequency: str = "monthly", ref_date: date | None = None) -> date:
+        today2 = ref_date or datetime.now(timezone.utc).date()
+        y2 = today2.year
+        m2 = today2.month
+        d2 = clamp_day(y2, m2, due_day)
+        candidate = date(y2, m2, d2)
+        if candidate < today2:
+            interval = 1
+            if frequency == "quarterly":
+                interval = 3
+            elif frequency == "semiannual":
+                interval = 6
+            elif frequency == "annual":
+                interval = 12
+            m3 = m2 + interval
+            y3 = y2 + (1 if m3 > 12 else 0)
+            m3 = 1 if m3 > 12 else m3
+            d3 = clamp_day(y3, m3, due_day)
+            candidate = date(y3, m3, d3)
+        if candidate < start_dt:
+            candidate = start_dt
+        return candidate
+
+    def in_range(ds: date | None) -> bool:
+        return bool(ds and (cur_start <= ds <= cur_end))
+
+    rent_incomes: list[tuple[str, Decimal]] = []
+    rented_asset_ids: set[int] = set()
+    for t in tenancies:
+        if t.end_date and t.end_date < cur_start:
+            continue
+        nd = t.next_due_date or compute_next_due(t.start_date, t.due_day, t.frequency or "monthly")
+        if in_range(nd):
+            rent_incomes.append(("租金收入", Decimal(t.monthly_rent or 0)))
+            if t.account_id:
+                rented_asset_ids.add(int(t.account_id))
+
+    # 资产月收益（排除已出租资产）
+    asset_incomes: list[tuple[str, Decimal]] = []
+    for a in assets:
+        if a.monthly_income and Decimal(a.monthly_income) > 0:
+            if a.id and int(a.id) in rented_asset_ids:
+                continue
+            cat = a.category or "资产收益"
+            asset_incomes.append((cat, Decimal(a.monthly_income)))
+
+    # 负债月供（当前月内）
+    expense_debts: list[tuple[str, Decimal]] = []
+    for acc in liabilities:
+        mp = Decimal(acc.monthly_payment or 0)
+        if mp <= 0:
+            continue
+        start_base = acc.loan_start_date if acc.loan_start_date else (to_utc(acc.created_at).date() if acc.created_at else cur_start)
+        # 计算本月应付的日子
+        due_day = start_base.day
+        dnum = clamp_day(cur_y, cur_m, due_day)
+        cand = date(cur_y, cur_m, dnum)
+        if cand < start_base:
+            continue
+        term = int(acc.loan_term_months or 0)
+        months_elapsed = max(0, (cur_y - start_base.year) * 12 + (cur_m - start_base.month))
+        if term > 0 and months_elapsed >= term:
+            continue
+        expense_debts.append(((acc.category or "负债") + "月供", mp))
+
+    # 上月的循环计划项，用于当前月补齐缺失的重复项（收入/支出）
+    prev_m = cur_m - 1
+    prev_y = cur_y
+    if prev_m <= 0:
+        prev_m += 12
+        prev_y -= 1
+    prev_start, prev_end = month_range(prev_y, prev_m)
+    prev_stmt = (
+        session.query(models.Cashflow)
+        .filter(models.Cashflow.household_id == hh_id)
+        .filter(models.Cashflow.date >= prev_start)
+        .filter(models.Cashflow.date <= prev_end)
+    )
+    prev_cfs = prev_stmt.order_by(models.Cashflow.date.asc()).all()
+    recorded_income_keys = set(f"income:{(r.category or '')}:{(r.note or r.category or '')}" for r in recorded_income if r.recurring_monthly)
+    recorded_expense_keys = set(f"expense:{(r.category or '')}:{(r.note or r.category or '')}" for r in recorded_expense if r.recurring_monthly)
+
+    synth_income: list[tuple[str, Decimal]] = []
+    synth_expense: list[tuple[str, Decimal]] = []
+    for r in prev_cfs:
+        key = f"{r.type.value}:{(r.category or '')}:{(r.note or r.category or '')}"
+        if not r.planned or not r.recurring_monthly:
+            continue
+        # 对齐到当前月份的日期（沿用上月的 day）
+        prev_day = r.date.day
+        dnum2 = clamp_day(cur_y, cur_m, prev_day)
+        cand2 = date(cur_y, cur_m, dnum2)
+        if cur_start <= cand2 <= cur_end:
+            if r.type.value == "income" and key not in recorded_income_keys:
+                synth_income.append((r.category or "其他收入", Decimal(r.amount or 0)))
+            if r.type.value == "expense" and key not in recorded_expense_keys:
+                synth_expense.append((r.category or "其他支出", Decimal(r.amount or 0)))
+
+    # 组装分布
+    def canon_income(name: str, note: str | None = None) -> str:
+        base = (name or "").strip() or "其他收入"
+        hay = f"{base} {note or ''}".lower()
+        if ("工资" in hay) or ("薪资" in hay) or ("薪水" in hay) or ("salary" in hay):
+            return "工资"
+        if "租金" in hay:
+            return "租金收入"
+        if ("设计服务" in hay) or ("设计" in hay):
+            return "设计服务"
+        return base
+
+    income_buckets: dict[str, Decimal] = {}
+    for r in recorded_income:
+        cat = canon_income(r.category or "其他收入", r.note)
+        income_buckets[cat] = income_buckets.get(cat, Decimal(0)) + Decimal(r.amount or 0)
+    for name, amt in rent_incomes:
+        income_buckets[name] = income_buckets.get(name, Decimal(0)) + amt
+    for name, amt in asset_incomes:
+        cat = canon_income(name)
+        income_buckets[cat] = income_buckets.get(cat, Decimal(0)) + amt
+    for name, amt in synth_income:
+        cat = canon_income(name)
+        income_buckets[cat] = income_buckets.get(cat, Decimal(0)) + amt
+
+    expense_buckets: dict[str, Decimal] = {}
+    for r in recorded_expense:
+        cat = (r.category or "其他支出").strip() or "其他支出"
+        expense_buckets[cat] = expense_buckets.get(cat, Decimal(0)) + Decimal(r.amount or 0)
+    for name, amt in expense_debts:
+        expense_buckets[name] = expense_buckets.get(name, Decimal(0)) + amt
+    for name, amt in synth_expense:
+        cat = (name or "其他支出").strip() or "其他支出"
+        expense_buckets[cat] = expense_buckets.get(cat, Decimal(0)) + amt
+
+    def build_distribution(buckets: dict[str, Decimal], kind: str) -> list[schemas.CategorySlice]:
+        entries = [(k, v) for k, v in buckets.items() if v and v > 0]
+        entries.sort(key=lambda kv: kv[1], reverse=True)
+        if not entries:
+            return []
+        MAX_SEG = 6
+        pinned_income = {"工资", "工资收入", "薪资", "租金收入", "设计服务"}
+        pinned = pinned_income if kind == "income" else set()
+        by_name = {name: amt for name, amt in entries}
+        pinned_list = [(n, by_name[n]) for n in pinned if n in by_name]
+        remaining = [(n, a) for (n, a) in entries if n not in pinned]
+        processed: list[tuple[str, Decimal]] = []
+        if len(pinned_list) >= MAX_SEG - 1:
+            major = pinned_list[: MAX_SEG - 1]
+            others_val = sum(a for _, a in remaining) + sum(a for _, a in pinned_list[MAX_SEG - 1 :])
+            processed = major + [("其他收入" if kind == "income" else "其他支出", Decimal(others_val))]
+        else:
+            slots = MAX_SEG - 1 - len(pinned_list)
+            major = pinned_list + remaining[: max(slots, 0)]
+            if len(major) < len(entries):
+                others_val = sum(a for (n, a) in entries if n not in [x for x, _ in major])
+                major = major + [("其他收入" if kind == "income" else "其他支出", Decimal(others_val))]
+            processed = major
+        total = sum(a for _, a in processed) or Decimal(1)
+        result: list[schemas.CategorySlice] = []
+        for idx, (name, amt) in enumerate(processed):
+            pct = float((amt / total * 100))
+            result.append(schemas.CategorySlice(category=name, amount=amt, percentage=round(pct, 1)))
+        return result
+
+    income_distribution = build_distribution(income_buckets, "income")
+    expense_distribution = build_distribution(expense_buckets, "expense")
+
+    # 当前月 summary（用于前端显示预计收入/预计支出）
+    current_summary = wealth_summary(session, user_id, cur_start, cur_end, scope="month")
+
+    return schemas.StatsOut(
+        months=months,
+        labels=labels,
+        income_trend=income_trend,
+        expense_trend=expense_trend,
+        income_distribution=income_distribution,
+        expense_distribution=expense_distribution,
+        summary=current_summary,
+    )

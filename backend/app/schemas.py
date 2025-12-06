@@ -369,3 +369,14 @@ class CashflowUpdate(BaseModel):
             return datetime.strptime(str(v), "%Y-%m-%d").date()
         except Exception:
             return None
+
+
+# 汇总统计输出（供前端一次性获取趋势与分布）
+class StatsOut(BaseModel):
+    months: int
+    labels: list[str]
+    income_trend: list[Decimal]
+    expense_trend: list[Decimal]
+    income_distribution: list[CategorySlice]
+    expense_distribution: list[CategorySlice]
+    summary: WealthSummaryOut

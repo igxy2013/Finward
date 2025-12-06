@@ -181,4 +181,5 @@ module.exports = {
     return request(`/analytics/snapshot`, { method: "POST", data });
   }
   ,getMonthlySnapshot: (year, month) => request(`/analytics/snapshot`, { data: { year, month } })
+  ,fetchStats: (months = 12) => request(`/analytics/stats`, { data: { months } })
 };

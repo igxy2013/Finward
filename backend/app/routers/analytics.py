@@ -44,3 +44,11 @@ def get_monthly_snapshot(
 ):
     return crud.get_monthly_snapshot(session, user.id, year, month)
 
+
+@router.get("/stats", response_model=schemas.StatsOut)
+def get_analytics_stats(
+    months: int = Query(12, ge=1, le=36, description="返回最近N个月的趋势与当前月分布"),
+    session: Session = Depends(get_session),
+    user = Depends(get_current_user),
+):
+    return crud.analytics_stats(session, months, user.id)

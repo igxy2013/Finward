@@ -162,18 +162,6 @@ Page({
     const start = this.formatDate(new Date(y, m - 1, 1));
     try {
       const res = await api.fetchWealthSummary(start, end, sel);
-      const actExp = Number(res.actual_expense || 0);
-      const actInc = Number(res.actual_income || 0);
-      const net = actInc - actExp;
-      const ratio = actExp > 0 ? (actInc / actExp) : null;
-      const quickSummary = {
-        expectedExpense: this.formatNumber(res.expected_expense),
-        expectedIncome: this.data.summary.expectedIncome,
-        actualExpense: this.formatNumber(actExp),
-        actualIncome: this.formatNumber(actInc)
-      };
-      this.setData({ summary: quickSummary, summaryReady: true });
-      
       let designServiceIncome = 0;
       try {
         const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
@@ -192,88 +180,24 @@ Page({
           }
         }
       } catch (err) {}
-      
-      let expectedRentIncomeSum = 0;
-      let assetMonthlyIncomeSum = 0;
-      try {
-        const primaryDays = 90;
-        let reminders = [];
-        let assets = [];
-        try {
-          const res = await Promise.all([
-            api.listRentReminders(primaryDays),
-            api.listAccounts("asset")
-          ]);
-          reminders = res[0] || [];
-          assets = res[1] || [];
-        } catch (err1) {
-          try {
-            const res2 = await Promise.all([
-              api.listRentReminders(45),
-              api.listAccounts("asset")
-            ]);
-            reminders = res2[0] || [];
-            assets = res2[1] || [];
-          } catch (err2) {
-            try {
-              assets = await api.listAccounts("asset");
-              reminders = [];
-            } catch (err3) {
-              assets = [];
-              reminders = [];
-            }
-          }
-        }
-        const rangeStart = start ? new Date(String(start).replace(/-/g, "/")) : null;
-        const rangeEnd = end ? new Date(String(end).replace(/-/g, "/")) : null;
-        const inRange = (ds) => {
-          if (!rangeStart || !rangeEnd) return true;
-          const d = new Date(String(ds).replace(/-/g, "/"));
-          return d >= rangeStart && d <= rangeEnd;
-        };
-        const rentedAssetIds = new Set();
-        (reminders || []).forEach((r) => {
-          if (inRange(r.next_due_date)) {
-            expectedRentIncomeSum += Number(r.monthly_rent || 0);
-            if (r.account_id) rentedAssetIds.add(Number(r.account_id));
-          }
-        });
-        (assets || []).forEach((acc) => {
-          if (!rentedAssetIds.has(Number(acc.id))) {
-            const mi = Number(acc.monthly_income || 0);
-            if (mi > 0) assetMonthlyIncomeSum += mi;
-          }
-        });
-      } catch (err) {}
-
-      let plannedIncomeSum = 0;
-      try {
-        const query = { end };
-        if (start) query.start = start;
-        const cfList = await api.listCashflows(query);
-        plannedIncomeSum = (cfList || []).reduce((sum, x) => sum + (x && x.type === 'income' && !!x.planned ? Number(x.amount || 0) : 0), 0);
-      } catch (err) {}
-
-      const expectedIncomeNum = plannedIncomeSum + expectedRentIncomeSum + assetMonthlyIncomeSum + designServiceIncome;
-      const expectedIncomeVal = skipIncomeUpdate ? this.data.summary.expectedIncome : this.formatNumber(expectedIncomeNum);
-      const actualIncomeVal = skipIncomeUpdate ? this.data.summary.actualIncome : this.formatNumber(Number(res.actual_income));
-      this.setData({
-        summary: {
-          ...this.data.summary,
-          expectedExpense: this.formatNumber(res.expected_expense),
-          expectedIncome: expectedIncomeVal,
-          actualExpense: this.formatNumber(res.actual_expense),
-          actualIncome: actualIncomeVal
-        },
-        summaryReady: !skipIncomeUpdate ? true : this.data.summaryReady
-      });
-      try { wx.setStorageSync('fw_summary_cache', this.data.summary); } catch (e) {}
       try {
         const app = getApp();
         if (app?.globalData?.token && !app.globalData.guest) {
           await api.saveMonthlySnapshot(y, m, designServiceIncome);
         }
       } catch (eSnap) {}
+
+      const res2 = await api.fetchWealthSummary(start, end, sel);
+      const actExp = Number(res2.actual_expense || 0);
+      const actInc = Number(res2.actual_income || 0);
+      const quickSummary = {
+        expectedExpense: this.formatNumber(res2.expected_expense),
+        expectedIncome: this.formatNumber(res2.expected_income),
+        actualExpense: this.formatNumber(actExp),
+        actualIncome: this.formatNumber(actInc)
+      };
+      this.setData({ summary: quickSummary, summaryReady: true });
+      try { wx.setStorageSync('fw_summary_cache', this.data.summary); } catch (e) {}
     } catch (e) {
       // 游客模式下不显示演示数据
       this.setData({

@@ -221,17 +221,16 @@ Page({
         () => {
           this.drawTrendChart();
           this.drawCashflowChart();
-          this.fetchCashflowDistribution();
+          this.fetchStats(12);
         }
       );
       try {
         const monthlyRes = await api.fetchMonthlyAnalytics(12);
         this.setData({ monthly: monthlyRes.points || [] }, () => {
           this.drawMonthlyCharts();
-          this.updateIncomeExpenseTrends();
         });
       } catch (e2) {
-        this.setData({ monthly: [] }, () => { this.drawMonthlyCharts(); this.updateIncomeExpenseTrends(); });
+        this.setData({ monthly: [] }, () => { this.drawMonthlyCharts(); });
       }
     } catch (error) {
       // 游客模式下不显示演示数据
@@ -260,6 +259,34 @@ Page({
         },
         error: ""
       });
+    }
+  },
+  async fetchStats(months = 12) {
+    const app = getApp();
+    if (!app?.globalData?.token || app.globalData.guest) {
+      this.setData({ incomeChartData: [], expenseChartData: [], incomeTrendSeries: [], expenseTrendSeries: [], incomeTrendLabels: [] });
+      return;
+    }
+    try {
+      const stats = await api.fetchStats(months);
+      const decorate = (slices = [], kind = 'income') => {
+        const paletteIncome = ["#43B176", "#3b82f6", "#06b6d4", "#a855f7", "#f59e0b", "#22c55e"];
+        const paletteExpense = ["#ef4444", "#3b82f6", "#22c55e", "#a855f7", "#f59e0b", "#06b6d4"];
+        const palette = kind === 'income' ? paletteIncome : paletteExpense;
+        return (slices || []).map((it, idx) => ({ name: it.category, value: Number(it.amount || 0), percentage: Number(it.percentage || 0).toFixed(1), color: palette[idx % palette.length] }));
+      };
+      const incomeChartData = decorate(stats.income_distribution || [], 'income');
+      const expenseChartData = decorate(stats.expense_distribution || [], 'expense');
+      const labels = Array.isArray(stats.labels) ? stats.labels : [];
+      const incomeSeries = Array.isArray(stats.income_trend) ? stats.income_trend.map(n => Number(n || 0)) : [];
+      const expenseSeries = Array.isArray(stats.expense_trend) ? stats.expense_trend.map(n => Number(n || 0)) : [];
+      this.setData({ incomeChartData, expenseChartData, incomeTrendLabels: labels, incomeTrendSeries: incomeSeries, expenseTrendSeries: expenseSeries }, () => {
+        this.drawIncomePie();
+        this.drawExpensePie();
+        this.drawIncomeTrend();
+      });
+    } catch (e) {
+      this.setData({ incomeChartData: [], expenseChartData: [], incomeTrendSeries: [], expenseTrendSeries: [], incomeTrendLabels: [] });
     }
   },
   async fetchCashflowDistribution() {
@@ -474,28 +501,17 @@ Page({
         globalEnd = this.formatDate(endDate);
       }
     } catch (eG) { globalStart = null; globalEnd = null; }
-    let recurringDefsIncome = [];
-    let recurringDefsExpense = [];
-    if (globalStart && globalEnd) {
-      try {
-        const allPlanned = await api.listCashflows({ start: globalStart, end: globalEnd, planned: true });
-        const defs = (allPlanned || []).filter(i => !!i.recurring_monthly);
-        recurringDefsIncome = defs.filter(i => i.type === 'income').map(i => ({
-          key: `${i.type}:${i.category}:${i.note ? i.note : i.category}`,
-          amount: Number(i.amount || 0),
-          start: String(i.recurring_start_date || i.date || ''),
-          end: String(i.recurring_end_date || ''),
-          category: i.category || ''
-        }));
-        recurringDefsExpense = defs.filter(i => i.type === 'expense').map(i => ({
-          key: `${i.type}:${i.category}:${i.note ? i.note : i.category}`,
-          amount: Number(i.amount || 0),
-          start: String(i.recurring_start_date || i.date || ''),
-          end: String(i.recurring_end_date || ''),
-          category: i.category || ''
-        }));
-      } catch (eAll) { recurringDefsIncome = []; recurringDefsExpense = []; }
-    }
+
+    // 获取租金提醒，用于计算租金收入（与收支页面逻辑对齐）
+    let rentReminders = [];
+    try {
+      rentReminders = await api.listRentReminders(90);
+    } catch (e) { rentReminders = []; }
+    const rentedAssetIds = new Set();
+    (rentReminders || []).forEach(r => {
+      if (r.account_id) rentedAssetIds.add(Number(r.account_id));
+    });
+
     const buildRange = (monthStr) => {
       const parts = String(monthStr || '').split('-');
       const y = parseInt(parts[0] || '0');
@@ -515,20 +531,33 @@ Page({
           api.listAccounts('asset'),
           api.listAccounts('liability')
         ]).then(([list, sumRes, assets, liabilities]) => {
+          // 1. 计划收入 (Cashflow)
           const plannedIncome = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'income' && !!x.planned ? Number(x.amount || 0) : 0); }, 0);
           const actualIncome = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'income' && !x.planned ? Number(x.amount || 0) : 0); }, 0);
-          const plannedExpense = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'expense' && !!x.planned ? Number(x.amount || 0) : 0); }, 0);
+          
+          // 2. 租金收入 (Rent Reminders)
+          let rentIncome = 0;
+          const rangeStart = new Date(rng.y, rng.m - 1, 1);
+          const rangeEnd = new Date(rng.y, rng.m, 0);
+          const inRange = (ds) => {
+             const d = new Date(String(ds).replace(/-/g, "/"));
+             return d >= rangeStart && d <= rangeEnd;
+          };
+          (rentReminders || []).forEach(r => {
+             if (inRange(r.next_due_date)) {
+                 rentIncome += Number(r.monthly_rent || 0);
+             }
+          });
 
-          let mastersIncome = 0;
-
-          let mastersExpense = 0;
-
-          // 资产月收益（所有资产的 monthly_income）纳入各历史月份
+          // 3. 资产月收益 (Asset Income)，排除已出租资产
           let assetMonthlyIncomeSum = 0;
           try {
             const monthIndex = rng.y * 12 + rng.m;
             (assets || []).forEach(acc => {
               if (!acc) return;
+              // 排除已出租的资产（避免与租金收入重复）
+              if (rentedAssetIds.has(Number(acc.id))) return;
+
               const mi = Number(acc.monthly_income || 0);
               if (!(mi > 0)) return;
               let started = true;
@@ -550,97 +579,28 @@ Page({
             });
           } catch (e2) { assetMonthlyIncomeSum = 0; }
 
-          // 负债月供计入固定支出趋势（按开始日期和期限判断是否在当月有效）
-          let liabilitiesMonthlySum = 0;
-          try {
-            const plannedRecurringExpenseCategories = new Set((list || [])
-              .filter(function(i){ return i && i.type === 'expense' && !!i.planned && !!i.recurring_monthly; })
-              .map(function(i){ return String(i.category || ''); }));
-            const monthIndex = rng.y * 12 + rng.m;
-            (liabilities || []).forEach(function(acc){
-              if (!acc) return;
-              const mp = Number(acc.monthly_payment || 0);
-              if (!mp || mp <= 0) return;
-              // 未开始：若有开始日期且开始月在所选月份之后，则跳过
-              let started = true;
-              let monthsElapsed = 0;
-              if (acc.loan_start_date) {
-                const s = new Date(String(acc.loan_start_date).trim().replace(/-/g, '/'));
-                if (isNaN(s.getTime())) {
-                   // 日期无效，保守起见视为未开始，或者视为已开始？
-                   // 这里假设如果有日期但无效，可能导致计算错误，跳过该项
-                   started = false; 
-                } else {
-                  const si = s.getFullYear() * 12 + (s.getMonth() + 1);
-                  monthsElapsed = monthIndex - si;
-                  if (monthsElapsed < 0) started = false;
-                }
-              }
-              if (!started) return;
-              // 若设置了期数，超过期限则跳过
-              const term = Number(acc.loan_term_months || 0);
-              if (term > 0 && monthsElapsed >= term) return;
-              // 去重：如果该月已有同类“<类别>月供”的计划重复支出，则不再叠加
-              const cat = `${String(acc.category || '负债')}月供`;
-              if (plannedRecurringExpenseCategories.has(cat)) return;
-              liabilitiesMonthlySum += mp;
-            });
-          } catch (eL) { liabilitiesMonthlySum = 0; }
+          // 收入汇总：计划收入 + 租金 + 资产收益 (设计服务收入会在后续统一叠加)
+          // 注意：这里不再使用复杂的循环收入推算逻辑，以保持与收支页面一致
+          const income0 = plannedIncome + rentIncome + assetMonthlyIncomeSum;
 
-          let recurringExpenseSum = 0;
-          try {
-            const monthStr = `${rng.y}-${String(rng.m).padStart(2, '0')}-01`;
-            const md = new Date(String(monthStr).replace(/-/g, '/'));
-            const recordedKeys = new Set((list || [])
-              .filter(i => !!i.recurring_monthly && !!i.planned && i.type === 'expense')
-              .map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
-            const recordedRecurringExpenseSum = (list || [])
-              .reduce((sum, x) => sum + (x && x.type === 'expense' && !!x.planned && !!x.recurring_monthly ? Number(x.amount || 0) : 0), 0);
-            let syntheticRecurringExpenseSum = 0;
-            (recurringDefsExpense || []).forEach(d => {
-              const s = d.start ? new Date(String(d.start).replace(/-/g, '/')) : null;
-              const e = d.end ? new Date(String(d.end).replace(/-/g, '/')) : null;
-              if (s && isNaN(s.getTime())) return;
-              if (e && isNaN(e.getTime())) return;
-              if (s && md < new Date(s.getFullYear(), s.getMonth(), 1)) return;
-              if (e && md > new Date(e.getFullYear(), e.getMonth(), 1)) return;
-              const key = d.key;
-              if (recordedKeys.has(key)) return;
-              syntheticRecurringExpenseSum += Number(d.amount || 0);
-            });
-            recurringExpenseSum = recordedRecurringExpenseSum + syntheticRecurringExpenseSum;
-          } catch (eRE) { recurringExpenseSum = 0; }
+          // 支出汇总：直接使用后端返回的 expected_expense，保持与收支页面一致
+          const expense0 = Number(sumRes && sumRes.expected_expense != null ? sumRes.expected_expense : 0);
 
-          let recurringIncomeSum = 0;
-          try {
-            const monthStr = `${rng.y}-${String(rng.m).padStart(2, '0')}-01`;
-            const md = new Date(String(monthStr).replace(/-/g, '/'));
-            const mk = `${rng.y}${String(rng.m).padStart(2, '0')}`;
-            const recordedKeys = new Set((list || []).filter(i => !!i.recurring_monthly && !!i.planned && i.type === 'income').map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
-            recurringDefsIncome.forEach(d => {
-              const s = d.start ? new Date(String(d.start).replace(/-/g, '/')) : null;
-              const e = d.end ? new Date(String(d.end).replace(/-/g, '/')) : null;
-              if (s && isNaN(s.getTime())) return;
-              if (e && isNaN(e.getTime())) return;
-              if (s && md < new Date(s.getFullYear(), s.getMonth(), 1)) return;
-              if (e && md > new Date(e.getFullYear(), e.getMonth(), 1)) return;
-              const key = d.key;
-              if (recordedKeys.has(key)) return;
-              recurringIncomeSum += Number(d.amount || 0);
-            });
-          } catch (eRI) { recurringIncomeSum = 0; }
-          const income0 = plannedIncome + mastersIncome + assetMonthlyIncomeSum + recurringIncomeSum;
-          const expense0 = recurringExpenseSum + liabilitiesMonthlySum;
           return api.getMonthlySnapshot(rng.y, rng.m)
             .then((snap) => {
-              const useIncome = (snap && snap.expected_income != null) ? Number(snap.expected_income) : income0;
+              // 如果有快照，支出使用快照值（通常等于 sumRes.expected_expense）
+              // 收入强制使用前端计算值 income0，因为后端快照可能未包含租金等前端逻辑
+              // 但如果快照有 external_income，应该加上吗？Wealth页面似乎没加，这里暂不加，保持一致
+              const useIncome = income0;
               const useExpense = (snap && snap.expected_expense != null) ? Number(snap.expected_expense) : expense0;
+              
               if (!snap) {
+                // 如果没有快照，尝试保存一份（Wealth页面也会触发保存）
                 return api.saveMonthlySnapshot(rng.y, rng.m)
                   .then((s) => {
-                    const sincome = (s && s.expected_income != null) ? Number(s.expected_income) : useIncome;
+                    // 保存后返回的值是后端算的，我们依然优先用前端算的 income0
                     const sexpense = (s && s.expected_expense != null) ? Number(s.expected_expense) : useExpense;
-                    return { income: sincome, expense: sexpense, y: rng.y, m: rng.m, plannedIncome, actualIncome, usedSnapshot: !!s };
+                    return { income: useIncome, expense: sexpense, y: rng.y, m: rng.m, plannedIncome, actualIncome, usedSnapshot: !!s };
                   })
                   .catch(() => ({ income: useIncome, expense: useExpense, y: rng.y, m: rng.m, plannedIncome, actualIncome, usedSnapshot: false }));
               }
