@@ -144,3 +144,18 @@ class Tenancy(Base):
     note: Mapped[str | None] = mapped_column(Text())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class MonthlySnapshot(Base):
+    __tablename__ = "monthly_snapshots"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    household_id: Mapped[int] = mapped_column(Integer)
+    year: Mapped[int] = mapped_column(Integer)
+    month: Mapped[int] = mapped_column(Integer)
+    expected_income: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    expected_expense: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    actual_income: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    actual_expense: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    external_income: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)

@@ -158,6 +158,38 @@ def ensure_schema_upgrade():
             except OperationalError:
                 pass
 
+            ms_tbl_exists = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'monthly_snapshots'
+                    """
+                ),
+                {"db": settings.db_name},
+            ).scalar() or 0
+            if not ms_tbl_exists:
+                conn.execute(
+                    text(
+                        """
+                        CREATE TABLE `monthly_snapshots` (
+                          `id` INT NOT NULL AUTO_INCREMENT,
+                          `household_id` INT NOT NULL,
+                          `year` INT NOT NULL,
+                          `month` INT NOT NULL,
+                          `expected_income` DECIMAL(18,2) NOT NULL DEFAULT 0,
+                          `expected_expense` DECIMAL(18,2) NOT NULL DEFAULT 0,
+                          `actual_income` DECIMAL(18,2) NOT NULL DEFAULT 0,
+                          `actual_expense` DECIMAL(18,2) NOT NULL DEFAULT 0,
+                          `external_income` DECIMAL(18,2) NULL,
+                          `computed_at` DATETIME NOT NULL,
+                          PRIMARY KEY (`id`),
+                          UNIQUE KEY `ux_ms_hh_year_month` (`household_id`,`year`,`month`)
+                        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                        """
+                    )
+                )
+                conn.commit()
+
             result4 = conn.execute(
                 text(
                     """

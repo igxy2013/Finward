@@ -12,6 +12,8 @@ const ASSET_CATEGORY_ICONS = {
   "房产": "home-4-line.svg",
   "车辆": "car-line.svg",
   "应收款": "money-cny-circle-line.svg",
+  "光伏发电站": "building-line.svg",
+  "新能源充电站": "building-line.svg",
   "其他": "wallet-line.svg"
 };
 

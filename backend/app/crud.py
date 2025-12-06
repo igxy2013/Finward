@@ -307,6 +307,27 @@ def backfill_accounts_to_household(session: Session, household_id: int) -> int:
 
 def wealth_summary(session: Session, user_id: int, start: date | None, end: date | None, scope: str | None = None) -> schemas.WealthSummaryOut:
     hh_id = get_or_create_household_id(session, user_id)
+    if scope and scope.lower() == "month" and start and end and start.year == end.year and start.month == end.month:
+        y = start.year
+        m = start.month
+        snap = (
+            session.query(models.MonthlySnapshot)
+            .filter(models.MonthlySnapshot.household_id == hh_id, models.MonthlySnapshot.year == y, models.MonthlySnapshot.month == m)
+            .first()
+        )
+        if snap:
+            from decimal import Decimal as D
+            ei = D(snap.expected_income or 0)
+            ee = D(snap.expected_expense or 0)
+            ai = D(snap.actual_income or 0)
+            ae = D(snap.actual_expense or 0)
+            ext = D(snap.external_income or 0)
+            return schemas.WealthSummaryOut(
+                expected_expense=ee,
+                expected_income=ei + ext,
+                actual_expense=ae,
+                actual_income=ai,
+            )
     base = select(models.Cashflow).where(models.Cashflow.household_id == hh_id)
     if start:
         base = base.where(models.Cashflow.date >= start)
@@ -382,6 +403,75 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
         expected_income=exp_inc,
         actual_expense=act_exp,
         actual_income=act_inc,
+    )
+
+
+def upsert_monthly_snapshot(session: Session, user_id: int, year: int, month: int, external_income: Decimal | None = None) -> schemas.MonthlySnapshotOut:
+    hh_id = get_or_create_household_id(session, user_id)
+    start = date(year, month, 1)
+    from calendar import monthrange
+    last_day = monthrange(year, month)[1]
+    end = date(year, month, last_day)
+    summary = wealth_summary(session, user_id, start, end, scope="month")
+    ext = Decimal(external_income or 0)
+    snap = (
+        session.query(models.MonthlySnapshot)
+        .filter(models.MonthlySnapshot.household_id == hh_id, models.MonthlySnapshot.year == year, models.MonthlySnapshot.month == month)
+        .first()
+    )
+    now = datetime.now(timezone.utc)
+    if snap:
+        snap.expected_income = float(summary.expected_income)
+        snap.expected_expense = float(summary.expected_expense)
+        snap.actual_income = float(summary.actual_income)
+        snap.actual_expense = float(summary.actual_expense)
+        snap.external_income = float(ext) if external_income is not None else snap.external_income
+        snap.computed_at = now
+    else:
+        snap = models.MonthlySnapshot(
+            household_id=hh_id,
+            year=year,
+            month=month,
+            expected_income=float(summary.expected_income),
+            expected_expense=float(summary.expected_expense),
+            actual_income=float(summary.actual_income),
+            actual_expense=float(summary.actual_expense),
+            external_income=float(ext) if external_income is not None else None,
+            computed_at=now,
+        )
+        session.add(snap)
+    session.commit()
+    session.refresh(snap)
+    return schemas.MonthlySnapshotOut(
+        year=year,
+        month=month,
+        expected_income=Decimal(snap.expected_income or 0),
+        expected_expense=Decimal(snap.expected_expense or 0),
+        actual_income=Decimal(snap.actual_income or 0),
+        actual_expense=Decimal(snap.actual_expense or 0),
+        external_income=Decimal(snap.external_income or 0) if snap.external_income is not None else None,
+        computed_at=snap.computed_at,
+    )
+
+
+def get_monthly_snapshot(session: Session, user_id: int, year: int, month: int) -> schemas.MonthlySnapshotOut | None:
+    hh_id = get_or_create_household_id(session, user_id)
+    snap = (
+        session.query(models.MonthlySnapshot)
+        .filter(models.MonthlySnapshot.household_id == hh_id, models.MonthlySnapshot.year == year, models.MonthlySnapshot.month == month)
+        .first()
+    )
+    if not snap:
+        return None
+    return schemas.MonthlySnapshotOut(
+        year=year,
+        month=month,
+        expected_income=Decimal(snap.expected_income or 0),
+        expected_expense=Decimal(snap.expected_expense or 0),
+        actual_income=Decimal(snap.actual_income or 0),
+        actual_expense=Decimal(snap.actual_expense or 0),
+        external_income=Decimal(snap.external_income or 0) if snap.external_income is not None else None,
+        computed_at=snap.computed_at,
     )
 
 

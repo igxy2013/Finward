@@ -250,6 +250,23 @@ class WealthSummaryOut(BaseModel):
     actual_income: Decimal
 
 
+class MonthlySnapshotOut(BaseModel):
+    year: int
+    month: int
+    expected_income: Decimal
+    expected_expense: Decimal
+    actual_income: Decimal
+    actual_expense: Decimal
+    external_income: Decimal | None = None
+    computed_at: datetime
+
+
+class MonthlySnapshotCreate(BaseModel):
+    year: int
+    month: int
+    external_income: Decimal | None = None
+
+
 class CashflowTypeLiteral(str, Enum):
     income = "income"
     expense = "expense"

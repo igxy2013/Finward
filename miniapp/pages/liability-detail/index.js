@@ -30,6 +30,11 @@ Page({
     this.setData({ id, loading: true, error: "" });
     this.fetchDetail(id);
   },
+  onShow() {
+    const id = Number(this.data.id || 0);
+    if (!id) return;
+    this.fetchDetail(id);
+  },
   async fetchDetail(id) {
     try {
       const data = await api.getAccount(id);

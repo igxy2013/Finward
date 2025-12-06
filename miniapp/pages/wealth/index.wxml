@@ -9,7 +9,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/bill-line-red.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">本月预计支出</text>
+        <text class="sum-label">本月固定支出</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>

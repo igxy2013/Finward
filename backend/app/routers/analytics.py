@@ -25,3 +25,22 @@ def get_analytics_monthly(
 ) -> schemas.MonthlyOut:
     return crud.analytics_monthly(session, months, user.id)
 
+
+@router.post("/snapshot", response_model=schemas.MonthlySnapshotOut)
+def save_monthly_snapshot(
+    payload: schemas.MonthlySnapshotCreate,
+    session: Session = Depends(get_session),
+    user = Depends(get_current_user),
+):
+    return crud.upsert_monthly_snapshot(session, user.id, payload.year, payload.month, payload.external_income)
+
+
+@router.get("/snapshot", response_model=schemas.MonthlySnapshotOut | None)
+def get_monthly_snapshot(
+    year: int = Query(..., ge=2000, le=2100),
+    month: int = Query(..., ge=1, le=12),
+    session: Session = Depends(get_session),
+    user = Depends(get_current_user),
+):
+    return crud.get_monthly_snapshot(session, user.id, year, month)
+

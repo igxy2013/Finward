@@ -88,26 +88,57 @@
 
 .chart-legend {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
+  align-items: flex-start;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 24rpx;
   margin-bottom: 12rpx;
   padding-right: 12rpx;
 }
 
+.legend-inline {
+  flex-wrap: nowrap;
+}
+.legend-inline .legend-item {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
 .legend-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8rpx;
+  flex: 1 1 32%;
+  max-width: 32%;
 }
 
 .legend-dot {
   width: 16rpx;
   height: 16rpx;
   border-radius: 50%;
+  margin-top: 4rpx;
 }
 
 .legend-text {
+  font-size: 22rpx;
+  color: #6b7280;
+}
+
+.legend-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 20rpx;
+  color: #374151;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.legend-percent {
+  flex-shrink: 0;
   font-size: 22rpx;
   color: #6b7280;
 }
@@ -405,14 +436,17 @@
 
 .legend-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 8rpx;
+  flex: 1 1 48%;
+  max-width: 48%;
 }
 
 .legend-dot {
   width: 16rpx;
   height: 16rpx;
   border-radius: 50%;
+  margin-top: 4rpx;
 }
 
 .legend-dot.positive {

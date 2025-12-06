@@ -15,3 +15,8 @@ miniapp/.env
 
 # Misc
 *.log
+
+# Python 字节码缓存
+backend/app/__pycache__/
+*.pyc
+*.pyo

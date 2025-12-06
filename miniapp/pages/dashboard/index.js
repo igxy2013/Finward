@@ -12,6 +12,8 @@ const ASSET_CATEGORY_ICONS = {
   "房产": "home-4-line.svg",
   "车辆": "car-line.svg",
   "应收款": "money-cny-circle-line.svg",
+  "光伏发电站": "building-line.svg",
+  "新能源充电站": "building-line.svg",
   "其他": "wallet-line.svg"
 };
 
@@ -71,6 +73,7 @@ Page({
     }
     this.setData({ needLogin: false, loading: true });
     this.fetchData();
+    this.preloadDesignServiceStats();
   },
   openItemActions(e) {
     const id = Number(e.currentTarget.dataset.id);
@@ -128,6 +131,13 @@ Page({
     if (!token) app.globalData.guest = true; else if (!app.globalData.token) app.globalData.token = token;
     this.setData({ needLogin: false, refreshing: true });
     this.fetchData(true);
+    this.preloadDesignServiceStats();
+  },
+  async preloadDesignServiceStats() {
+    try {
+      const stats = await api.getFinanceStats('month');
+      try { wx.setStorageSync('fw_design_service_stats_month', { data: stats, ts: Date.now() }); } catch (e) {}
+    } catch (e) {}
   },
   async fetchData(quiet = false) {
     if (quiet) {

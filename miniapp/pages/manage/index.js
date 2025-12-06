@@ -46,6 +46,8 @@ Page({
       { label: "房产" },
       { label: "车辆" },
       { label: "应收款" },
+      { label: "光伏发电站" },
+      { label: "新能源充电站" },
       { label: "其他" }
     ],
     assetCategoryOptions: [
@@ -59,6 +61,8 @@ Page({
       { label: "房产" },
       { label: "车辆" },
       { label: "应收款" },
+      { label: "光伏发电站" },
+      { label: "新能源充电站" },
       { label: "其他" }
     ],
     liabilityCategoryOptions: [
@@ -379,6 +383,13 @@ Page({
         } catch (e) {}
       }
       if (this.data.editId) {
+        try {
+          const pages = getCurrentPages();
+          const prev = pages && pages.length >= 2 ? pages[pages.length - 2] : null;
+          if (prev && typeof prev.fetchDetail === 'function') {
+            await prev.fetchDetail(accountId);
+          }
+        } catch (e) {}
         wx.navigateBack();
       } else {
         this.setData({

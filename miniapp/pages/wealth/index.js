@@ -101,7 +101,8 @@ Page({
   async fetchSummary(skipIncomeUpdate = false) {
     const now = new Date();
     const sel = 'month';
-    const end = this.formatDate(now);
+    const endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const end = this.formatDate(endDate);
     const start = this.formatDate(new Date(now.getFullYear(), now.getMonth(), 1));
     try {
       const res = await api.fetchWealthSummary(start, end, sel);
@@ -115,9 +116,17 @@ Page({
       
       let designServiceIncome = 0;
       try {
-        const stats = await api.getFinanceStats('month');
-        if (stats.success) {
-          designServiceIncome = Number(stats.data.total_revenue || 0);
+        let cached = null;
+        try { cached = wx.getStorageSync('fw_design_service_stats_month'); } catch (e) { cached = null; }
+        const fresh = cached && cached.data && cached.data.success && (Date.now() - (cached.ts || 0) < 5 * 60 * 1000);
+        if (fresh) {
+          designServiceIncome = Number(cached.data.data?.total_revenue || 0);
+        } else {
+          const stats = await api.getFinanceStats('month');
+          if (stats.success) {
+            designServiceIncome = Number(stats.data.total_revenue || 0);
+          }
+          try { wx.setStorageSync('fw_design_service_stats_month', { data: stats, ts: Date.now() }); } catch (e) {}
         }
       } catch (err) {}
       
@@ -268,6 +277,46 @@ Page({
                 account_name: t.account_name,
                 name: t.note ? t.note : (t.category || '收入'),
                 icon: getCategoryIcon(t.category || '其他收入', 'income')
+              });
+            }
+          });
+      } catch (e) {}
+
+      let recurringSynthExpense = [];
+      try {
+        const prevStartDate = new Date(startDate.getFullYear(), startDate.getMonth() - 1, 1);
+        const prevEndDate = new Date(startDate.getFullYear(), startDate.getMonth(), 0);
+        const prevStart = this.formatDate(prevStartDate);
+        const prevEnd = this.formatDate(prevEndDate);
+        const prevQuery = { start: prevStart, end: prevEnd, type: 'expense', planned: true };
+        let prevList = [];
+        try { prevList = await api.listCashflows(prevQuery); } catch (ePrev) { prevList = []; }
+        const currKeys = new Set((formatted || [])
+          .filter(i => i.type === 'expense' && !!i.planned && !!i.recurring_monthly)
+          .map(i => `${i.type}:${i.category}:${i.name}`));
+        (prevList || [])
+          .filter(i => i && i.type === 'expense' && !!i.planned && !!i.recurring_monthly)
+          .forEach(t => {
+            const key = `${t.type}:${t.category}:${t.note ? t.note : t.category}`;
+            if (!currKeys.has(key)) {
+              const prevDay = (() => { const d = new Date(String(t.date).replace(/-/g, '/')); return d.getDate(); })();
+              const y = endDate.getFullYear();
+              const m = endDate.getMonth() + 1;
+              const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, prevDay)); })();
+              const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
+              recurringSynthExpense.push({
+                id: `recurring:${t.id}:${y}${String(m).padStart(2, '0')}`,
+                type: 'expense',
+                category: t.category || '其他支出',
+                amount: this.formatNumber(t.amount),
+                date: dt,
+                planned: true,
+                recurring_monthly: true,
+                _synthetic: 'recurring-expense',
+                account_id: t.account_id,
+                account_name: t.account_name,
+                name: t.note ? t.note : (t.category || '支出'),
+                icon: getCategoryIcon(t.category || '其他支出', 'expense')
               });
             }
           });
@@ -434,31 +483,39 @@ Page({
         });
       } catch (err) {}
       
-      // 获取财务统计数据并添加为设计服务收入
       let designServiceIncome = [];
       try {
-        // 只在本月视图下添加设计服务收入
         if (sel === 'month') {
-          const stats = await api.getFinanceStats('month');
-          if (stats.success && stats.data.total_revenue > 0) {
+          let cached = null;
+          try { cached = wx.getStorageSync('fw_design_service_stats_month'); } catch (e) { cached = null; }
+          const fresh = cached && cached.data && cached.data.success && (Date.now() - (cached.ts || 0) < 5 * 60 * 1000);
+          let total = 0;
+          if (fresh) {
+            total = Number(cached.data.data?.total_revenue || 0);
+          } else {
+            const stats = await api.getFinanceStats('month');
+            if (stats.success) {
+              total = Number(stats.data.total_revenue || 0);
+            }
+            try { wx.setStorageSync('fw_design_service_stats_month', { data: stats, ts: Date.now() }); } catch (e) {}
+          }
+          if (total > 0) {
             designServiceIncome = [{
               id: 'design-service-income',
               type: 'income',
-              category: '其他收入',
-              amount: this.formatNumber(stats.data.total_revenue),
+              category: '设计服务',
+              amount: this.formatNumber(total),
               date: end,
               planned: true,
               recurring_monthly: false,
               _synthetic: 'design-service',
               name: '设计服务',
               note: '设计服务收入',
-              icon: getCategoryIcon('其他收入', 'income')
+              icon: getCategoryIcon('设计服务', 'income')
             }];
           }
         }
-      } catch (err) {
-        console.error('获取设计服务收入失败:', err);
-      }
+      } catch (err) {}
       const activeType = this.data.activeType;
 
       let expectedExpenseFallback = [];
@@ -493,7 +550,7 @@ Page({
         }
         return Array.from(m.values());
       };
-      const combinedAll = dedupeById([...rents, ...assetIncomes, ...debts, ...formatted, ...recurringSynth, ...designServiceIncome, ...expectedExpenseFallback])
+      const combinedAll = dedupeById([...rents, ...assetIncomes, ...debts, ...formatted, ...recurringSynth, ...recurringSynthExpense, ...designServiceIncome, ...expectedExpenseFallback])
         .sort((a, b) => String(b.date).localeCompare(String(a.date)))
         .map(item => ({
           ...item,
@@ -515,12 +572,16 @@ Page({
         const totalExpectedIncome = combinedAll
           .filter(i => i.type === 'income' && !!i.planned)
           .reduce((sum, i) => sum + toNum(i.amount), 0);
+        const totalExpectedExpense = combinedAll
+          .filter(i => i.type === 'expense' && !!i.planned)
+          .reduce((sum, i) => sum + toNum(i.amount), 0);
         const totalActualIncome = combinedAll
           .filter(i => i.type === 'income' && !i.planned)
           .reduce((sum, i) => sum + toNum(i.amount), 0);
         this.setData({
           summary: {
             ...this.data.summary,
+            expectedExpense: this.formatNumber(totalExpectedExpense),
             expectedIncome: this.formatNumber(totalExpectedIncome),
             actualIncome: this.formatNumber(totalActualIncome)
           },
