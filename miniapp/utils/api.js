@@ -170,8 +170,10 @@ module.exports = {
   ,updateTenant: (id, data) => request(`/tenants/${id}`, { method: "PATCH", data })
   ,deleteTenant: (id) => request(`/tenants/${id}`, { method: "DELETE" })
   ,listRentReminders: (days = 14) => request(`/tenants/rent/reminders`, { data: { days } })
-  ,getFinanceStats: (timeRange) => externalRequest(`https://acbim.cn/api/public/finance/stats`, { data: { time_range: timeRange } })
+  ,getFinanceStats: (timeRange, monthStr) => {
+    const data = monthStr ? { time_range: timeRange, month: monthStr } : { time_range: timeRange };
+    return externalRequest(`https://acbim.cn/api/public/finance/stats`, { data });
+  }
   ,testAuth: () => request(`/auth/me`)
 };
-
 

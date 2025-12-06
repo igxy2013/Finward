@@ -174,24 +174,24 @@ Page({
       };
       this.setData({ summary: quickSummary, summaryReady: true });
       
-      const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
       let designServiceIncome = 0;
-      if (isCurrentMonth) {
-        try {
-          let cached = null;
-          try { cached = wx.getStorageSync('fw_design_service_stats_month'); } catch (e) { cached = null; }
-          const fresh = cached && cached.data && cached.data.success && (Date.now() - (cached.ts || 0) < 5 * 60 * 1000);
-          if (fresh) {
-            designServiceIncome = Number(cached.data.data?.total_revenue || 0);
-          } else {
-            const stats = await api.getFinanceStats('month');
-            if (stats.success) {
-              designServiceIncome = Number(stats.data.total_revenue || 0);
-              try { wx.setStorageSync('fw_design_service_stats_month', { data: stats, ts: Date.now() }); } catch (e) {}
-            }
+      try {
+        const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
+        const monthStr = `${y}-${String(m).padStart(2, '0')}`;
+        const cacheKey = `fw_design_service_stats_month:${monthStr}`;
+        let cached = null;
+        try { cached = wx.getStorageSync(cacheKey); } catch (e) { cached = null; }
+        const fresh = cached && cached.data && cached.data.success && (Date.now() - (cached.ts || 0) < 5 * 60 * 1000);
+        if (fresh) {
+          designServiceIncome = Number(cached.data.data?.total_revenue || 0);
+        } else {
+          const stats = isCurrentMonth ? await api.getFinanceStats('month') : await api.getFinanceStats('month', monthStr);
+          if (stats.success) {
+            designServiceIncome = Number(stats.data.total_revenue || 0);
+            try { wx.setStorageSync(cacheKey, { data: stats, ts: Date.now() }); } catch (e) {}
           }
-        } catch (err) {}
-      }
+        }
+      } catch (err) {}
       
       let expectedRentIncomeSum = 0;
       let assetMonthlyIncomeSum = 0;
@@ -255,20 +255,15 @@ Page({
       } catch (err) {}
 
       const expectedIncomeNum = plannedIncomeSum + expectedRentIncomeSum + assetMonthlyIncomeSum + designServiceIncome;
-      const expectedExpenseNum = Number(res.expected_expense || 0);
       const expectedIncomeVal = skipIncomeUpdate ? this.data.summary.expectedIncome : this.formatNumber(expectedIncomeNum);
       const actualIncomeVal = skipIncomeUpdate ? this.data.summary.actualIncome : this.formatNumber(Number(res.actual_income));
-      const netVal = this.formatNumber(expectedIncomeNum - expectedExpenseNum);
-      const ratioVal = expectedExpenseNum > 0 ? this.formatNumber(expectedIncomeNum / expectedExpenseNum) : '—';
       this.setData({
         summary: {
+          ...this.data.summary,
           expectedExpense: this.formatNumber(res.expected_expense),
           expectedIncome: expectedIncomeVal,
           actualExpense: this.formatNumber(res.actual_expense),
-          actualIncome: actualIncomeVal,
-          netIncome: netVal,
-          netIncomePositive: (expectedIncomeNum - expectedExpenseNum) >= 0,
-          incomeExpenseRatio: ratioVal
+          actualIncome: actualIncomeVal
         },
         summaryReady: !skipIncomeUpdate ? true : this.data.summaryReady
       });
@@ -305,12 +300,33 @@ Page({
       }
       const normalized = (arr) => (arr || []).map((x) => ({ ...x, id: x.id || `${x.type || 'unknown'}:${x.planned ? 'planned' : 'actual'}:${x.category}:${x.date}` }));
       const mergedRaw = [...normalized(list)];
-      const formatted = mergedRaw.map((x) => ({
+      let formatted = mergedRaw.map((x) => ({
         ...x,
         amount: this.formatNumber(x.amount),
         name: x.note ? x.note : x.category,
         icon: getCategoryIcon(x.category, x.type)
       }));
+      try {
+        let masters = wx.getStorageSync('fw_recurring_masters');
+        if (masters && typeof masters === 'object') {
+          const ymk = endDate.getFullYear();
+          const mmk = endDate.getMonth() + 1;
+          const monthKey = `${ymk}${String(mmk).padStart(2, '0')}`;
+          formatted = (formatted || []).filter((i) => {
+            if (!(i && i.planned && i.recurring_monthly)) return true;
+            const key = `${i.type}:${i.category}:${i.name}`;
+            const ms = masters[key];
+            if (!ms) return true;
+            const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
+            const e = ms.end_date ? new Date(String(ms.end_date).replace(/-/g, '/')) : null;
+            const startMonthKey = s ? `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}` : null;
+            const endMonthKey = e ? `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}` : null;
+            if (startMonthKey && startMonthKey > monthKey) return false;
+            if (endMonthKey && monthKey > endMonthKey) return false;
+            return true;
+          });
+        }
+      } catch (e) {}
 
       // 自动生成本月缺失的每月重复收入（例如工资）
       let recurringSynth = [];
@@ -531,29 +547,36 @@ Page({
           }
         });
         
+        const monthIndex = endDate.getFullYear() * 12 + (endDate.getMonth() + 1);
         assets.forEach((acc) => {
-          // 跳过已计算为租金收入的资产
-          if (rentedAssetIds.has(acc.id)) {
-            return;
+          if (rentedAssetIds.has(acc.id)) return;
+          const mi = Number(acc.monthly_income || 0);
+          if (!(mi > 0)) return;
+          let started = true;
+          let monthsElapsed = 0;
+          if (acc.invest_start_date) {
+            const s = new Date(String(acc.invest_start_date).replace(/-/g, '/'));
+            const si = s.getFullYear() * 12 + (s.getMonth() + 1);
+            monthsElapsed = monthIndex - si;
+            if (monthsElapsed < 0) started = false;
           }
-          
-          // 检查资产是否有月收益
-          if (acc.monthly_income && Number(acc.monthly_income) > 0) {
-            assetIncomes.push({
-              id: `asset-income:${acc.id}`,
-              type: 'income',
-              category: acc.category || '资产收益',
-              amount: this.formatNumber(acc.monthly_income),
-              date: end, // 使用当前日期
-              planned: true,
-              recurring_monthly: true,
-              _synthetic: 'asset-income',
-              account_id: acc.id,
-              account_name: acc.name,
-              name: acc.name ? `${acc.name}收益` : '资产收益',
-              icon: getCategoryIcon(acc.category || '资产收益', 'income')
-            });
-          }
+          if (!started) return;
+          const term = Number(acc.investment_term_months || 0);
+          if (term > 0 && monthsElapsed >= term) return;
+          assetIncomes.push({
+            id: `asset-income:${acc.id}`,
+            type: 'income',
+            category: acc.category || '资产收益',
+            amount: this.formatNumber(mi),
+            date: end,
+            planned: true,
+            recurring_monthly: true,
+            _synthetic: 'asset-income',
+            account_id: acc.id,
+            account_name: acc.name,
+            name: acc.name ? `${acc.name}收益` : '资产收益',
+            icon: getCategoryIcon(acc.category || '资产收益', 'income')
+          });
         });
       } catch (err) {
         console.error('获取资产收益失败:', err);
@@ -633,22 +656,16 @@ Page({
             if (!rangeStart || !rangeEnd) return;
             let y = rangeStart.getFullYear();
             let m = rangeStart.getMonth() + 1;
-            let maxMonths = term > 0 ? term : 600;
-            let count = 0;
-            while (true) {
-              const d = clampDay(y, m, dueDay);
-              const cand = new Date(y, m - 1, d);
-              if (cand < s) {
-                m += 1; if (m > 12) { m = 1; y += 1; }
-                count += 1; if (count >= maxMonths) break;
-                continue;
-              }
-              if (cand > rangeEnd) break;
-              if (cand >= rangeStart && cand <= rangeEnd) {
-                pushPayment(acc, y, m, d);
-              }
-              m += 1; if (m > 12) { m = 1; y += 1; }
-              count += 1; if (count >= maxMonths) break;
+            const d = clampDay(y, m, dueDay);
+            const cand = new Date(y, m - 1, d);
+            if (cand < s || cand > rangeEnd) return;
+            const monthIndex = y * 12 + m;
+            const startIndex = s.getFullYear() * 12 + (s.getMonth() + 1);
+            const monthsElapsed = monthIndex - startIndex;
+            if (monthsElapsed < 0) return;
+            if (term > 0 && monthsElapsed >= term) return;
+            if (cand >= rangeStart && cand <= rangeEnd) {
+              pushPayment(acc, y, m, d);
             }
           }
         });
@@ -657,22 +674,25 @@ Page({
       let designServiceIncome = [];
       try {
         if (sel === 'month') {
+          const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
+          const monthStr = `${y}-${String(m).padStart(2, '0')}`;
+          const cacheKey = `fw_design_service_stats_month:${monthStr}`;
           let cached = null;
-          try { cached = wx.getStorageSync('fw_design_service_stats_month'); } catch (e) { cached = null; }
+          try { cached = wx.getStorageSync(cacheKey); } catch (e) { cached = null; }
           const fresh = cached && cached.data && cached.data.success && (Date.now() - (cached.ts || 0) < 5 * 60 * 1000);
           let total = 0;
           if (fresh) {
             total = Number(cached.data.data?.total_revenue || 0);
           } else {
-            const stats = await api.getFinanceStats('month');
+            const stats = isCurrentMonth ? await api.getFinanceStats('month') : await api.getFinanceStats('month', monthStr);
             if (stats.success) {
               total = Number(stats.data.total_revenue || 0);
+              try { wx.setStorageSync(cacheKey, { data: stats, ts: Date.now() }); } catch (e) {}
             }
-            try { wx.setStorageSync('fw_design_service_stats_month', { data: stats, ts: Date.now() }); } catch (e) {}
           }
           if (total > 0) {
             designServiceIncome = [{
-              id: 'design-service-income',
+              id: `design-service-income:${monthStr}`,
               type: 'income',
               category: '设计服务',
               amount: this.formatNumber(total),
@@ -749,12 +769,18 @@ Page({
         const totalActualIncome = combinedAll
           .filter(i => i.type === 'income' && !i.planned)
           .reduce((sum, i) => sum + toNum(i.amount), 0);
+        const netExpected = totalExpectedIncome - totalExpectedExpense;
+        const netPositive = netExpected >= 0;
+        const ratioDisplay = totalExpectedExpense > 0 ? (totalExpectedIncome / totalExpectedExpense).toFixed(2) : '—';
         this.setData({
           summary: {
             ...this.data.summary,
             expectedExpense: this.formatNumber(totalExpectedExpense),
             expectedIncome: this.formatNumber(totalExpectedIncome),
-            actualIncome: this.formatNumber(totalActualIncome)
+            actualIncome: this.formatNumber(totalActualIncome),
+            netIncome: this.formatNumber(netExpected),
+            netIncomePositive: netPositive,
+            incomeExpenseRatio: ratioDisplay
           },
           summaryReady: true
         });
