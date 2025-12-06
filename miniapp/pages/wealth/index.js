@@ -268,6 +268,12 @@ Page({
         summaryReady: !skipIncomeUpdate ? true : this.data.summaryReady
       });
       try { wx.setStorageSync('fw_summary_cache', this.data.summary); } catch (e) {}
+      try {
+        const app = getApp();
+        if (app?.globalData?.token && !app.globalData.guest) {
+          await api.saveMonthlySnapshot(y, m, designServiceIncome);
+        }
+      } catch (eSnap) {}
     } catch (e) {
       // 游客模式下不显示演示数据
       this.setData({

@@ -175,5 +175,10 @@ module.exports = {
     return externalRequest(`https://acbim.cn/api/public/finance/stats`, { data });
   }
   ,testAuth: () => request(`/auth/me`)
+  ,saveMonthlySnapshot: (year, month, external_income) => {
+    const data = { year, month };
+    if (external_income != null) data.external_income = external_income;
+    return request(`/analytics/snapshot`, { method: "POST", data });
+  }
+  ,getMonthlySnapshot: (year, month) => request(`/analytics/snapshot`, { data: { year, month } })
 };
-

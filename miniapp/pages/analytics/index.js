@@ -629,9 +629,24 @@ Page({
               recurringIncomeSum += Number(d.amount || 0);
             });
           } catch (eRI) { recurringIncomeSum = 0; }
-          const income = plannedIncome + mastersIncome + assetMonthlyIncomeSum + recurringIncomeSum;
-          const expense = recurringExpenseSum + liabilitiesMonthlySum;
-          return { income, expense, y: rng.y, m: rng.m, plannedIncome, actualIncome };
+          const income0 = plannedIncome + mastersIncome + assetMonthlyIncomeSum + recurringIncomeSum;
+          const expense0 = recurringExpenseSum + liabilitiesMonthlySum;
+          return api.getMonthlySnapshot(rng.y, rng.m)
+            .then((snap) => {
+              const useIncome = (snap && snap.expected_income != null) ? Number(snap.expected_income) : income0;
+              const useExpense = (snap && snap.expected_expense != null) ? Number(snap.expected_expense) : expense0;
+              if (!snap) {
+                return api.saveMonthlySnapshot(rng.y, rng.m)
+                  .then((s) => {
+                    const sincome = (s && s.expected_income != null) ? Number(s.expected_income) : useIncome;
+                    const sexpense = (s && s.expected_expense != null) ? Number(s.expected_expense) : useExpense;
+                    return { income: sincome, expense: sexpense, y: rng.y, m: rng.m, plannedIncome, actualIncome, usedSnapshot: !!s };
+                  })
+                  .catch(() => ({ income: useIncome, expense: useExpense, y: rng.y, m: rng.m, plannedIncome, actualIncome, usedSnapshot: false }));
+              }
+              return { income: useIncome, expense: useExpense, y: rng.y, m: rng.m, plannedIncome, actualIncome, usedSnapshot: true };
+            })
+            .catch(() => ({ income: income0, expense: expense0, y: rng.y, m: rng.m, plannedIncome, actualIncome, usedSnapshot: false }));
         }).catch(() => ({ income: 0, expense: 0, y: rng.y, m: rng.m }));
       });
     let results = [];
@@ -659,7 +674,9 @@ Page({
           if (stats.success) total = Number(stats.data.total_revenue || 0);
           try { wx.setStorageSync(cacheKey, { data: stats, ts: Date.now() }); } catch (e3) {}
         }
-        results[i].income += total;
+        if (!r.usedSnapshot) {
+          results[i].income += total;
+        }
       } catch (e4) {}
     }
     const incomeSeries = results.map(r => Number(r.income || 0));
