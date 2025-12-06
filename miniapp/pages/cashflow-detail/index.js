@@ -32,6 +32,22 @@ Page({
     }
     this.loadItem(id);
   },
+  onShow() {
+    if (this.data.synthetic) return;
+    const id = Number(this.data?.item?.id || 0);
+    if (!id) return;
+    this.loadItem(id);
+  },
+  getRecurringStartDate(data) {
+    try {
+      const k = `${String(data.type || '')}:${String(data.category || '')}:${String(data.note || data.name || data.category || '')}`;
+      let masters = wx.getStorageSync('fw_recurring_masters');
+      if (masters && typeof masters === 'object' && masters[k] && masters[k].start_date) {
+        return masters[k].start_date;
+      }
+    } catch (e) {}
+    return '';
+  },
   loadSynthetic(options) {
     try {
       const d = (s) => {
@@ -44,6 +60,8 @@ Page({
       const amountText = d(options.amount_display || '0.00');
       const title = d(options.name || options.category || '记录');
       const icon = this.getIcon({ type });
+      const recurringStartDateOpt = d(options.recurring_start_date || '');
+      const recurringStartDateCalc = recurringStartDateOpt || this.getRecurringStartDate({ type, category: d(options.category || ''), note: d(options.note || '') });
       this.setData({
         item: {
           id: d(options.id || ''),
@@ -53,6 +71,7 @@ Page({
           date: d(options.date || ''),
           planned: options.planned === '1',
           recurring_monthly: options.recurring === '1',
+          recurring_start_date: recurringStartDateCalc,
           name: d(options.name || ''),
           account_id: d(options.account_id || ''),
           account_name: d(options.account_name || ''),
@@ -67,6 +86,7 @@ Page({
           date: d(options.date || ''),
           category: d(options.category || ''),
           recurringLabel,
+          recurringStartDate: recurringStartDateCalc,
           accountName: d(options.account_name || ''),
           note: d(options.note || ''),
           tenantName: d(options.tenant_name || ''),
@@ -89,6 +109,7 @@ Page({
       const amountText = this.formatNumber(item.amount);
       const title = item.name || item.category || "记录";
       const icon = this.getIcon(item);
+      const recurringStartDateCalc = this.getRecurringStartDate(item);
       this.setData({
         item,
         display: {
@@ -99,6 +120,7 @@ Page({
           date: item.date || "",
           category: item.category || "",
           recurringLabel,
+          recurringStartDate: recurringStartDateCalc,
           accountName: item.account_name || "",
           note: item.note || "",
           tenantName: item.tenant_name || "",
@@ -120,14 +142,57 @@ Page({
     return `/assets/icons/${t}`;
   },
   edit() {
-    if (this.data.synthetic) return;
-    const id = Number(this.data?.item?.id || 0);
+    const isSynthetic = !!this.data.synthetic;
+    const it = this.data.item || {};
+    if (isSynthetic && it._synthetic === 'recurring-expense') {
+      const startDate = this.getRecurringStartDate(it);
+      const q = [
+        `type=${encodeURIComponent(it.type || '')}`,
+        `category=${encodeURIComponent(it.category || '')}`,
+        `amount=${encodeURIComponent(String(it.amount || '').replace(/,/g, ''))}`,
+        `date=${encodeURIComponent(it.date || '')}`,
+        `note=${encodeURIComponent(it.name || '')}`,
+        `account_name=${encodeURIComponent(it.account_name || '')}`,
+        `tenant_name=${encodeURIComponent(it.tenant_name || '')}`,
+        `planned=1`,
+        `recurring=1`,
+        `ref=detail`,
+        `sid=${encodeURIComponent(String(it.id || ''))}`,
+        `recurring_start_date=${encodeURIComponent(String(startDate || ''))}`
+      ].join('&');
+      wx.navigateTo({ url: `/pages/cashflow/index?${q}` });
+      return;
+    }
+    const id = Number(it.id || 0);
     if (!id) return;
     wx.navigateTo({ url: `/pages/cashflow/index?edit=1&id=${id}` });
   },
   async remove() {
-    if (this.data.synthetic) return;
-    const id = Number(this.data?.item?.id || 0);
+    const isSynthetic = !!this.data.synthetic;
+    const it = this.data.item || {};
+    if (isSynthetic && (it._synthetic === 'recurring-expense' || it._synthetic === 'recurring-income')) {
+      const sid = String(it.id || '');
+      wx.showModal({
+        title: "删除确认",
+        content: "本月不显示该重复项，确认吗？",
+        success: (res) => {
+          if (!res.confirm) return;
+          let store = {};
+          try { store = wx.getStorageSync('fw_recurring_skip'); } catch (e) { store = {}; }
+          if (!store || typeof store !== 'object') store = {};
+          const m = sid.match(/:(\d{6})$/);
+          const monthKey = m ? m[1] : '';
+          const arr = Array.isArray(store[monthKey]) ? store[monthKey] : [];
+          if (!arr.includes(sid)) arr.push(sid);
+          store[monthKey] = arr;
+          try { wx.setStorageSync('fw_recurring_skip', store); } catch (e) {}
+          wx.showToast({ title: "已隐藏", icon: "success" });
+          wx.navigateBack();
+        }
+      });
+      return;
+    }
+    const id = Number(it.id || 0);
     if (!id) return;
     wx.showModal({
       title: "删除确认",

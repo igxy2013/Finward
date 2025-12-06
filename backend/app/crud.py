@@ -62,18 +62,7 @@ def list_accounts(session: Session, account_type: schemas.AccountTypeLiteral | N
             payments_possible = int((amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
             limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
             paid_months = min(months_elapsed, limit, payments_possible)
-            remaining_months = max(0, (limit or 0) - paid_months)
-            rate = Decimal(a.annual_interest_rate) if getattr(a, "annual_interest_rate", None) is not None else Decimal(0)
-            if rate > 0 and remaining_months > 0:
-                r = rate / Decimal(12)
-                if r > 0:
-                    one = Decimal(1)
-                    pv = Decimal(a.monthly_payment) * (one - (one + r) ** (-Decimal(remaining_months))) / r
-                else:
-                    pv = Decimal(a.monthly_payment) * Decimal(remaining_months)
-                amt = pv
-            else:
-                amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
+            amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
         if t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
             # 按年直线折旧: 当前净值 = 期初金额 * (1 - rate * years)
             start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else now)
@@ -121,18 +110,7 @@ def get_account(session: Session, account_id: int) -> schemas.AccountOut | None:
         payments_possible = int((amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
         limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
         paid_months = min(months_elapsed, limit, payments_possible)
-        remaining_months = max(0, (limit or 0) - paid_months)
-        rate = Decimal(a.annual_interest_rate) if getattr(a, "annual_interest_rate", None) is not None else Decimal(0)
-        if rate > 0 and remaining_months > 0:
-            r = rate / Decimal(12)
-            if r > 0:
-                one = Decimal(1)
-                pv = Decimal(a.monthly_payment) * (one - (one + r) ** (-Decimal(remaining_months))) / r
-            else:
-                pv = Decimal(a.monthly_payment) * Decimal(remaining_months)
-            amt = pv
-        else:
-            amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
+        amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
     if t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
         start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else now)
         days = max(0, (now - start_date).days)
@@ -500,18 +478,7 @@ def overview(session: Session, user_id: int) -> schemas.OverviewOut:
                 payments_possible = int((amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
                 limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
                 paid_months = min(months_elapsed, limit, payments_possible)
-                remaining_months = max(0, (limit or 0) - paid_months)
-                rate = Decimal(a.annual_interest_rate) if getattr(a, "annual_interest_rate", None) is not None else Decimal(0)
-                if rate > 0 and remaining_months > 0:
-                    r = rate / Decimal(12)
-                    if r > 0:
-                        one = Decimal(1)
-                        pv = Decimal(a.monthly_payment) * (one - (one + r) ** (-Decimal(remaining_months))) / r
-                    else:
-                        pv = Decimal(a.monthly_payment) * Decimal(remaining_months)
-                    amt = pv
-                else:
-                    amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
+                amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
             total_liabilities += amt
     net_worth = total_assets - total_liabilities
     return schemas.OverviewOut(

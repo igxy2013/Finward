@@ -83,3 +83,7 @@
 .item-name { color: #111827; font-size: 26rpx; font-weight: 600; }
 .item-amount { font-size: 28rpx; font-weight: 700; }
 .item-meta { margin-top: 4rpx; display: flex; gap: 14rpx; color: #6b7280; font-size: 22rpx; }
+.period-switcher { display: flex; align-items: center; justify-content: center; gap: 16rpx; margin-bottom: 16rpx; }
+.period-display { font-size: 28rpx; color: #374151; padding: 6rpx 16rpx; background: #fff; border: 1rpx solid #e5e7eb; border-radius: 999rpx; }
+.nav-btn { width: 48rpx; height: 48rpx; display: flex; align-items: center; justify-content: center; border-radius: 999rpx; border: 1rpx solid #e5e7eb; background: #fff; color: #374151; }
+.nav-btn:active { background: #f3f4f6; }

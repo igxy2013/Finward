@@ -1,5 +1,11 @@
 <view class="page">
-  
+  <view class="period-switcher">
+    <view class="nav-btn" bindtap="prevMonth">‹</view>
+    <picker mode="multiSelector" range="{{monthSelectorRange}}" value="{{monthSelectorIndex}}" bindchange="handlePeriodMultiChange">
+      <view class="period-display">{{selectedYear}}年{{selectedMonth}}月</view>
+    </picker>
+    <view class="nav-btn" bindtap="nextMonth">›</view>
+  </view>
 
   <view class="summary" wx:if="{{summaryReady}}">
     <view class="summary-item accent-expense">
@@ -35,13 +41,13 @@
       <view class="card-glow"></view>
       <view class="summary-top">
         <view class="summary-icon">
-          <image class="summary-icon-img" src="/assets/icons/arrow-down-line-red.svg" mode="aspectFit"></image>
+          <image class="summary-icon-img" src="/assets/icons/arrow-up-line.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">本月实际支出</text>
+        <text class="sum-label">本月预计净收入</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>
-        <text class="amount negative">{{summary.actualExpense}}</text>
+        <text class="amount {{summary.netIncomePositive ? 'positive' : 'negative'}}">{{summary.netIncome}}</text>
       </view>
     </view>
     <view class="summary-item accent-income">
@@ -49,13 +55,12 @@
       <view class="card-glow"></view>
       <view class="summary-top">
         <view class="summary-icon">
-          <image class="summary-icon-img" src="/assets/icons/arrow-up-line.svg" mode="aspectFit"></image>
+          <image class="summary-icon-img" src="/assets/icons/scales-line.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">本月实际收入</text>
+        <text class="sum-label">本月预计收支比</text>
       </view>
       <view class="sum-value">
-        <text class="currency">￥</text>
-        <text class="amount positive">{{summary.actualIncome}}</text>
+        <text class="amount positive">{{summary.incomeExpenseRatio}}</text>
       </view>
     </view>
   </view>

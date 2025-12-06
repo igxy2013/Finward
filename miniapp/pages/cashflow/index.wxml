@@ -30,6 +30,18 @@
       <text class="label">每月重复</text>
       <switch checked="{{form.recurring_monthly}}" bindchange="handleRecurringChange"></switch>
     </view>
+    <view class="form-item" wx:if="{{form.recurring_monthly}}">
+      <text class="label">开始日期*</text>
+      <picker mode="date" value="{{form.recurring_start_date}}" bindchange="handleRecurringStartChange">
+        <view class="picker-value">{{form.recurring_start_date || '请选择开始日期'}}</view>
+      </picker>
+    </view>
+    <view class="form-item" wx:if="{{form.recurring_monthly}}">
+      <text class="label">结束日期</text>
+      <picker mode="date" value="{{form.recurring_end_date}}" bindchange="handleRecurringEndChange">
+        <view class="picker-value">{{form.recurring_end_date || '请选择结束日期'}}</view>
+      </picker>
+    </view>
     <view class="form-item" wx:if="{{form.type === 'income' && form.category === '租金收入'}}">
       <text class="label">资产名称*</text>
       <input placeholder="请输入资产名称" value="{{hidden.account_name}}" data-key="account_name" bindinput="handleHiddenInput" />

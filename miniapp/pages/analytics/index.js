@@ -363,19 +363,125 @@ Page({
       const endDate = new Date(y, m, 0);
       return { start: this.formatDate(startDate), end: this.formatDate(endDate), y, m };
     };
-    const tasks = months.map(p => {
-      const rng = buildRange(p.month);
-      if (!rng) return Promise.resolve({ income: 0, expense: 0 });
-      const query = { start: rng.start, end: rng.end };
-      return Promise.all([
-        api.listCashflows(query),
-        api.fetchWealthSummary(rng.start, rng.end, 'month')
-      ]).then(([list, sumRes]) => {
-        const income = (list || []).reduce((sum, x) => sum + (x && x.type === 'income' && !!x.planned ? Number(x.amount || 0) : 0), 0);
-        const expense = Number(sumRes && sumRes.expected_expense ? sumRes.expected_expense : 0);
-        return { income, expense, y: rng.y, m: rng.m };
-      }).catch(() => ({ income: 0, expense: 0, y: rng.y, m: rng.m }));
-    });
+      const tasks = months.map(p => {
+        const rng = buildRange(p.month);
+        if (!rng) return Promise.resolve({ income: 0, expense: 0 });
+        const query = { start: rng.start, end: rng.end };
+        return Promise.all([
+          api.listCashflows(query),
+          api.fetchWealthSummary(rng.start, rng.end, 'month'),
+          api.listAccounts('asset'),
+          api.listAccounts('liability')
+        ]).then(([list, sumRes, assets, liabilities]) => {
+          const plannedIncome = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'income' && !!x.planned ? Number(x.amount || 0) : 0); }, 0);
+          const actualIncome = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'income' && !x.planned ? Number(x.amount || 0) : 0); }, 0);
+          const plannedExpense = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'expense' && !!x.planned ? Number(x.amount || 0) : 0); }, 0);
+          const backendExpectedExpense = Number(sumRes && sumRes.expected_expense ? sumRes.expected_expense : 0);
+
+          // 统计本地“每月重复·预计收入”主项，从开始日期起纳入当月
+          let mastersIncome = 0;
+          try {
+            const currKeys = new Set((list || [])
+              .filter(i => i && i.type === 'income' && !!i.planned && !!i.recurring_monthly)
+              .map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
+            const monthKey = `${rng.y}${String(rng.m).padStart(2, '0')}`;
+            let masters = wx.getStorageSync('fw_recurring_masters');
+            if (masters && typeof masters === 'object') {
+              Object.values(masters).forEach((ms) => {
+                if (!ms || ms.type !== 'income') return;
+                const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
+                if (!s) return;
+                const startKey = `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}`;
+                if (startKey > monthKey) return;
+                if (ms.end_date) {
+                  const e = new Date(String(ms.end_date).replace(/-/g, '/'));
+                  const endKey = `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}`;
+                  if (monthKey > endKey) return;
+                }
+                const key = `${ms.type}:${ms.category}:${ms.note || ms.category}`;
+                if (currKeys.has(key)) return;
+                const amt = Number(ms.amount || 0);
+                if (amt > 0) mastersIncome += amt;
+              });
+            }
+          } catch (e) {}
+
+          // 统计本地“每月重复·预计支出”主项，从开始日期起纳入当月
+          let mastersExpense = 0;
+          try {
+            const currExpKeys = new Set((list || [])
+              .filter(function(i){ return i && i.type === 'expense' && !!i.planned && !!i.recurring_monthly; })
+              .map(function(i){ return `${i.type}:${i.category}:${i.note ? i.note : i.category}`; }));
+            const monthKey = `${rng.y}${String(rng.m).padStart(2, '0')}`;
+            let masters = wx.getStorageSync('fw_recurring_masters');
+            let skipStore = wx.getStorageSync('fw_recurring_skip');
+            const skippedArr = skipStore && typeof skipStore === 'object' ? (skipStore[monthKey] || []) : [];
+            if (masters && typeof masters === 'object') {
+              Object.values(masters).forEach(function(ms){
+                if (!ms || ms.type !== 'expense') return;
+                const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
+                if (!s) return;
+                const startKey = `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}`;
+                if (startKey > monthKey) return;
+                if (ms.end_date) {
+                  const e = new Date(String(ms.end_date).replace(/-/g, '/'));
+                  const endKey = `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}`;
+                  if (monthKey > endKey) return;
+                }
+                const key = `${ms.type}:${ms.category}:${ms.note || ms.category}`;
+                if (currExpKeys.has(key)) return;
+                const syntheticId = `recurring:local:${key}:${monthKey}`;
+                if (skippedArr.indexOf(syntheticId) >= 0) return;
+                const amt = Number(ms.amount || 0);
+                if (amt > 0) mastersExpense += amt;
+              });
+            }
+          } catch (eE) {}
+
+          // 资产月收益（所有资产的 monthly_income）纳入各历史月份
+          let assetMonthlyIncomeSum = 0;
+          try {
+            (assets || []).forEach(acc => {
+              const mi = Number(acc.monthly_income || 0);
+              if (mi > 0) assetMonthlyIncomeSum += mi;
+            });
+          } catch (e2) { assetMonthlyIncomeSum = 0; }
+
+          // 负债月供计入固定支出趋势（按开始日期和期限判断是否在当月有效）
+          let liabilitiesMonthlySum = 0;
+          try {
+            const plannedRecurringExpenseCategories = new Set((list || [])
+              .filter(function(i){ return i && i.type === 'expense' && !!i.planned && !!i.recurring_monthly; })
+              .map(function(i){ return String(i.category || ''); }));
+            const monthIndex = rng.y * 12 + rng.m;
+            (liabilities || []).forEach(function(acc){
+              const mp = Number(acc.monthly_payment || 0);
+              if (!mp || mp <= 0) return;
+              // 未开始：若有开始日期且开始月在所选月份之后，则跳过
+              let started = true;
+              let monthsElapsed = 0;
+              if (acc.loan_start_date) {
+                const s = new Date(String(acc.loan_start_date).replace(/-/g, '/'));
+                const si = s.getFullYear() * 12 + (s.getMonth() + 1);
+                monthsElapsed = monthIndex - si;
+                if (monthsElapsed < 0) started = false;
+              }
+              if (!started) return;
+              // 若设置了期数，超过期限则跳过
+              const term = Number(acc.loan_term_months || 0);
+              if (term > 0 && monthsElapsed >= term) return;
+              // 去重：如果该月已有同类“<类别>月供”的计划重复支出，则不再叠加
+              const cat = `${String(acc.category || '负债')}月供`;
+              if (plannedRecurringExpenseCategories.has(cat)) return;
+              liabilitiesMonthlySum += mp;
+            });
+          } catch (eL) { liabilitiesMonthlySum = 0; }
+
+          const income = (actualIncome > 0 ? actualIncome : plannedIncome) + mastersIncome + assetMonthlyIncomeSum;
+          const expense = (plannedExpense > 0 ? plannedExpense : backendExpectedExpense) + mastersExpense + liabilitiesMonthlySum;
+          return { income, expense, y: rng.y, m: rng.m, plannedIncome, actualIncome };
+        }).catch(() => ({ income: 0, expense: 0, y: rng.y, m: rng.m }));
+      });
     let results = [];
     try {
       results = await Promise.all(tasks);
@@ -400,7 +506,9 @@ Page({
             if (stats.success) total = Number(stats.data.total_revenue || 0);
             try { wx.setStorageSync('fw_design_service_stats_month', { data: stats, ts: Date.now() }); } catch (e3) {}
           }
-          results[i].income += total;
+          if ((results[i].actualIncome || 0) <= 0) {
+            results[i].income += total;
+          }
           try {
             const startDate = new Date(cy, cm - 1, 1);
             const endDate = new Date(cy, cm, 0);
@@ -455,7 +563,9 @@ Page({
                 if (mi > 0) assetMonthlyIncomeSum += mi;
               }
             });
-            results[i].income += (expectedRentIncomeSum + assetMonthlyIncomeSum);
+          if ((results[i].actualIncome || 0) <= 0) {
+            results[i].income += expectedRentIncomeSum;
+          }
           } catch (errx) {}
 
           try {
@@ -464,9 +574,7 @@ Page({
             const start = this.formatDate(startDate);
             const end = this.formatDate(endDate);
             const sel = 'month';
-            const sumRes = await api.fetchWealthSummary(start, end, sel);
-            const exp = Number(sumRes && sumRes.expected_expense ? sumRes.expected_expense : 0);
-            results[i].expense = exp;
+            await api.fetchWealthSummary(start, end, sel);
           } catch (eExp) {}
         } catch (e4) {}
       }
