@@ -106,6 +106,30 @@ def ensure_schema_upgrade():
                     if not (result4.scalar() or 0):
                         conn.execute(text("ALTER TABLE cashflows ADD COLUMN recurring_monthly TINYINT(1) NOT NULL DEFAULT 0"))
                         conn.commit()
+                    rsd = conn.execute(
+                        text(
+                            """
+                            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'cashflows' AND COLUMN_NAME = 'recurring_start_date'
+                            """
+                        ),
+                        {"db": settings.db_name},
+                    ).scalar() or 0
+                    if not rsd:
+                        conn.execute(text("ALTER TABLE cashflows ADD COLUMN recurring_start_date DATE NULL"))
+                        conn.commit()
+                    red = conn.execute(
+                        text(
+                            """
+                            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'cashflows' AND COLUMN_NAME = 'recurring_end_date'
+                            """
+                        ),
+                        {"db": settings.db_name},
+                    ).scalar() or 0
+                    if not red:
+                        conn.execute(text("ALTER TABLE cashflows ADD COLUMN recurring_end_date DATE NULL"))
+                        conn.commit()
                     # Add relational reference columns if missing
                     cf_acc = conn.execute(
                         text(
@@ -323,6 +347,5 @@ def ensure_schema_upgrade():
                 pass
     except Exception as e:
         print(f"Warning: Could not ensure schema upgrade: {e}")
-
 
 

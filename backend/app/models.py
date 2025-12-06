@@ -111,6 +111,8 @@ class Cashflow(Base):
     category: Mapped[str] = mapped_column(String(80), nullable=False, default="其他")
     planned: Mapped[bool] = mapped_column(Boolean, default=False)
     recurring_monthly: Mapped[bool] = mapped_column(Boolean, default=False)
+    recurring_start_date: Mapped[date | None] = mapped_column(Date())
+    recurring_end_date: Mapped[date | None] = mapped_column(Date())
     date: Mapped[date] = mapped_column(Date())
     note: Mapped[str | None] = mapped_column(Text())
     # 关联字段（可选）：用于标识所属资产与租客，避免依赖备注

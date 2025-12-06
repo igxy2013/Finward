@@ -336,6 +336,37 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
                 exp_inc += amt * Decimal(multiplier)
             else:
                 act_inc += amt * Decimal(multiplier)
+
+    stmt_rec = (
+        select(models.Cashflow)
+        .where(models.Cashflow.household_id == hh_id)
+        .where(models.Cashflow.recurring_monthly == True)
+    )
+    rec_rows = session.scalars(stmt_rec).all()
+    for r in rec_rows:
+        # 若已包含在当前区间的 rows 中，跳过以免重复
+        if start and end and (r.date >= start and r.date <= end):
+            continue
+        amt = Decimal(r.amount)
+        rs = r.recurring_start_date or r.date
+        re = r.recurring_end_date or (end or rs)
+        s_eff = max(start or rs, rs)
+        e_eff = min(end or re, re)
+        if e_eff < s_eff:
+            continue
+        months = ((e_eff.year - s_eff.year) * 12 + (e_eff.month - s_eff.month) + 1)
+        if months <= 0:
+            continue
+        if r.type.value == "expense":
+            if r.planned:
+                exp_exp += amt * Decimal(months)
+            else:
+                act_exp += amt * Decimal(months)
+        else:
+            if r.planned:
+                exp_inc += amt * Decimal(months)
+            else:
+                act_inc += amt * Decimal(months)
     scope_key = (scope or "").lower()
     if scope_key in {"month", "year"}:
         hh_id2 = hh_id

@@ -74,6 +74,15 @@ def update_cashflow(cashflow_id: int, payload: dict = Body(...), session: Sessio
                 v = datetime.strptime(str(v), "%Y-%m-%d").date()
             except Exception:
                 continue
+        elif k in ("recurring_start_date", "recurring_end_date"):
+            if v is None or v == "":
+                v = None
+            else:
+                try:
+                    from datetime import datetime
+                    v = datetime.strptime(str(v), "%Y-%m-%d").date()
+                except Exception:
+                    continue
         elif k in ("planned", "recurring_monthly"):
             v = bool(v)
         setattr(cf, k, v)
@@ -107,6 +116,15 @@ def replace_cashflow(cashflow_id: int, payload: dict = Body(...), session: Sessi
                 v = datetime.strptime(str(v), "%Y-%m-%d").date()
             except Exception:
                 continue
+        elif k in ("recurring_start_date", "recurring_end_date"):
+            if v is None or v == "":
+                v = None
+            else:
+                try:
+                    from datetime import datetime
+                    v = datetime.strptime(str(v), "%Y-%m-%d").date()
+                except Exception:
+                    continue
         elif k in ("planned", "recurring_monthly"):
             v = bool(v)
         setattr(cf, k, v)

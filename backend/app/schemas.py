@@ -278,6 +278,8 @@ class CashflowCreate(BaseModel):
     amount: Decimal
     planned: bool = False
     recurring_monthly: bool = False
+    recurring_start_date: date | None = None
+    recurring_end_date: date | None = None
     date: date
     note: str | None = None
     account_id: int | None = None
@@ -293,6 +295,8 @@ class CashflowOut(BaseModel):
     amount: Decimal
     planned: bool
     recurring_monthly: bool
+    recurring_start_date: date | None = None
+    recurring_end_date: date | None = None
     date: date
     note: str | None = None
     account_id: int | None = None
@@ -313,6 +317,8 @@ class CashflowUpdate(BaseModel):
     amount: Decimal | None = None
     planned: bool | None = None
     recurring_monthly: bool | None = None
+    recurring_start_date: Optional[date] = None
+    recurring_end_date: Optional[date] = None
     date: Optional[date] = None
     note: str | None = None
     account_id: int | None = None
@@ -344,6 +350,18 @@ class CashflowUpdate(BaseModel):
     @classmethod
     def parse_date_field(cls, v):
         if not v:
+            return None
+        if isinstance(v, date):
+            return v
+        try:
+            return datetime.strptime(str(v), "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+    @field_validator('recurring_start_date', 'recurring_end_date', mode='before')
+    @classmethod
+    def parse_optional_date_field(cls, v):
+        if v is None or v == "":
             return None
         if isinstance(v, date):
             return v

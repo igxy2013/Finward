@@ -153,34 +153,12 @@ Page({
       try { if (refFrom === 'detail') wx.setNavigationBarTitle({ title: '编辑收支' }); } catch (e) {}
     }
   },
-  getMasterStartDate(type, category, note) {
-    try {
-      const key = `${String(type || '')}:${String(category || '')}:${String(note || '')}`;
-      const masters = wx.getStorageSync('fw_recurring_masters');
-      if (masters && typeof masters === 'object' && masters[key]) {
-        return masters[key].start_date || '';
-      }
-    } catch (e) {}
-    return '';
-  },
-  getMasterEndDate(type, category, note) {
-    try {
-      const key = `${String(type || '')}:${String(category || '')}:${String(note || '')}`;
-      const masters = wx.getStorageSync('fw_recurring_masters');
-      if (masters && typeof masters === 'object' && masters[key]) {
-        return masters[key].end_date || '';
-      }
-    } catch (e) {}
-    return '';
-  },
   async prefill(id) {
     try {
       const item = await api.getCashflow(id);
       const typeIndex = item.type === "income" ? 1 : 0;
       const categoryOptions = item.type === "income" ? this.data.incomeCategoryOptions : this.data.expenseCategoryOptions;
       const categoryIndex = Math.max(0, categoryOptions.findIndex((opt) => opt.label === item.category));
-      const masterStart = this.getMasterStartDate(item.type, item.category, item.note || '');
-      const masterEnd = this.getMasterEndDate(item.type, item.category, item.note || '');
       this.setData({
         form: {
           type: item.type,
@@ -188,8 +166,8 @@ Page({
           amount: String(item.amount),
           planned: !!item.planned,
           recurring_monthly: !!item.recurring_monthly,
-          recurring_start_date: (item.recurring_start_date || masterStart || ''),
-          recurring_end_date: (item.recurring_end_date || masterEnd || ''),
+          recurring_start_date: (item.recurring_start_date || ''),
+          recurring_end_date: (item.recurring_end_date || ''),
           date: item.date,
           note: item.note || ""
         },
@@ -260,54 +238,12 @@ Page({
     this.setData({ submitting: true });
     try {
       const payload = { ...this.data.form, amount: Number(this.data.form.amount), account_id: this.data.hidden.account_id, tenancy_id: this.data.hidden.tenancy_id, account_name: this.data.hidden.account_name, tenant_name: this.data.hidden.tenant_name };
-      if (payload.hasOwnProperty('recurring_start_date')) delete payload.recurring_start_date;
-      if (payload.hasOwnProperty('recurring_end_date')) delete payload.recurring_end_date;
       if (this.data.editId) {
         await api.updateCashflow(this.data.editId, payload);
-        try {
-          if (this.data.form.planned && this.data.form.recurring_monthly && this.data.form.recurring_start_date) {
-            let masters = wx.getStorageSync('fw_recurring_masters');
-            if (!masters || typeof masters !== 'object') masters = {};
-            const key = `${this.data.form.type}:${this.data.form.category}:${this.data.form.note || ''}`;
-            masters[key] = {
-              key,
-              type: this.data.form.type,
-              category: this.data.form.category,
-              note: this.data.form.note || '',
-              amount: Number(this.data.form.amount),
-              start_date: this.data.form.recurring_start_date,
-              end_date: this.data.form.recurring_end_date || '',
-              account_name: this.data.hidden.account_name || '',
-              tenant_name: this.data.hidden.tenant_name || '',
-              id: this.data.editId
-            };
-            wx.setStorageSync('fw_recurring_masters', masters);
-          }
-        } catch (e) {}
         wx.showToast({ title: "更新成功", icon: "success" });
         wx.navigateBack();
       } else {
         const created = await api.createCashflow(payload);
-        try {
-          if (this.data.form.planned && this.data.form.recurring_monthly && this.data.form.recurring_start_date) {
-            let masters = wx.getStorageSync('fw_recurring_masters');
-            if (!masters || typeof masters !== 'object') masters = {};
-            const key = `${this.data.form.type}:${this.data.form.category}:${this.data.form.note || ''}`;
-            masters[key] = {
-              key,
-              type: this.data.form.type,
-              category: this.data.form.category,
-              note: this.data.form.note || '',
-              amount: Number(this.data.form.amount),
-              start_date: this.data.form.recurring_start_date,
-              end_date: this.data.form.recurring_end_date || '',
-              account_name: this.data.hidden.account_name || '',
-              tenant_name: this.data.hidden.tenant_name || '',
-              id: created && created.id ? created.id : undefined
-            };
-            wx.setStorageSync('fw_recurring_masters', masters);
-          }
-        } catch (e) {}
         wx.showToast({ title: "记录成功", icon: "success" });
         if (this.data.refFrom === 'detail' && created && created.id) {
           wx.redirectTo({ url: `/pages/cashflow-detail/index?id=${created.id}` });

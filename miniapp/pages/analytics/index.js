@@ -88,20 +88,118 @@ Page({
  
   onLoad() {
     const app = getApp();
-    if (!app?.globalData?.token) {
+    const token = app?.globalData?.token || wx.getStorageSync('fw_token');
+    if (!token) {
       app.globalData.guest = true;
+    } else {
+      app.globalData.guest = false;
+      if (!app.globalData.token) app.globalData.token = token;
     }
     this.setData({ needLogin: false });
+    if (app.globalData.guest) {
+      this.setData({
+        loading: false,
+        summary: {
+          netWorth: this.formatNumber(0),
+          totalAssets: this.formatNumber(0),
+          totalLiabilities: this.formatNumber(0),
+          netChange: this.formatSignedNumber(0),
+          changeRatio: "0%",
+          changeRatioValue: 0,
+          debtRatio: "0%",
+          debtRatioValue: 0
+        },
+        trend: [],
+        assetCategories: [],
+        liabilityCategories: [],
+        cashflow: [],
+        monthly: [],
+        incomeChartData: [],
+        expenseChartData: [],
+        highlights: {
+          bestCategory: "-",
+          bestCategoryAmount: "￥0.00",
+          riskCategory: "-",
+          riskCategoryAmount: "￥0.00"
+        }
+      });
+      return;
+    }
     this.fetchAnalytics();
   },
   onShow() {
     const app = getApp();
-    if (!app?.globalData?.token) app.globalData.guest = true;
+    const token = app?.globalData?.token || wx.getStorageSync('fw_token');
+    if (!token) {
+      app.globalData.guest = true;
+    } else {
+      app.globalData.guest = false;
+      if (!app.globalData.token) app.globalData.token = token;
+    }
     if (this.data.needLogin) this.setData({ needLogin: false });
+    if (app.globalData.guest) {
+      this.setData({
+        loading: false,
+        summary: {
+          netWorth: this.formatNumber(0),
+          totalAssets: this.formatNumber(0),
+          totalLiabilities: this.formatNumber(0),
+          netChange: this.formatSignedNumber(0),
+          changeRatio: "0%",
+          changeRatioValue: 0,
+          debtRatio: "0%",
+          debtRatioValue: 0
+        },
+        trend: [],
+        assetCategories: [],
+        liabilityCategories: [],
+        cashflow: [],
+        monthly: [],
+        incomeChartData: [],
+        expenseChartData: [],
+        highlights: {
+          bestCategory: "-",
+          bestCategoryAmount: "￥0.00",
+          riskCategory: "-",
+          riskCategoryAmount: "￥0.00"
+        }
+      });
+      return;
+    }
     this.fetchAnalytics(true);
   },
 
   async fetchAnalytics(quiet = false) {
+    const app = getApp();
+    if (!app?.globalData?.token || app.globalData.guest) {
+      this.setData({
+        loading: false,
+        summary: {
+          netWorth: this.formatNumber(0),
+          totalAssets: this.formatNumber(0),
+          totalLiabilities: this.formatNumber(0),
+          netChange: this.formatSignedNumber(0),
+          changeRatio: "0%",
+          changeRatioValue: 0,
+          debtRatio: "0%",
+          debtRatioValue: 0
+        },
+        trend: [],
+        assetCategories: [],
+        liabilityCategories: [],
+        cashflow: [],
+        monthly: [],
+        incomeChartData: [],
+        expenseChartData: [],
+        highlights: {
+          bestCategory: "-",
+          bestCategoryAmount: "￥0.00",
+          riskCategory: "-",
+          riskCategoryAmount: "￥0.00"
+        }
+      });
+      return;
+    }
     const days = 365;
     this.setData({ loading: !quiet, error: "" });
     try {
@@ -165,6 +263,11 @@ Page({
     }
   },
   async fetchCashflowDistribution() {
+    const app = getApp();
+    if (!app?.globalData?.token || app.globalData.guest) {
+      this.setData({ incomeChartData: [], expenseChartData: [] });
+      return;
+    }
     try {
       const now = new Date();
       const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -175,11 +278,12 @@ Page({
       let list = [];
       try { list = await api.listCashflows(query); } catch (e) { list = []; }
 
-      const rangeStart = start ? new Date(String(start).replace(/-/g, "/")) : null;
-      const rangeEnd = end ? new Date(String(end).replace(/-/g, "/")) : null;
+      const rangeStart = start ? new Date(String(start).trim().replace(/-/g, "/")) : null;
+      const rangeEnd = end ? new Date(String(end).trim().replace(/-/g, "/")) : null;
       const inRange = (ds) => {
         if (!rangeStart || !rangeEnd) return true;
-        const d = new Date(String(ds).replace(/-/g, "/"));
+        const d = new Date(String(ds).trim().replace(/-/g, "/"));
+        if (isNaN(d.getTime())) return false;
         return d >= rangeStart && d <= rangeEnd;
       };
 
@@ -340,63 +444,8 @@ Page({
           });
       } catch (e) { recurringSynthExpense = []; }
 
-      let localMasters = [];
-      try {
-        const y = startDate.getFullYear();
-        const m = startDate.getMonth() + 1;
-        const monthKey = `${y}${String(m).padStart(2, '0')}`;
-        let masters = wx.getStorageSync('fw_recurring_masters');
-        let skipStore = wx.getStorageSync('fw_recurring_skip');
-        const skippedArr = skipStore && typeof skipStore === 'object' ? (skipStore[monthKey] || []) : [];
-        
-        if (masters && typeof masters === 'object') {
-             const recordedKeys = new Set((list || [])
-              .filter(i => !!i.planned && !!i.recurring_monthly)
-              .map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
-             
-             const synthKeys = new Set([...recurringSynth, ...recurringSynthExpense]
-                .map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
-
-             Object.values(masters).forEach(ms => {
-                if (!ms) return;
-                const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
-                if (!s) return;
-                const startKey = `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}`;
-                if (startKey > monthKey) return;
-                
-                if (ms.end_date) {
-                  const e = new Date(String(ms.end_date).replace(/-/g, '/'));
-                  const endKey = `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}`;
-                  if (monthKey > endKey) return;
-                }
-
-                const key = `${ms.type}:${ms.category}:${ms.note || ms.category}`;
-                if (recordedKeys.has(key) || synthKeys.has(key)) return;
-                
-                const syntheticId = `recurring:local:${key}:${monthKey}`;
-                if (skippedArr.indexOf(syntheticId) >= 0) return;
-
-                const amt = Number(ms.amount || 0);
-                if (amt > 0) {
-                    localMasters.push({
-                        id: syntheticId,
-                        type: ms.type,
-                        category: ms.category,
-                        note: ms.note,
-                        amount: amt,
-                        date: end, 
-                        planned: true,
-                        recurring_monthly: true
-                    });
-                }
-             });
-        }
-      } catch (eLocal) {
-          localMasters = [];
-      }
-
       const recorded = (list || []).map(x => ({ type: x.type, category: x.category, note: x.note, amount: Number(x.amount || 0), planned: !!x.planned }));
-      const combinedAll = [...recorded, ...rents, ...assetIncomes, ...debts, ...designServiceIncome, ...recurringSynth, ...recurringSynthExpense, ...localMasters];
+      const combinedAll = [...recorded, ...rents, ...assetIncomes, ...debts, ...designServiceIncome, ...recurringSynth, ...recurringSynthExpense];
       const incomeItems = combinedAll.filter(i => i.type === 'income');
       const expenseItems = combinedAll.filter(i => i.type === 'expense' && i.planned);
       const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
@@ -433,84 +482,29 @@ Page({
           const plannedExpense = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'expense' && !!x.planned ? Number(x.amount || 0) : 0); }, 0);
           const backendExpectedExpense = Number(sumRes && sumRes.expected_expense ? sumRes.expected_expense : 0);
 
-          // 统计本地“每月重复·预计收入”主项，从开始日期起纳入当月
           let mastersIncome = 0;
-          try {
-            const currKeys = new Set((list || [])
-              .filter(i => i && i.type === 'income' && !!i.planned && !!i.recurring_monthly)
-              .map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
-            const monthKey = `${rng.y}${String(rng.m).padStart(2, '0')}`;
-            let masters = wx.getStorageSync('fw_recurring_masters');
-            let skipStore = wx.getStorageSync('fw_recurring_skip');
-            const skippedArr = skipStore && typeof skipStore === 'object' ? (skipStore[monthKey] || []) : [];
-            if (masters && typeof masters === 'object') {
-              Object.values(masters).forEach((ms) => {
-                if (!ms || ms.type !== 'income') return;
-                const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
-                if (!s) return;
-                const startKey = `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}`;
-                if (startKey > monthKey) return;
-                if (ms.end_date) {
-                  const e = new Date(String(ms.end_date).replace(/-/g, '/'));
-                  const endKey = `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}`;
-                  if (monthKey > endKey) return;
-                }
-                const key = `${ms.type}:${ms.category}:${ms.note || ms.category}`;
-                if (currKeys.has(key)) return;
-                const syntheticId = `recurring:local:${key}:${monthKey}`;
-                if (skippedArr.indexOf(syntheticId) >= 0) return;
-                const amt = Number(ms.amount || 0);
-                if (amt > 0) mastersIncome += amt;
-              });
-            }
-          } catch (e) {}
 
-          // 统计本地“每月重复·预计支出”主项，从开始日期起纳入当月
           let mastersExpense = 0;
-          try {
-            const currExpKeys = new Set((list || [])
-              .filter(function(i){ return i && i.type === 'expense' && !!i.planned && !!i.recurring_monthly; })
-              .map(function(i){ return `${i.type}:${i.category}:${i.note ? i.note : i.category}`; }));
-            const monthKey = `${rng.y}${String(rng.m).padStart(2, '0')}`;
-            let masters = wx.getStorageSync('fw_recurring_masters');
-            let skipStore = wx.getStorageSync('fw_recurring_skip');
-            const skippedArr = skipStore && typeof skipStore === 'object' ? (skipStore[monthKey] || []) : [];
-            if (masters && typeof masters === 'object') {
-              Object.values(masters).forEach(function(ms){
-                if (!ms || ms.type !== 'expense') return;
-                const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
-                if (!s) return;
-                const startKey = `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}`;
-                if (startKey > monthKey) return;
-                if (ms.end_date) {
-                  const e = new Date(String(ms.end_date).replace(/-/g, '/'));
-                  const endKey = `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}`;
-                  if (monthKey > endKey) return;
-                }
-                const key = `${ms.type}:${ms.category}:${ms.note || ms.category}`;
-                if (currExpKeys.has(key)) return;
-                const syntheticId = `recurring:local:${key}:${monthKey}`;
-                if (skippedArr.indexOf(syntheticId) >= 0) return;
-                const amt = Number(ms.amount || 0);
-                if (amt > 0) mastersExpense += amt;
-              });
-            }
-          } catch (eE) {}
 
           // 资产月收益（所有资产的 monthly_income）纳入各历史月份
           let assetMonthlyIncomeSum = 0;
           try {
             const monthIndex = rng.y * 12 + rng.m;
             (assets || []).forEach(acc => {
+              if (!acc) return;
               const mi = Number(acc.monthly_income || 0);
               if (!(mi > 0)) return;
               let started = true;
               let monthsElapsed = 0;
               if (acc.invest_start_date) {
-                const s = new Date(String(acc.invest_start_date).replace(/-/g, '/'));
-                const si = s.getFullYear() * 12 + (s.getMonth() + 1);
-                monthsElapsed = monthIndex - si;
-                if (monthsElapsed < 0) started = false;
+                const s = new Date(String(acc.invest_start_date).trim().replace(/-/g, '/'));
+                if (isNaN(s.getTime())) {
+                  started = false;
+                } else {
+                  const si = s.getFullYear() * 12 + (s.getMonth() + 1);
+                  monthsElapsed = monthIndex - si;
+                  if (monthsElapsed < 0) started = false;
+                }
               }
               if (!started) return;
               const term = Number(acc.investment_term_months || 0);
@@ -527,16 +521,23 @@ Page({
               .map(function(i){ return String(i.category || ''); }));
             const monthIndex = rng.y * 12 + rng.m;
             (liabilities || []).forEach(function(acc){
+              if (!acc) return;
               const mp = Number(acc.monthly_payment || 0);
               if (!mp || mp <= 0) return;
               // 未开始：若有开始日期且开始月在所选月份之后，则跳过
               let started = true;
               let monthsElapsed = 0;
               if (acc.loan_start_date) {
-                const s = new Date(String(acc.loan_start_date).replace(/-/g, '/'));
-                const si = s.getFullYear() * 12 + (s.getMonth() + 1);
-                monthsElapsed = monthIndex - si;
-                if (monthsElapsed < 0) started = false;
+                const s = new Date(String(acc.loan_start_date).trim().replace(/-/g, '/'));
+                if (isNaN(s.getTime())) {
+                   // 日期无效，保守起见视为未开始，或者视为已开始？
+                   // 这里假设如果有日期但无效，可能导致计算错误，跳过该项
+                   started = false; 
+                } else {
+                  const si = s.getFullYear() * 12 + (s.getMonth() + 1);
+                  monthsElapsed = monthIndex - si;
+                  if (monthsElapsed < 0) started = false;
+                }
               }
               if (!started) return;
               // 若设置了期数，超过期限则跳过
@@ -550,10 +551,7 @@ Page({
           } catch (eL) { liabilitiesMonthlySum = 0; }
 
           const income = plannedIncome + mastersIncome + assetMonthlyIncomeSum;
-          const hasPlannedOrDebt = (plannedExpense > 0) || (liabilitiesMonthlySum > 0);
-          const expense = hasPlannedOrDebt
-            ? (plannedExpense + mastersExpense + liabilitiesMonthlySum)
-            : (backendExpectedExpense + mastersExpense);
+          const expense = backendExpectedExpense;
           return { income, expense, y: rng.y, m: rng.m, plannedIncome, actualIncome };
         }).catch(() => ({ income: 0, expense: 0, y: rng.y, m: rng.m }));
       });
@@ -1089,11 +1087,12 @@ Page({
       let list = [];
       try { list = await api.listCashflows(query); } catch (e0) { list = []; }
 
-      const rangeStart = start ? new Date(String(start).replace(/-/g, "/")) : null;
-      const rangeEnd = end ? new Date(String(end).replace(/-/g, "/")) : null;
+      const rangeStart = start ? new Date(String(start).trim().replace(/-/g, "/")) : null;
+      const rangeEnd = end ? new Date(String(end).trim().replace(/-/g, "/")) : null;
       const inRange = (ds) => {
         if (!rangeStart || !rangeEnd) return true;
-        const d = new Date(String(ds).replace(/-/g, "/"));
+        const d = new Date(String(ds).trim().replace(/-/g, "/"));
+        if (isNaN(d.getTime())) return false;
         return d >= rangeStart && d <= rangeEnd;
       };
 
@@ -1147,7 +1146,8 @@ Page({
           if (!mp) return;
           if (!rangeStart || !rangeEnd) return;
           if (!startStr) { const dd = clampDay(y, m, 1); pushPayment(acc, y, m, dd); return; }
-          const s = new Date(String(startStr).replace(/-/g, "/"));
+          const s = new Date(String(startStr).trim().replace(/-/g, "/"));
+          if (isNaN(s.getTime())) return;
           const dueDay = s.getDate();
           let yy = y; let mm = m;
           while (true) {

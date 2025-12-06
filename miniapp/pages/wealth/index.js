@@ -306,27 +306,7 @@ Page({
         name: x.note ? x.note : x.category,
         icon: getCategoryIcon(x.category, x.type)
       }));
-      try {
-        let masters = wx.getStorageSync('fw_recurring_masters');
-        if (masters && typeof masters === 'object') {
-          const ymk = endDate.getFullYear();
-          const mmk = endDate.getMonth() + 1;
-          const monthKey = `${ymk}${String(mmk).padStart(2, '0')}`;
-          formatted = (formatted || []).filter((i) => {
-            if (!(i && i.planned && i.recurring_monthly)) return true;
-            const key = `${i.type}:${i.category}:${i.name}`;
-            const ms = masters[key];
-            if (!ms) return true;
-            const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
-            const e = ms.end_date ? new Date(String(ms.end_date).replace(/-/g, '/')) : null;
-            const startMonthKey = s ? `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}` : null;
-            const endMonthKey = e ? `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}` : null;
-            if (startMonthKey && startMonthKey > monthKey) return false;
-            if (endMonthKey && monthKey > endMonthKey) return false;
-            return true;
-          });
-        }
-      } catch (e) {}
+      
 
       // 自动生成本月缺失的每月重复收入（例如工资）
       let recurringSynth = [];
@@ -369,53 +349,56 @@ Page({
             }
           });
         try {
-          // 合成本地“每月重复·预计收入”主项，从开始日期起生成当月缺失条目
-          let masters = wx.getStorageSync('fw_recurring_masters');
-          if (masters && typeof masters === 'object') {
-            const y = endDate.getFullYear();
-            const m = endDate.getMonth() + 1;
-            const monthKey = `${y}${String(m).padStart(2, '0')}`;
-            const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
-            Object.values(masters).forEach((ms) => {
-              if (!ms || ms.type !== 'income') return;
-              const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
-              if (!s) return;
-              const startMonthKey = `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}`;
-              if (startMonthKey > monthKey) return;
-              if (ms.end_date) {
-                const e = new Date(String(ms.end_date).replace(/-/g, '/'));
-                const endMonthKey = `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}`;
-                if (monthKey > endMonthKey) return;
-              }
-              const key = `${ms.type}:${ms.category}:${ms.note || ms.category}`;
-              if (currKeys.has(key)) return;
-              if (existingSynthIncomeKeys.has(key)) return;
-              const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, s.getDate())); })();
-              const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
-              recurringSynth.push({
-                id: `recurring:local:${key}:${monthKey}`,
-                type: 'income',
-                category: ms.category || '其他收入',
-                amount: this.formatNumber(toNum(ms.amount)),
-                date: dt,
-                planned: true,
-                recurring_monthly: true,
-                _synthetic: 'recurring-income',
-                recurring_start_date: ms.start_date,
-                account_name: ms.account_name,
-                name: ms.note ? ms.note : (ms.category || '收入'),
-                icon: getCategoryIcon(ms.category || '其他收入', 'income')
-              });
-              existingSynthIncomeKeys.add(key);
+          const y = endDate.getFullYear();
+          const m = endDate.getMonth() + 1;
+          const monthKey = `${y}${String(m).padStart(2, '0')}`;
+          let allCf = [];
+          try { allCf = await api.listCashflows({}); } catch (eAll) { allCf = []; }
+          const recMasters = (allCf || []).filter(i => i && !!i.planned && !!i.recurring_monthly);
+          const monthIndex = y * 12 + m;
+          const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
+          const buildKey = (i) => `${i.type}:${i.category}:${i.note ? i.note : (i.name ? i.name : i.category)}`;
+          recMasters.filter(i => i.type === 'income').forEach(ms => {
+            const s = ms.recurring_start_date ? new Date(String(ms.recurring_start_date).replace(/-/g, '/')) : (ms.date ? new Date(String(ms.date).replace(/-/g, '/')) : null);
+            if (!s || isNaN(s.getTime())) return;
+            const e = ms.recurring_end_date ? new Date(String(ms.recurring_end_date).replace(/-/g, '/')) : null;
+            const si = s.getFullYear() * 12 + (s.getMonth() + 1);
+            if (monthIndex < si) return;
+            if (e) {
+              const ei = e.getFullYear() * 12 + (e.getMonth() + 1);
+              if (monthIndex > ei) return;
+            }
+            const key = buildKey(ms);
+            if (currKeys.has(key)) return;
+            if (existingSynthIncomeKeys.has(key)) return;
+            const baseDay = s.getDate();
+            const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, baseDay)); })();
+            const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
+            recurringSynth.push({
+              id: `recurring:db:${key}:${monthKey}`,
+              type: 'income',
+              category: ms.category || '其他收入',
+              amount: this.formatNumber(toNum(ms.amount)),
+              date: dt,
+              planned: true,
+              recurring_monthly: true,
+              _synthetic: 'recurring-income',
+              recurring_start_date: ms.recurring_start_date || ms.date,
+              recurring_end_date: ms.recurring_end_date || '',
+              account_id: ms.account_id,
+              account_name: ms.account_name,
+              name: ms.note ? ms.note : (ms.category || '收入'),
+              icon: getCategoryIcon(ms.category || '其他收入', 'income')
             });
-            try {
-              let skipStore = wx.getStorageSync('fw_recurring_skip');
-              const arr = skipStore && typeof skipStore === 'object' ? (skipStore[monthKey] || []) : [];
-              if (arr.length > 0) {
-                recurringSynth = (recurringSynth || []).filter(x => !arr.includes(String(x.id)));
-              }
-            } catch (e2) {}
-          }
+            existingSynthIncomeKeys.add(key);
+          });
+          try {
+            let skipStore = wx.getStorageSync('fw_recurring_skip');
+            const arr = skipStore && typeof skipStore === 'object' ? (skipStore[monthKey] || []) : [];
+            if (arr.length > 0) {
+              recurringSynth = (recurringSynth || []).filter(x => !arr.includes(String(x.id)));
+            }
+          } catch (e2) {}
         } catch (e1) {}
       } catch (e) {}
 
@@ -458,47 +441,49 @@ Page({
             }
           });
         try {
-          const monthKey = `${endDate.getFullYear()}${String(endDate.getMonth() + 1).padStart(2, '0')}`;
-          try {
-            let masters = wx.getStorageSync('fw_recurring_masters');
-            if (masters && typeof masters === 'object') {
-              const y = endDate.getFullYear();
-              const m = endDate.getMonth() + 1;
-              const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
-              Object.values(masters).forEach((ms) => {
-                if (!ms || ms.type !== 'expense') return;
-                const s = ms.start_date ? new Date(String(ms.start_date).replace(/-/g, '/')) : null;
-                if (!s) return;
-                const startMonthKey = `${s.getFullYear()}${String(s.getMonth() + 1).padStart(2, '0')}`;
-                if (startMonthKey > monthKey) return;
-                if (ms.end_date) {
-                  const e = new Date(String(ms.end_date).replace(/-/g, '/'));
-                  const endMonthKey = `${e.getFullYear()}${String(e.getMonth() + 1).padStart(2, '0')}`;
-                  if (monthKey > endMonthKey) return;
-                }
-                const key = `${ms.type}:${ms.category}:${ms.note || ms.category}`;
-                const exists = (recurringSynthExpense || []).some(x => String(x.id) === `recurring:local:${key}:${monthKey}`) ||
-                  (formatted || []).some(i => i.type === 'expense' && !!i.planned && !!i.recurring_monthly && `${i.type}:${i.category}:${i.name}` === key);
-                if (exists) return;
-                const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, s.getDate())); })();
-                const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
-                recurringSynthExpense.push({
-                  id: `recurring:local:${key}:${monthKey}`,
-                  type: 'expense',
-                  category: ms.category || '其他支出',
-                  amount: this.formatNumber(toNum(ms.amount)),
-                  date: dt,
-                  planned: true,
-                  recurring_monthly: true,
-                  _synthetic: 'recurring-expense',
-                  recurring_start_date: ms.start_date,
-                  account_name: ms.account_name,
-                  name: ms.note ? ms.note : (ms.category || '支出'),
-                  icon: getCategoryIcon(ms.category || '其他支出', 'expense')
-                });
-              });
+          const y = endDate.getFullYear();
+          const m = endDate.getMonth() + 1;
+          const monthKey = `${y}${String(m).padStart(2, '0')}`;
+          let allCf = [];
+          try { allCf = await api.listCashflows({}); } catch (eAll) { allCf = []; }
+          const recMasters = (allCf || []).filter(i => i && !!i.planned && !!i.recurring_monthly);
+          const monthIndex = y * 12 + m;
+          const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
+          const buildKey = (i) => `${i.type}:${i.category}:${i.note ? i.note : (i.name ? i.name : i.category)}`;
+          recMasters.filter(i => i.type === 'expense').forEach(ms => {
+            const s = ms.recurring_start_date ? new Date(String(ms.recurring_start_date).replace(/-/g, '/')) : (ms.date ? new Date(String(ms.date).replace(/-/g, '/')) : null);
+            if (!s || isNaN(s.getTime())) return;
+            const e = ms.recurring_end_date ? new Date(String(ms.recurring_end_date).replace(/-/g, '/')) : null;
+            const si = s.getFullYear() * 12 + (s.getMonth() + 1);
+            if (monthIndex < si) return;
+            if (e) {
+              const ei = e.getFullYear() * 12 + (e.getMonth() + 1);
+              if (monthIndex > ei) return;
             }
-          } catch (eM) {}
+            const key = buildKey(ms);
+            const exists = (recurringSynthExpense || []).some(x => `${x.type}:${x.category}:${x.name}` === key) ||
+              (formatted || []).some(i => i.type === 'expense' && !!i.planned && !!i.recurring_monthly && `${i.type}:${i.category}:${i.name}` === key);
+            if (exists) return;
+            const baseDay = s.getDate();
+            const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, baseDay)); })();
+            const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
+            recurringSynthExpense.push({
+              id: `recurring:db:${key}:${monthKey}`,
+              type: 'expense',
+              category: ms.category || '其他支出',
+              amount: this.formatNumber(toNum(ms.amount)),
+              date: dt,
+              planned: true,
+              recurring_monthly: true,
+              _synthetic: 'recurring-expense',
+              recurring_start_date: ms.recurring_start_date || ms.date,
+              recurring_end_date: ms.recurring_end_date || '',
+              account_id: ms.account_id,
+              account_name: ms.account_name,
+              name: ms.note ? ms.note : (ms.category || '支出'),
+              icon: getCategoryIcon(ms.category || '其他支出', 'expense')
+            });
+          });
           let store = wx.getStorageSync('fw_recurring_skip');
           if (store && typeof store === 'object') {
             const arr = Array.isArray(store[monthKey]) ? store[monthKey] : [];
@@ -832,7 +817,7 @@ Page({
     if (rawId.startsWith('tenancy:')) {
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       if (item) {
-        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}`;
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}&recurring_end_date=${encodeURIComponent(String(item.recurring_end_date || ''))}`;
         wx.navigateTo({ url });
         return;
       }
@@ -842,7 +827,7 @@ Page({
     if (rawId.startsWith('loan:')) {
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       if (item) {
-        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}`;
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}&recurring_end_date=${encodeURIComponent(String(item.recurring_end_date || ''))}`;
         wx.navigateTo({ url });
         return;
       }
@@ -853,7 +838,7 @@ Page({
     if (rawId.startsWith('asset-income:')) {
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       if (item) {
-        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}`;
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}&recurring_end_date=${encodeURIComponent(String(item.recurring_end_date || ''))}`;
         wx.navigateTo({ url });
         return;
       }
@@ -864,7 +849,7 @@ Page({
     if (nonNumeric) {
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       if (item) {
-        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&note=${encodeURIComponent(String(item.note || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}`;
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&note=${encodeURIComponent(String(item.note || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}&recurring_end_date=${encodeURIComponent(String(item.recurring_end_date || ''))}`;
         wx.navigateTo({ url });
         return;
       }

@@ -70,6 +70,7 @@ App({
                 const token = res.data?.token;
                 if (token) {
                   this.globalData.token = token;
+                  this.globalData.guest = false;
                   try { wx.setStorageSync('fw_token', token); } catch (e) {}
                   resolve(token);
                 } else {
@@ -96,7 +97,10 @@ App({
     const now = Date.now();
     if (now - this._lastLoginTs < 1500 && this._loginPromise) return this._loginPromise;
     this._lastLoginTs = now;
-    this._loginPromise = this.login().finally(() => {
+    this._loginPromise = this.login().then((t) => {
+      this.globalData.guest = false;
+      return t;
+    }).finally(() => {
       this._loginPromise = null;
     });
     return this._loginPromise;

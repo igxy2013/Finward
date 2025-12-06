@@ -38,16 +38,6 @@ Page({
     if (!id) return;
     this.loadItem(id);
   },
-  getRecurringStartDate(data) {
-    try {
-      const k = `${String(data.type || '')}:${String(data.category || '')}:${String(data.note || data.name || data.category || '')}`;
-      let masters = wx.getStorageSync('fw_recurring_masters');
-      if (masters && typeof masters === 'object' && masters[k] && masters[k].start_date) {
-        return masters[k].start_date;
-      }
-    } catch (e) {}
-    return '';
-  },
   loadSynthetic(options) {
     try {
       const d = (s) => {
@@ -60,8 +50,8 @@ Page({
       const amountText = d(options.amount_display || '0.00');
       const title = d(options.name || options.category || '记录');
       const icon = this.getIcon({ type });
-      const recurringStartDateOpt = d(options.recurring_start_date || '');
-      const recurringStartDateCalc = recurringStartDateOpt || this.getRecurringStartDate({ type, category: d(options.category || ''), note: d(options.note || '') });
+      const recurringStartDate = d(options.recurring_start_date || '');
+      const recurringEndDate = d(options.recurring_end_date || '');
       this.setData({
         item: {
           id: d(options.id || ''),
@@ -71,7 +61,8 @@ Page({
           date: d(options.date || ''),
           planned: options.planned === '1',
           recurring_monthly: options.recurring === '1',
-          recurring_start_date: recurringStartDateCalc,
+          recurring_start_date: recurringStartDate,
+          recurring_end_date: recurringEndDate,
           name: d(options.name || ''),
           account_id: d(options.account_id || ''),
           account_name: d(options.account_name || ''),
@@ -86,7 +77,8 @@ Page({
           date: d(options.date || ''),
           category: d(options.category || ''),
           recurringLabel,
-          recurringStartDate: recurringStartDateCalc,
+          recurringStartDate,
+          recurringEndDate,
           accountName: d(options.account_name || ''),
           note: d(options.note || ''),
           tenantName: d(options.tenant_name || ''),
@@ -109,7 +101,6 @@ Page({
       const amountText = this.formatNumber(item.amount);
       const title = item.name || item.category || "记录";
       const icon = this.getIcon(item);
-      const recurringStartDateCalc = this.getRecurringStartDate(item);
       this.setData({
         item,
         display: {
@@ -120,7 +111,8 @@ Page({
           date: item.date || "",
           category: item.category || "",
           recurringLabel,
-          recurringStartDate: recurringStartDateCalc,
+          recurringStartDate: item.recurring_start_date || "",
+          recurringEndDate: item.recurring_end_date || "",
           accountName: item.account_name || "",
           note: item.note || "",
           tenantName: item.tenant_name || "",
@@ -145,7 +137,8 @@ Page({
     const isSynthetic = !!this.data.synthetic;
     const it = this.data.item || {};
     if (isSynthetic && it._synthetic === 'recurring-expense') {
-      const startDate = this.getRecurringStartDate(it);
+      const startDate = it.recurring_start_date || '';
+      const endDate = it.recurring_end_date || '';
       const q = [
         `type=${encodeURIComponent(it.type || '')}`,
         `category=${encodeURIComponent(it.category || '')}`,
@@ -158,7 +151,8 @@ Page({
         `recurring=1`,
         `ref=detail`,
         `sid=${encodeURIComponent(String(it.id || ''))}`,
-        `recurring_start_date=${encodeURIComponent(String(startDate || ''))}`
+        `recurring_start_date=${encodeURIComponent(String(startDate || ''))}`,
+        `recurring_end_date=${encodeURIComponent(String(endDate || ''))}`
       ].join('&');
       wx.navigateTo({ url: `/pages/cashflow/index?${q}` });
       return;
