@@ -26,9 +26,11 @@ class AccountCreate(AccountBase):
     monthly_payment: Decimal | None = None
     annual_interest_rate: Decimal | None = None
     loan_start_date: date | None = None
+    loan_end_date: date | None = None
     investment_term_months: int | None = None
     monthly_income: Decimal | None = None
     invest_start_date: date | None = None
+    invest_end_date: date | None = None
     depreciation_rate: Decimal | None = None
 
 
@@ -43,9 +45,11 @@ class AccountUpdate(BaseModel):
     monthly_payment: Decimal | None = None
     annual_interest_rate: Decimal | None = None
     loan_start_date: date | None = None
+    loan_end_date: date | None = None
     investment_term_months: int | None = None
     monthly_income: Decimal | None = None
     invest_start_date: date | None = None
+    invest_end_date: date | None = None
     depreciation_rate: Decimal | None = None
 
 
@@ -57,9 +61,11 @@ class AccountOut(AccountBase):
     monthly_payment: Decimal | None = None
     annual_interest_rate: Decimal | None = None
     loan_start_date: date | None = None
+    loan_end_date: date | None = None
     investment_term_months: int | None = None
     monthly_income: Decimal | None = None
     invest_start_date: date | None = None
+    invest_end_date: date | None = None
     depreciation_rate: Decimal | None = None
     initial_amount: Decimal
     current_value: Decimal

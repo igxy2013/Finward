@@ -311,6 +311,10 @@
   margin-bottom: 24rpx;
 }
 
+.card-header--spaced {
+  margin-top: 24rpx;
+}
+
 .card-title {
   font-size: 32rpx;
   font-weight: 600;

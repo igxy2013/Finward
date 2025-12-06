@@ -12,9 +12,11 @@ Page({
       monthly_payment: "",
       annual_interest_rate: "",
       loan_start_date: "",
+      loan_end_date: "",
       investment_term_months: "",
       monthly_income: "",
       invest_start_date: "",
+      invest_end_date: "",
       depreciation_rate: "", // 显示为百分比值，如 10 表示 10%
       rental_enabled: false,
       tenant_name: "",
@@ -129,9 +131,11 @@ Page({
           monthly_payment: item.monthly_payment != null ? String(item.monthly_payment) : "",
           annual_interest_rate: item.annual_interest_rate != null ? String(Number(item.annual_interest_rate) * 100) : "",
           loan_start_date: item.loan_start_date || "",
+          loan_end_date: item.loan_end_date || "",
           investment_term_months: item.investment_term_months != null ? String(item.investment_term_months) : "",
           monthly_income: item.monthly_income != null ? String(item.monthly_income) : "",
           invest_start_date: item.invest_start_date || "",
+          invest_end_date: item.invest_end_date || "",
           depreciation_rate: item.depreciation_rate != null ? String(Number(item.depreciation_rate) * 100) : "",
           rental_enabled: false,
           tenant_name: "",
@@ -150,6 +154,7 @@ Page({
         categoryDisplay: categoryOptions[categoryIndex]?.label || "请选择分类",
         current_value_display: this.clipTwoDecimals(String(item.current_value != null ? item.current_value : item.amount))
       });
+      this.recomputeEndDates();
       if ((item.type || "asset") === "asset" && (item.category || "") === "房产") {
         try {
           const tenants = await api.listTenants(id);
@@ -217,15 +222,18 @@ Page({
         categoryDisplay: categoryOptions[categoryIndex]?.label || "请选择分类",
         current_value_display: this.clipTwoDecimals(String(item.current_value != null ? item.current_value : item.amount))
       });
+      this.recomputeEndDates();
     }
   },
   handleDateChangeAsset(e) {
-    this.setData({ "form.invest_start_date": e.detail.value });
+      this.setData({ "form.invest_start_date": e.detail.value });
     this.recomputeCurrentValue();
+    this.recomputeEndDates();
   },
   handleDateChangeLoan(e) {
     this.setData({ "form.loan_start_date": e.detail.value });
     this.recomputeCurrentValue();
+    this.recomputeEndDates();
   },
   handleInput(e) {
     const key = e.currentTarget.dataset.key;
@@ -233,6 +241,7 @@ Page({
     if (key === "amount") v = this.clipTwoDecimals(v);
     this.setData({ [`form.${key}`]: v });
     if (key === "amount" || key === "depreciation_rate" || key === "annual_interest_rate" || key === "monthly_payment" || key === "loan_term_months") this.recomputeCurrentValue();
+    if (key === "loan_term_months") this.recomputeEndDates();
   },
   handleTenantDueDayChange(e) {
     const idx = Number(e.detail.value || 0);
@@ -298,6 +307,50 @@ Page({
       this.setData({ current_value_display: this.clipTwoDecimals(String(current)) });
     }
   },
+  recomputeEndDates() {
+    // 负债结束日期：按开始日期 + 期限(月) 自动计算
+    const startLoan = this.data.form.loan_start_date;
+    const termLoan = Number(this.data.form.loan_term_months || 0);
+    let loanEnd = "";
+    if (startLoan && termLoan > 0) {
+      const s = new Date(String(startLoan).replace(/-/g, "/"));
+      if (!isNaN(s.getTime())) {
+        const y = s.getFullYear();
+        const m = s.getMonth();
+        const d = s.getDate();
+        // 最后一期所在月份：开始月 + 期限 - 1
+        const endMonthIdx = m + termLoan - 1;
+        const endDate = new Date(y, endMonthIdx + 1, 0); // 该月最后一天
+        const day = Math.min(d, endDate.getDate());
+        const finalDate = new Date(y, endMonthIdx, day);
+        const yy = finalDate.getFullYear();
+        const mm = String(finalDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(finalDate.getDate()).padStart(2, '0');
+        loanEnd = `${yy}-${mm}-${dd}`;
+      }
+    }
+    // 资产结束日期：如设置了投资期限则按开始日期 + 期限(月) 计算，否则保留用户设置
+    const startInvest = this.data.form.invest_start_date;
+    const termInvest = Number(this.data.form.investment_term_months || 0);
+    let investEnd = this.data.form.invest_end_date || "";
+    if (startInvest && termInvest > 0) {
+      const s = new Date(String(startInvest).replace(/-/g, "/"));
+      if (!isNaN(s.getTime())) {
+        const y = s.getFullYear();
+        const m = s.getMonth();
+        const d = s.getDate();
+        const endMonthIdx = m + termInvest - 1;
+        const endDate = new Date(y, endMonthIdx + 1, 0);
+        const day = Math.min(d, endDate.getDate());
+        const finalDate = new Date(y, endMonthIdx, day);
+        const yy = finalDate.getFullYear();
+        const mm = String(finalDate.getMonth() + 1).padStart(2, '0');
+        const dd = String(finalDate.getDate()).padStart(2, '0');
+        investEnd = `${yy}-${mm}-${dd}`;
+      }
+    }
+    this.setData({ "form.loan_end_date": loanEnd, "form.invest_end_date": investEnd });
+  },
   handleTypeChange(e) {
     const typeIndex = Number(e.detail.value);
     const value = this.data.typeOptions[typeIndex].value;
@@ -340,10 +393,12 @@ Page({
         loan_term_months: f.loan_term_months !== "" ? Number(f.loan_term_months) : null,
         monthly_payment: f.monthly_payment !== "" ? Number(f.monthly_payment) : null,
         loan_start_date: f.loan_start_date || null,
+        loan_end_date: f.loan_end_date || null,
         annual_interest_rate: f.annual_interest_rate !== "" ? Number(f.annual_interest_rate) / 100 : null,
         investment_term_months: f.investment_term_months !== "" ? Number(f.investment_term_months) : null,
         monthly_income: f.monthly_income !== "" ? Number(f.monthly_income) : null,
         invest_start_date: f.invest_start_date || null,
+        invest_end_date: f.invest_end_date || null,
         depreciation_rate: f.depreciation_rate !== "" ? Number(f.depreciation_rate) / 100 : null
       };
       let accountId = this.data.editId || null;

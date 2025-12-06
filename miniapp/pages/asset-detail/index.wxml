@@ -64,6 +64,7 @@
         <view class="info-item" wx:if="{{detail.monthly_payment}}"><text class="info-label">月供</text><text class="info-value">￥{{detail.monthly_payment_display}}</text></view>
         <view class="info-item" wx:if="{{detail.loan_term_months}}"><text class="info-label">期限</text><text class="info-value">{{detail.loan_term_months}} 个月</text></view>
         <view class="info-item" wx:if="{{detail.loan_start_date_display}}"><text class="info-label">开始日期</text><text class="info-value">{{detail.loan_start_date_display}}</text></view>
+        <view class="info-item" wx:if="{{detail.loan_end_date_display}}"><text class="info-label">结束日期</text><text class="info-value">{{detail.loan_end_date_display}}</text></view>
       </view>
     </view>
 
@@ -75,6 +76,7 @@
         <view class="info-item" wx:if="{{detail.monthly_income}}"><text class="info-label">月收益</text><text class="info-value">￥{{detail.monthly_income_display}}</text></view>
         <view class="info-item" wx:if="{{detail.investment_term_months}}"><text class="info-label">期限</text><text class="info-value">{{detail.investment_term_months}} 个月</text></view>
         <view class="info-item" wx:if="{{detail.invest_start_date_display}}"><text class="info-label">开始日期</text><text class="info-value">{{detail.invest_start_date_display}}</text></view>
+        <view class="info-item" wx:if="{{detail.invest_end_date_display}}"><text class="info-label">结束日期</text><text class="info-value">{{detail.invest_end_date_display}}</text></view>
         <view class="info-item" wx:if="{{detail.depreciation_rate_display}}"><text class="info-label">折旧率(年%)</text><text class="info-value">{{detail.depreciation_rate_display}}%</text></view>
       </view>
     </view>

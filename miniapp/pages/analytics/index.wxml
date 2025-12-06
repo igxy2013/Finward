@@ -112,7 +112,7 @@
       <view class="chart-block">
         <canvas type="2d" id="incomeTrendCanvas" canvas-id="incomeTrendCanvas" class="chart-canvas" catchtap="noop" bindtouchstart="onIncomeTrendTouch" bindtouchmove="onIncomeTrendTouch"></canvas>
       </view>
-      <view class="card-header">
+      <view class="card-header card-header--spaced">
         <text class="card-title">固定支出分布</text>
         <text class="card-subtitle">Expense Distribution</text>
       </view>

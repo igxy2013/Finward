@@ -55,6 +55,26 @@ Page({
         next_due_date_display: data.next_due_date ? this.formatDate(data.next_due_date) : "",
         monthly_payment_display: data.monthly_payment ? this.formatNumber(data.monthly_payment) : "",
         loan_start_date_display: data.loan_start_date ? this.formatDate(data.loan_start_date) : "",
+        loan_end_date_display: (() => {
+          const ed = data.loan_end_date;
+          if (ed) return this.formatDate(ed);
+          const sd = data.loan_start_date;
+          const term = Number(data.loan_term_months || 0);
+          if (!sd || !(term > 0)) return "";
+          const s = new Date(String(sd).replace(/-/g, "/"));
+          if (isNaN(s.getTime())) return "";
+          const y = s.getFullYear();
+          const m = s.getMonth();
+          const d = s.getDate();
+          const endMonthIdx = m + term - 1;
+          const endDate = new Date(y, endMonthIdx + 1, 0);
+          const day = Math.min(d, endDate.getDate());
+          const finalDate = new Date(y, endMonthIdx, day);
+          const yy = finalDate.getFullYear();
+          const mm = String(finalDate.getMonth() + 1).padStart(2, '0');
+          const dd = String(finalDate.getDate()).padStart(2, '0');
+          return `${yy}-${mm}-${dd}`;
+        })(),
         annual_interest_rate_display: (data.annual_interest_rate != null && data.annual_interest_rate !== "") ? Number(data.annual_interest_rate * 100).toFixed(2) : ""
       };
       this.setData({ detail, icon, change_positive, change_negative, change_sign, loading: false });

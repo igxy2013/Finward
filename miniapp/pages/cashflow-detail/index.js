@@ -38,7 +38,7 @@ Page({
     if (!id) return;
     this.loadItem(id);
   },
-  loadSynthetic(options) {
+  async loadSynthetic(options) {
     try {
       const d = (s) => {
         try { return decodeURIComponent(String(s || '')); } catch (e) { return String(s || ''); }
@@ -52,6 +52,7 @@ Page({
       const icon = this.getIcon({ type });
       const recurringStartDate = d(options.recurring_start_date || options.date || '');
       const recurringEndDate = d(options.recurring_end_date || '');
+      const baseId = d(options.base_id || '');
       this.setData({
         item: {
           id: d(options.id || ''),
@@ -67,7 +68,8 @@ Page({
           account_id: d(options.account_id || ''),
           account_name: d(options.account_name || ''),
           tenant_name: d(options.tenant_name || ''),
-          _synthetic: d(options.synthetic_kind || '')
+          _synthetic: d(options.synthetic_kind || ''),
+          base_id: baseId
         },
         display: {
           title,
@@ -87,9 +89,74 @@ Page({
         loading: false,
         synthetic: true
       });
+      const syn = String(this.data.item?._synthetic || '');
+      const aid = Number(this.data.item?.account_id || 0);
+      if (aid && (syn === 'loan-payment' || syn === 'loan' || syn === 'asset-income')) {
+        try {
+          const acc = await api.getAccount(aid);
+          let endStr = '';
+          if (syn === 'loan-payment' || syn === 'loan') {
+            const ed = acc.loan_end_date;
+            if (ed) endStr = this.formatDateStr(ed);
+            else {
+              const sd = acc.loan_start_date;
+              const term = Number(acc.loan_term_months || 0);
+              if (sd && term > 0) endStr = this.calcEndDate(sd, term);
+            }
+          } else if (syn === 'asset-income') {
+            const ed = acc.invest_end_date;
+            if (ed) endStr = this.formatDateStr(ed);
+            else {
+              const sd = acc.invest_start_date;
+              const term = Number(acc.investment_term_months || 0);
+              if (sd && term > 0) endStr = this.calcEndDate(sd, term);
+            }
+          }
+          if (endStr) {
+            this.setData({ display: { ...this.data.display, endDate: endStr } });
+          }
+        } catch (eAcc) {}
+      }
+      const bidNum = Number(baseId || 0);
+      if (bidNum) {
+        try {
+          const baseItem = await api.getCashflow(bidNum);
+          const rsd = baseItem.recurring_start_date || '';
+          const red = baseItem.recurring_end_date || '';
+          this.setData({
+            item: { ...this.data.item, recurring_start_date: rsd || this.data.item.recurring_start_date, recurring_end_date: red || this.data.item.recurring_end_date },
+            display: { ...this.data.display, recurringStartDate: rsd || this.data.display.recurringStartDate, recurringEndDate: red || this.data.display.recurringEndDate }
+          });
+        } catch (eFetch) {}
+      }
     } catch (e) {
       this.setData({ loading: false, error: '加载失败' });
     }
+  },
+  formatDateStr(dateStr) {
+    const d = new Date(String(dateStr).replace(/-/g, '/'));
+    if (isNaN(d.getTime())) return '';
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${dd}`;
+  },
+  calcEndDate(startStr, termMonths) {
+    try {
+      const s = new Date(String(startStr).replace(/-/g, '/'));
+      if (isNaN(s.getTime())) return '';
+      const y = s.getFullYear();
+      const m = s.getMonth();
+      const d = s.getDate();
+      const endMonthIdx = m + Number(termMonths || 0) - 1;
+      const endDate = new Date(y, endMonthIdx + 1, 0);
+      const day = Math.min(d, endDate.getDate());
+      const finalDate = new Date(y, endMonthIdx, day);
+      const yy = finalDate.getFullYear();
+      const mm = String(finalDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(finalDate.getDate()).padStart(2, '0');
+      return `${yy}-${mm}-${dd}`;
+    } catch (e) { return ''; }
   },
   async loadItem(id) {
     this.setData({ loading: true, error: "" });
@@ -136,7 +203,17 @@ Page({
   edit() {
     const isSynthetic = !!this.data.synthetic;
     const it = this.data.item || {};
-    if (isSynthetic && it._synthetic === 'recurring-expense') {
+    if (isSynthetic && (it._synthetic === 'recurring-expense' || it._synthetic === 'recurring-income')) {
+      const base = String(it.base_id || '').trim();
+      let parsedBase = base;
+      if (!parsedBase) {
+        const m = String(it.id || '').match(/^recurring:(\d+):/);
+        if (m && m[1]) parsedBase = m[1];
+      }
+      if (parsedBase) {
+        wx.navigateTo({ url: `/pages/cashflow/index?edit=1&id=${parsedBase}` });
+        return;
+      }
       const startDate = it.recurring_start_date || '';
       const endDate = it.recurring_end_date || '';
       const q = [
@@ -157,7 +234,7 @@ Page({
       wx.navigateTo({ url: `/pages/cashflow/index?${q}` });
       return;
     }
-    if (isSynthetic && it._synthetic === 'loan-payment') {
+    if (isSynthetic && (it._synthetic === 'loan-payment' || it._synthetic === 'loan')) {
       const aid = Number(it.account_id || 0);
       if (aid) {
         wx.navigateTo({ url: `/pages/liability-detail/index?id=${aid}` });
@@ -178,7 +255,43 @@ Page({
   async remove() {
     const isSynthetic = !!this.data.synthetic;
     const it = this.data.item || {};
-    if (isSynthetic && (it._synthetic === 'recurring-expense' || it._synthetic === 'recurring-income' || it._synthetic === 'loan-payment' || it._synthetic === 'asset-income')) {
+    if (isSynthetic && (it._synthetic === 'recurring-expense' || it._synthetic === 'recurring-income')) {
+      const base = String(it.base_id || '').trim();
+      let parsedBase = base;
+      if (!parsedBase) {
+        const m = String(it.id || '').match(/^recurring:(\d+):/);
+        if (m && m[1]) parsedBase = m[1];
+      }
+      if (parsedBase) {
+        wx.showActionSheet({
+          itemList: ["删除主记录", "仅隐藏本月"],
+          success: async (res) => {
+            if (res.tapIndex === 0) {
+              try {
+                await api.deleteCashflow(Number(parsedBase));
+                wx.showToast({ title: "已删除", icon: "success" });
+                wx.navigateBack();
+              } catch (e) {
+                wx.showToast({ title: "删除失败", icon: "none" });
+              }
+            } else if (res.tapIndex === 1) {
+              const sid = String(it.id || '');
+              let store = {};
+              try { store = wx.getStorageSync('fw_recurring_skip'); } catch (e) { store = {}; }
+              if (!store || typeof store !== 'object') store = {};
+              const m = sid.match(/:(\d{6})$/);
+              const monthKey = m ? m[1] : '';
+              const arr = Array.isArray(store[monthKey]) ? store[monthKey] : [];
+              if (!arr.includes(sid)) arr.push(sid);
+              store[monthKey] = arr;
+              try { wx.setStorageSync('fw_recurring_skip', store); } catch (e) {}
+              wx.showToast({ title: "已隐藏", icon: "success" });
+              wx.navigateBack();
+            }
+          }
+        });
+        return;
+      }
       const sid = String(it.id || '');
       wx.showModal({
         title: "删除确认",
@@ -194,6 +307,39 @@ Page({
           if (!arr.includes(sid)) arr.push(sid);
           store[monthKey] = arr;
           try { wx.setStorageSync('fw_recurring_skip', store); } catch (e) {}
+          wx.showToast({ title: "已隐藏", icon: "success" });
+          wx.navigateBack();
+        }
+      });
+      return;
+    }
+    if (isSynthetic && (it._synthetic === 'loan-payment' || it._synthetic === 'loan' || it._synthetic === 'asset-income' || it._synthetic === 'rent')) {
+      const sid = String(it.id || '');
+      wx.showModal({
+        title: "删除确认",
+        content: "本月不显示该重复项，确认吗？",
+        success: (res) => {
+          if (!res.confirm) return;
+          if (it._synthetic === 'rent') {
+            let store = {};
+            try { store = wx.getStorageSync('fw_rent_skip'); } catch (e) { store = {}; }
+            if (!store || typeof store !== 'object') store = {};
+            const monthKey = String(it.date || '').slice(0,7).replace('-', '');
+            const arr = Array.isArray(store[monthKey]) ? store[monthKey] : [];
+            if (!arr.includes(sid)) arr.push(sid);
+            store[monthKey] = arr;
+            try { wx.setStorageSync('fw_rent_skip', store); } catch (e) {}
+          } else {
+            let store = {};
+            try { store = wx.getStorageSync('fw_recurring_skip'); } catch (e) { store = {}; }
+            if (!store || typeof store !== 'object') store = {};
+            const m = sid.match(/:(\d{6})$/);
+            const monthKey = m ? m[1] : '';
+            const arr = Array.isArray(store[monthKey]) ? store[monthKey] : [];
+            if (!arr.includes(sid)) arr.push(sid);
+            store[monthKey] = arr;
+            try { wx.setStorageSync('fw_recurring_skip', store); } catch (e) {}
+          }
           wx.showToast({ title: "已隐藏", icon: "success" });
           wx.navigateBack();
         }

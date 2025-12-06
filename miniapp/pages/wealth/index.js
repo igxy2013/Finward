@@ -79,6 +79,28 @@ Page({
     activeType: "all",
     cashflows: []
   },
+  onTabItemTap() {
+    try {
+      const now = new Date();
+      const y = now.getFullYear();
+      const m = now.getMonth() + 1;
+      const years = Array.from({ length: 11 }, (_, i) => String(y - 10 + i));
+      const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
+      const yi = Math.max(0, years.findIndex(v => Number(v) === y));
+      const mi = Math.max(0, months.findIndex(v => Number(v) === m));
+      this.setData({
+        selectedYear: y,
+        selectedMonth: m,
+        monthSelectorRange: [years, months],
+        monthSelectorIndex: [yi, mi],
+        activeType: 'all'
+      }, () => {
+        try { wx.setStorageSync('fw_period', { y, m }); } catch (e) {}
+        this.fetchSummary(false);
+        this.fetchList(false);
+      });
+    } catch (e) {}
+  },
   async onShow() {
     const app = getApp();
     try {
@@ -93,8 +115,8 @@ Page({
     let saved = null;
     try { saved = wx.getStorageSync('fw_period'); } catch (e) { saved = null; }
     const now = new Date();
-    let y = Number(saved?.y || 0) || now.getFullYear();
-    let m = Number(saved?.m || 0) || (now.getMonth() + 1);
+    const y = Number(saved?.y || 0) || now.getFullYear();
+    const m = Number(saved?.m || 0) || (now.getMonth() + 1);
     const years = Array.from({ length: 11 }, (_, i) => String(y - 10 + i));
     const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
     const yi = Math.max(0, years.findIndex(v => Number(v) === y));
@@ -108,7 +130,7 @@ Page({
     this.skipFilterOnce = true;
     let cached = null;
     try { cached = wx.getStorageSync('fw_summary_cache'); } catch (e) {}
-    this.setData({ summaryReady: false, activeType: 'all' }, () => {
+    this.setData({ summaryReady: false, activeType: this.data.activeType || 'all' }, () => {
       this.fetchSummary(false);
       this.fetchList(false);
     });
@@ -505,6 +527,16 @@ Page({
           tenant_name: r.tenant_name, // 添加租户名称
           icon: getCategoryIcon('租金收入', 'income')
         }));
+        try {
+          const y = endDate.getFullYear();
+          const m = endDate.getMonth() + 1;
+          const monthKey = `${y}${String(m).padStart(2, '0')}`;
+          const store = wx.getStorageSync('fw_rent_skip');
+          const arr = store && typeof store === 'object' ? (store[monthKey] || []) : [];
+          if (arr.length > 0) {
+            rents = (rents || []).filter(x => !arr.includes(String(x.id)));
+          }
+        } catch (e) {}
       } catch (err) {}
       
       // 获取资产月收益（排除已计算为租金收入的资产）
@@ -536,6 +568,13 @@ Page({
           if (!started) return;
           const term = Number(acc.investment_term_months || 0);
           if (term > 0 && monthsElapsed >= term) return;
+          if (acc.invest_end_date) {
+            const e = new Date(String(acc.invest_end_date).replace(/-/g, '/'));
+            if (!isNaN(e.getTime())) {
+              const ei = e.getFullYear() * 12 + (e.getMonth() + 1);
+              if (monthIndex > ei) return;
+            }
+          }
           assetIncomes.push({
             id: `asset-income:${acc.id}`,
             type: 'income',
@@ -603,12 +642,22 @@ Page({
           const mp = Number(acc.monthly_payment || 0);
           const startStr = acc.loan_start_date;
           const term = Number(acc.loan_term_months || 0);
+          const endStr = acc.loan_end_date;
           if (!mp) return;
           if (!startStr) {
             if (!rangeStart || !rangeEnd) return;
             const y = rangeStart.getFullYear();
             const m = rangeStart.getMonth() + 1;
             const d = clampDay(y, m, 1);
+            // 若存在结束日期，且该月超过结束月份，则不推入
+            if (endStr) {
+              const e = new Date(String(endStr).replace(/-/g, '/'));
+              if (!isNaN(e.getTime())) {
+                const ei = e.getFullYear() * 12 + (e.getMonth() + 1);
+                const mi = y * 12 + m;
+                if (mi > ei) return;
+              }
+            }
             pushPayment(acc, y, m, d);
             return;
           }
@@ -625,7 +674,13 @@ Page({
               d = clampDay(y, m, dueDay);
               candidate = new Date(y, m - 1, d);
             }
-            if (candidate >= s) pushPayment(acc, candidate.getFullYear(), candidate.getMonth() + 1, candidate.getDate());
+            if (candidate >= s) {
+              if (endStr) {
+                const e = new Date(String(endStr).replace(/-/g, '/'));
+                if (!isNaN(e.getTime()) && candidate > e) return;
+              }
+              pushPayment(acc, candidate.getFullYear(), candidate.getMonth() + 1, candidate.getDate());
+            }
           } else {
             if (!rangeStart || !rangeEnd) return;
             let y = rangeStart.getFullYear();
@@ -638,6 +693,13 @@ Page({
             const monthsElapsed = monthIndex - startIndex;
             if (monthsElapsed < 0) return;
             if (term > 0 && monthsElapsed >= term) return;
+            if (endStr) {
+              const e = new Date(String(endStr).replace(/-/g, '/'));
+              if (!isNaN(e.getTime())) {
+                const ei = e.getFullYear() * 12 + (e.getMonth() + 1);
+                if (monthIndex > ei) return;
+              }
+            }
             if (cand >= rangeStart && cand <= rangeEnd) {
               pushPayment(acc, y, m, d);
             }
@@ -830,7 +892,9 @@ Page({
     if (nonNumeric) {
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       if (!item) return;
-      const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || item.synthetic_kind || ''))}&note=${encodeURIComponent(String(item.note || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}&recurring_end_date=${encodeURIComponent(String(item.recurring_end_date || ''))}`;
+      const m = String(rawId).match(/^recurring:(\d+):/);
+      const baseId = m ? m[1] : '';
+      const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || item.synthetic_kind || ''))}&note=${encodeURIComponent(String(item.note || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}&recurring_end_date=${encodeURIComponent(String(item.recurring_end_date || ''))}&base_id=${encodeURIComponent(baseId)}`;
       wx.navigateTo({ url });
       return;
     }
@@ -840,6 +904,12 @@ Page({
     wx.navigateTo({ url: `/pages/cashflow-detail/index?id=${id}` });
   },
   editSyntheticRecurring(item) {
+    const sid = String(item.id || '');
+    const m = sid.match(/^recurring:(\d+):/);
+    if (m && m[1]) {
+      wx.navigateTo({ url: `/pages/cashflow/index?edit=1&id=${m[1]}` });
+      return;
+    }
     const q = [
       `type=${encodeURIComponent(item.type || '')}`,
       `category=${encodeURIComponent(item.category || '')}`,

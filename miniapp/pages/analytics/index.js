@@ -342,16 +342,24 @@ Page({
         (rents || []).forEach(r => { if (r.account_id) rentedIds.add(Number(r.account_id)); });
         (assets || []).forEach((acc) => {
           const mi = Number(acc.monthly_income || 0);
-          if (mi > 0) {
-            assetIncomes.push({
-              id: `asset-income:${acc.id}`,
-              type: 'income',
-              category: acc.category || '资产收益',
-              amount: mi,
-              date: end,
-              planned: true
-            });
+          if (!(mi > 0)) return;
+          const investEndStr = acc.invest_end_date;
+          if (investEndStr) {
+            const e = new Date(String(investEndStr).trim().replace(/-/g, "/"));
+            if (!isNaN(e.getTime())) {
+              const endIdx = e.getFullYear() * 12 + (e.getMonth() + 1);
+              const curIdx = endDate.getFullYear() * 12 + (endDate.getMonth() + 1);
+              if (curIdx > endIdx) return;
+            }
           }
+          assetIncomes.push({
+            id: `asset-income:${acc.id}`,
+            type: 'income',
+            category: acc.category || '资产收益',
+            amount: mi,
+            date: end,
+            planned: true
+          });
         });
       } catch (err) { assetIncomes = []; }
 
@@ -385,8 +393,11 @@ Page({
             pushPayment(acc, y, m, d);
             return;
           }
-          const s = new Date(String(startStr).replace(/-/g, "/"));
+          const s = new Date(String(startStr).trim().replace(/-/g, "/"));
+          if (isNaN(s.getTime())) return;
           const dueDay = s.getDate();
+          const term = Number(acc.loan_term_months || 0);
+          const loanEndStr = acc.loan_end_date;
           let y = rangeStart.getFullYear();
           let m = rangeStart.getMonth() + 1;
           while (true) {
@@ -394,6 +405,12 @@ Page({
             const cand = new Date(y, m - 1, d);
             if (cand < s) { m += 1; if (m > 12) { m = 1; y += 1; } continue; }
             if (cand > rangeEnd) break;
+            if (loanEndStr) {
+              const e = new Date(String(loanEndStr).trim().replace(/-/g, "/"));
+              if (!isNaN(e.getTime()) && cand > e) break;
+            }
+            const monthsElapsed = (y - s.getFullYear()) * 12 + (m - (s.getMonth() + 1));
+            if (term > 0 && monthsElapsed >= term) break;
             if (cand >= rangeStart && cand <= rangeEnd) pushPayment(acc, y, m, d);
             m += 1; if (m > 12) { m = 1; y += 1; }
           }
@@ -440,6 +457,11 @@ Page({
               const m = endDate.getMonth() + 1;
               const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, prevDay)); })();
               const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
+              const dtObj = new Date(y, m - 1, dnum);
+              const rsd = t.recurring_start_date ? new Date(String(t.recurring_start_date).replace(/-/g, '/')) : null;
+              const red = t.recurring_end_date ? new Date(String(t.recurring_end_date).replace(/-/g, '/')) : null;
+              if (rsd && !isNaN(rsd.getTime()) && dtObj < rsd) return;
+              if (red && !isNaN(red.getTime()) && dtObj > red) return;
               recurringSynth.push({ id: `recurring:${t.id}:${y}${String(m).padStart(2, '0')}`, type: 'income', category: t.category || '其他收入', amount: Number(t.amount || 0), date: dt, planned: true });
             }
           });
@@ -467,6 +489,11 @@ Page({
               const m = endDate.getMonth() + 1;
               const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, prevDay)); })();
               const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
+              const dtObj = new Date(y, m - 1, dnum);
+              const rsd = t.recurring_start_date ? new Date(String(t.recurring_start_date).replace(/-/g, '/')) : null;
+              const red = t.recurring_end_date ? new Date(String(t.recurring_end_date).replace(/-/g, '/')) : null;
+              if (rsd && !isNaN(rsd.getTime()) && dtObj < rsd) return;
+              if (red && !isNaN(red.getTime()) && dtObj > red) return;
               recurringSynthExpense.push({ id: `recurring:${t.id}:${y}${String(m).padStart(2, '0')}`, type: 'expense', category: t.category || '其他支出', amount: Number(t.amount || 0), date: dt, planned: true });
             }
           });
@@ -799,8 +826,8 @@ Page({
         const ctx = canvas.getContext('2d');
         ctx.scale(dpr, dpr);
         const w = rect.width, h = rect.height;
-        const padL = 40, padR = 16, padT = 16, padB = 24;
-        const iw = w - padL - padR, ih = h - padT - padB;
+        let padL = 40; const padR = 16, padT = 16, padB = 24;
+        let iw = 0, ih = 0;
         const drawEmpty = (text) => {
           ctx.clearRect(0, 0, w, h);
           ctx.fillStyle = 'rgba(255,255,255,0.04)';
@@ -823,6 +850,11 @@ Page({
         );
         const minVal = 0;
         const range = (maxVal - minVal) || 1;
+        ctx.font = '12px sans-serif';
+        const labelW = (ctx.measureText(this.formatAxisValue(maxVal)).width || 0);
+        padL = Math.max(40, Math.ceil(labelW) + 12);
+        iw = w - padL - padR;
+        ih = h - padT - padB;
         ctx.strokeStyle = 'rgba(17,24,39,0.15)';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -962,8 +994,8 @@ Page({
         const ctx = canvas.getContext('2d');
         ctx.scale(dpr, dpr);
         const w = rect.width, h = rect.height;
-        const padL = 40, padR = 16, padT = 16, padB = 24;
-        const iw = w - padL - padR, ih = h - padT - padB;
+        let padL = 40; const padR = 16, padT = 16, padB = 24;
+        let iw = 0, ih = 0;
         const drawEmpty = (text) => {
           ctx.clearRect(0, 0, w, h);
           ctx.fillStyle = 'rgba(255,255,255,0.04)';
@@ -981,6 +1013,11 @@ Page({
         const maxVal = Math.max(...series);
         const minVal = 0;
         const range = (maxVal - minVal) || 1;
+        ctx.font = '12px sans-serif';
+        const labelW = (ctx.measureText(this.formatAxisValue(maxVal)).width || 0);
+        padL = Math.max(40, Math.ceil(labelW) + 12);
+        iw = w - padL - padR;
+        ih = h - padT - padB;
         ctx.strokeStyle = 'rgba(17,24,39,0.15)';
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -1470,9 +1507,9 @@ Page({
 
           const w1 = valueRect.width, h1 = valueRect.height;
           const w2 = ratioRect.width, h2 = ratioRect.height;
-          const padL = 48, padR = 20, padT = 16, padB = 26;
-          const iw1 = w1 - padL - padR, ih1 = h1 - padT - padB;
-          const iw2 = w2 - padL - padR, ih2 = h2 - padT - padB;
+          let padL = 48; const padR = 20, padT = 16, padB = 26;
+          let iw1 = 0, ih1 = 0;
+          let iw2 = 0, ih2 = 0;
 
           const drawEmpty = (ctx, w, h, text) => {
             ctx.clearRect(0, 0, w, h);
@@ -1519,6 +1556,11 @@ Page({
           const maxVal = Math.max(...allVals);
           const minVal = Math.min(...allVals);
           const range = maxVal - minVal || 1;
+          ctx1.font = '12px sans-serif';
+          const labelW1 = (ctx1.measureText(this.formatAxisValue(maxVal)).width || 0);
+          padL = Math.max(48, Math.ceil(labelW1) + 14);
+          iw1 = w1 - padL - padR; ih1 = h1 - padT - padB;
+          iw2 = w2 - padL - padR; ih2 = h2 - padT - padB;
           const toXY = (arr, idx) => {
             const x = padL + (idx / Math.max(filteredPoints.length - 1, 1)) * iw1;
             const y = padT + (1 - ((arr[idx] - minVal) / range)) * ih1;
@@ -1796,11 +1838,10 @@ Page({
     return `${parseInt(parts[1])}月`;
   },
   formatAxisValue(value) {
-    const v = Math.abs(Number(value || 0));
-    const sign = Number(value || 0) < 0 ? '-' : '';
-    if (v >= 1e8) return `${sign}${(v / 1e8).toFixed(1)}亿`;
-    if (v >= 1e4) return `${sign}${(v / 1e4).toFixed(1)}万`;
-    return `${sign}${Math.round(v)}`;
+    const num = Number(value || 0);
+    const abs = Math.abs(num);
+    const sign = num < 0 ? '-' : '';
+    return `${sign}${Math.round(abs)}元`;
   },
   async handleLogin() {
     const app = getApp();

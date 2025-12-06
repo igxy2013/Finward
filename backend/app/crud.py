@@ -61,6 +61,11 @@ def list_accounts(session: Session, account_type: schemas.AccountTypeLiteral | N
             months_elapsed = max(0, (now.year - start_base.year) * 12 + (now.month - start_base.month))
             payments_possible = int((amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
             limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+            if getattr(a, "loan_end_date", None):
+                ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+                si = start_base.year * 12 + start_base.month
+                end_cap = max(0, ei - si + 1)
+                limit = min(limit, end_cap)
             paid_months = min(months_elapsed, limit, payments_possible)
             amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
         if t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
@@ -86,9 +91,11 @@ def list_accounts(session: Session, account_type: schemas.AccountTypeLiteral | N
                 monthly_payment=Decimal(a.monthly_payment) if a.monthly_payment is not None else None,
                 annual_interest_rate=Decimal(a.annual_interest_rate) if getattr(a, "annual_interest_rate", None) is not None else None,
                 loan_start_date=a.loan_start_date,
+                loan_end_date=getattr(a, "loan_end_date", None),
                 investment_term_months=a.investment_term_months,
                 monthly_income=Decimal(a.monthly_income) if a.monthly_income is not None else None,
                 invest_start_date=a.invest_start_date,
+                invest_end_date=getattr(a, "invest_end_date", None),
                 depreciation_rate=Decimal(a.depreciation_rate) if a.depreciation_rate is not None else None,
                 initial_amount=Decimal(a.amount),
                 current_value=amt,
@@ -109,6 +116,12 @@ def get_account(session: Session, account_id: int) -> schemas.AccountOut | None:
         months_elapsed = max(0, (now.year - start_base.year) * 12 + (now.month - start_base.month))
         payments_possible = int((amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
         limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+        # 结束日期上限：若存在 loan_end_date，则以结束月份为上限
+        if getattr(a, "loan_end_date", None):
+            ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+            si = start_base.year * 12 + start_base.month
+            end_cap = max(0, ei - si + 1)
+            limit = min(limit, end_cap)
         paid_months = min(months_elapsed, limit, payments_possible)
         amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
     if t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
@@ -132,9 +145,11 @@ def get_account(session: Session, account_id: int) -> schemas.AccountOut | None:
         monthly_payment=Decimal(a.monthly_payment) if a.monthly_payment is not None else None,
         annual_interest_rate=Decimal(a.annual_interest_rate) if getattr(a, "annual_interest_rate", None) is not None else None,
         loan_start_date=a.loan_start_date,
+        loan_end_date=getattr(a, "loan_end_date", None),
         investment_term_months=a.investment_term_months,
         monthly_income=Decimal(a.monthly_income) if a.monthly_income is not None else None,
         invest_start_date=a.invest_start_date,
+        invest_end_date=getattr(a, "invest_end_date", None),
         depreciation_rate=Decimal(a.depreciation_rate) if a.depreciation_rate is not None else None,
         initial_amount=Decimal(a.amount),
         current_value=amt,
@@ -385,6 +400,11 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
                 s_eff = max(range_start, start_base)
                 months_eff = 0 if end_date < s_eff else ((end_date.year - s_eff.year) * 12 + (end_date.month - s_eff.month) + 1)
                 limit = a.loan_term_months if a.loan_term_months is not None else months_eff
+                if getattr(a, "loan_end_date", None):
+                    ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+                    si = s_eff.year * 12 + s_eff.month
+                    end_cap = max(0, ei - si + 1)
+                    limit = min(limit, end_cap)
                 exp_exp += Decimal(a.monthly_payment) * Decimal(min(months_eff, limit))
             # 资产：月收益累计，起始为投资开始或创建日期
             if a.monthly_income and (a.investment_term_months is None or a.investment_term_months > 0):
@@ -392,6 +412,11 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
                 s_eff2 = max(range_start, start_base2)
                 months_eff2 = 0 if end_date < s_eff2 else ((end_date.year - s_eff2.year) * 12 + (end_date.month - s_eff2.month) + 1)
                 limit2 = a.investment_term_months if a.investment_term_months is not None else months_eff2
+                if getattr(a, "invest_end_date", None):
+                    ei2 = a.invest_end_date.year * 12 + a.invest_end_date.month
+                    si2 = s_eff2.year * 12 + s_eff2.month
+                    end_cap2 = max(0, ei2 - si2 + 1)
+                    limit2 = min(limit2, end_cap2)
                 exp_inc += Decimal(a.monthly_income) * Decimal(min(months_eff2, limit2))
     elif effective_scope_key == "all":
         # 全部范围：账号的月供/月收益按各自起始日至“end”进行月度累加，并受期限限制
@@ -404,11 +429,21 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
                 start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else end_date)
                 months_elapsed = max(1, (end_date.year - start_base.year) * 12 + (end_date.month - start_base.month) + 1)
                 limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+                if getattr(a, "loan_end_date", None):
+                    ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+                    si = start_base.year * 12 + start_base.month
+                    end_cap = max(0, ei - si + 1)
+                    limit = min(limit, end_cap)
                 exp_exp += Decimal(a.monthly_payment) * Decimal(min(months_elapsed, limit))
             if a.monthly_income and a.monthly_income > 0:
                 start_base2 = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else end_date)
                 months_elapsed2 = max(1, (end_date.year - start_base2.year) * 12 + (end_date.month - start_base2.month) + 1)
                 limit2 = a.investment_term_months if a.investment_term_months is not None else months_elapsed2
+                if getattr(a, "invest_end_date", None):
+                    ei2 = a.invest_end_date.year * 12 + a.invest_end_date.month
+                    si2 = start_base2.year * 12 + start_base2.month
+                    end_cap2 = max(0, ei2 - si2 + 1)
+                    limit2 = min(limit2, end_cap2)
                 exp_inc += Decimal(a.monthly_income) * Decimal(min(months_elapsed2, limit2))
     # 若为“按月”统计，叠加快照中的 external_income 以与前端列表保持一致
     # 仅在显式 scope=month 时叠加快照 external_income（避免快照计算时重复计入）
@@ -523,6 +558,11 @@ def overview(session: Session, user_id: int) -> schemas.OverviewOut:
                 months_elapsed = max(0, (now.year - start_base.year) * 12 + (now.month - start_base.month))
                 payments_possible = int((amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
                 limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+                if getattr(a, "loan_end_date", None):
+                    ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+                    si = start_base.year * 12 + start_base.month
+                    end_cap = max(0, ei - si + 1)
+                    limit = min(limit, end_cap)
                 paid_months = min(months_elapsed, limit, payments_possible)
                 amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
             total_liabilities += amt
@@ -713,6 +753,11 @@ def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.Mo
                 months_elapsed = 0 if end_of_month < start_base else ((end_of_month.year - start_base.year) * 12 + (end_of_month.month - start_base.month))
                 payments_possible = int((base_amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
                 limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+                if getattr(a, "loan_end_date", None):
+                    ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+                    si = start_base.year * 12 + start_base.month
+                    end_cap = max(0, ei - si + 1)
+                    limit = min(limit, end_cap)
                 paid_months = min(months_elapsed, limit, payments_possible)
                 val = max(Decimal(0), base_amt - Decimal(a.monthly_payment) * Decimal(paid_months))
             elif t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
@@ -846,6 +891,12 @@ def analytics_stats(session: Session, months: int, user_id: int) -> schemas.Stat
         if a.monthly_income and Decimal(a.monthly_income) > 0:
             if a.id and int(a.id) in rented_asset_ids:
                 continue
+            # 投资结束日期上限：若当前月份超过 invest_end_date，跳过
+            if getattr(a, "invest_end_date", None):
+                cur_idx = cur_y * 12 + cur_m
+                ei = a.invest_end_date.year * 12 + a.invest_end_date.month
+                if cur_idx > ei:
+                    continue
             cat = a.category or "资产收益"
             asset_incomes.append((cat, Decimal(a.monthly_income)))
 
@@ -861,6 +912,8 @@ def analytics_stats(session: Session, months: int, user_id: int) -> schemas.Stat
         dnum = clamp_day(cur_y, cur_m, due_day)
         cand = date(cur_y, cur_m, dnum)
         if cand < start_base:
+            continue
+        if getattr(acc, "loan_end_date", None) and cand > acc.loan_end_date:
             continue
         term = int(acc.loan_term_months or 0)
         months_elapsed = max(0, (cur_y - start_base.year) * 12 + (cur_m - start_base.month))
@@ -895,6 +948,11 @@ def analytics_stats(session: Session, months: int, user_id: int) -> schemas.Stat
         prev_day = r.date.day
         dnum2 = clamp_day(cur_y, cur_m, prev_day)
         cand2 = date(cur_y, cur_m, dnum2)
+        # 结束/开始日期限定
+        if getattr(r, "recurring_end_date", None) and cand2 > r.recurring_end_date:
+            continue
+        if getattr(r, "recurring_start_date", None) and cand2 < r.recurring_start_date:
+            continue
         if cur_start <= cand2 <= cur_end:
             if r.type.value == "income" and key not in recorded_income_keys:
                 synth_income.append((r.category or "其他收入", Decimal(r.amount or 0)))
@@ -1115,6 +1173,11 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         term = int(a.investment_term_months or 0)
         if term > 0 and months_elapsed >= term:
             continue
+        # 投资结束日期上限
+        if getattr(a, "invest_end_date", None):
+            ei = a.invest_end_date.year * 12 + a.invest_end_date.month
+            if (y * 12 + m) > ei:
+                continue
         if not type_filter or type_filter == "income":
             asset_income_items.append(
                 schemas.WealthItemOut(
@@ -1154,6 +1217,9 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
                     yy += 1
                 continue
             if cand > end:
+                break
+            # 结束日期上限
+            if getattr(a, "loan_end_date", None) and cand > a.loan_end_date:
                 break
             term = int(a.loan_term_months or 0)
             months_elapsed = max(0, (yy - start_base.year) * 12 + (mm - start_base.month))
@@ -1209,6 +1275,11 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         prev_day = r.date.day
         dnum = clamp_day(y, m, prev_day)
         cand = date(y, m, dnum)
+        # 结束/开始日期限定
+        if getattr(r, "recurring_end_date", None) and cand > r.recurring_end_date:
+            continue
+        if getattr(r, "recurring_start_date", None) and cand < r.recurring_start_date:
+            continue
         if start <= cand <= end:
             tval2 = r.type.value if hasattr(r.type, "value") else r.type
             if not type_filter or type_filter == tval2:

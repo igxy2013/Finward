@@ -267,6 +267,20 @@ def ensure_schema_upgrade():
                 conn.execute(text("ALTER TABLE accounts ADD COLUMN loan_start_date DATE NULL"))
                 conn.commit()
 
+            # loan_end_date
+            result5c = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'loan_end_date'
+                    """
+                ),
+                {"db": settings.db_name},
+            )
+            if not (result5c.scalar() or 0):
+                conn.execute(text("ALTER TABLE accounts ADD COLUMN loan_end_date DATE NULL"))
+                conn.commit()
+
             result6 = conn.execute(
                 text(
                     """
@@ -304,6 +318,20 @@ def ensure_schema_upgrade():
             )
             if not (result8.scalar() or 0):
                 conn.execute(text("ALTER TABLE accounts ADD COLUMN invest_start_date DATE NULL"))
+                conn.commit()
+
+            # invest_end_date
+            result8b = conn.execute(
+                text(
+                    """
+                    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                    WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'accounts' AND COLUMN_NAME = 'invest_end_date'
+                    """
+                ),
+                {"db": settings.db_name},
+            )
+            if not (result8b.scalar() or 0):
+                conn.execute(text("ALTER TABLE accounts ADD COLUMN invest_end_date DATE NULL"))
                 conn.commit()
 
             result9 = conn.execute(
@@ -347,5 +375,4 @@ def ensure_schema_upgrade():
                 pass
     except Exception as e:
         print(f"Warning: Could not ensure schema upgrade: {e}")
-
 
