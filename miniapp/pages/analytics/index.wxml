@@ -106,15 +106,12 @@
         </block>
       </view>
       <view class="card-header">
-        <text class="card-title">预计收入趋势</text>
+        <text class="card-title">固定收支趋势</text>
         <text class="card-subtitle">Income Trend</text>
       </view>
       <view class="chart-block">
         <canvas type="2d" id="incomeTrendCanvas" canvas-id="incomeTrendCanvas" class="chart-canvas" catchtap="noop" bindtouchstart="onIncomeTrendTouch" bindtouchmove="onIncomeTrendTouch"></canvas>
       </view>
-    </view>
-
-    <view class="card">
       <view class="card-header">
         <text class="card-title">固定支出分布</text>
         <text class="card-subtitle">Expense Distribution</text>
@@ -131,14 +128,9 @@
           </view>
         </block>
       </view>
-      <view class="card-header">
-        <text class="card-title">固定支出趋势</text>
-        <text class="card-subtitle">Expense Trend</text>
-      </view>
-      <view class="chart-block">
-        <canvas type="2d" id="expenseTrendCanvas" canvas-id="expenseTrendCanvas" class="chart-canvas" catchtap="noop" bindtouchstart="onExpenseTrendTouch" bindtouchmove="onExpenseTrendTouch"></canvas>
-      </view>
     </view>
+
+    
 
     <view class="card category-card">
       <view class="card-header">

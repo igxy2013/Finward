@@ -684,7 +684,6 @@ Page({
     const labels = months.map(p => this.getMonthLabel(p.month));
     this.setData({ incomeTrendSeries: incomeSeries, expenseTrendSeries: expenseSeries, incomeTrendLabels: labels, expenseTrendLabels: labels }, () => {
       this.drawIncomeTrend();
-      this.drawExpenseTrend();
     });
   },
   calculateCashflowDistribution(items = [], kind = 'income') {
@@ -831,6 +830,7 @@ Page({
   drawIncomeTrend() {
     const series = this.data.incomeTrendSeries || [];
     const labels = this.data.incomeTrendLabels || [];
+    const expenseSeries = this.data.expenseTrendSeries || [];
     const query = wx.createSelectorQuery().in(this);
     wx.nextTick(() => {
       query.select('#incomeTrendCanvas').node().select('#incomeTrendCanvas').boundingClientRect().exec((res) => {
@@ -859,8 +859,13 @@ Page({
         ctx.clearRect(0, 0, w, h);
         ctx.fillStyle = 'rgba(255,255,255,0.04)';
         ctx.fillRect(0, 0, w, h);
-        if (!series || series.length === 0 || series.every(v => Number(v) <= 0)) { drawEmpty('暂无收入趋势'); return; }
-        const maxVal = Math.max(...series);
+        const hasIncome = !!series && series.length > 0 && !series.every(v => Number(v) <= 0);
+        const hasExpense = !!expenseSeries && expenseSeries.length > 0 && !expenseSeries.every(v => Number(v) <= 0);
+        if (!hasIncome && !hasExpense) { drawEmpty('暂无收支趋势'); return; }
+        const maxVal = Math.max(
+          ...(hasIncome ? series : [0]),
+          ...(hasExpense ? expenseSeries : [0])
+        );
         const minVal = 0;
         const range = (maxVal - minVal) || 1;
         ctx.strokeStyle = 'rgba(17,24,39,0.15)';
@@ -888,25 +893,44 @@ Page({
           ctx.textBaseline = 'middle';
           ctx.fillText(this.formatAxisValue(val), padL - 6, y);
         }
-        const toXY = (idx) => {
-          const x = padL + (idx / Math.max(series.length - 1, 1)) * iw;
-          const y = padT + (1 - ((series[idx] - minVal) / range)) * ih;
+        const toXY = (idx, arr) => {
+          const x = padL + (idx / Math.max(arr.length - 1, 1)) * iw;
+          const y = padT + (1 - ((arr[idx] - minVal) / range)) * ih;
           return { x, y };
         };
-        ctx.strokeStyle = '#22c55e';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        for (let i = 0; i < series.length; i++) {
-          const pt = toXY(i);
-          if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
-        }
-        ctx.stroke();
-        ctx.fillStyle = '#22c55e';
-        for (let i = 0; i < series.length; i++) {
-          const pt = toXY(i);
+        if (hasIncome) {
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 3;
           ctx.beginPath();
-          ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-          ctx.fill();
+          for (let i = 0; i < series.length; i++) {
+            const pt = toXY(i, series);
+            if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+          }
+          ctx.stroke();
+          ctx.fillStyle = '#22c55e';
+          for (let i = 0; i < series.length; i++) {
+            const pt = toXY(i, series);
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        if (hasExpense) {
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          for (let i = 0; i < expenseSeries.length; i++) {
+            const pt = toXY(i, expenseSeries);
+            if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+          }
+          ctx.stroke();
+          ctx.fillStyle = '#ef4444';
+          for (let i = 0; i < expenseSeries.length; i++) {
+            const pt = toXY(i, expenseSeries);
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
         }
         ctx.fillStyle = 'rgba(17,24,39,0.5)';
         ctx.font = '12px sans-serif';
@@ -917,22 +941,31 @@ Page({
           ctx.fillText(label, x, h - 6);
         }
         const xs = new Array(series.length).fill(0).map((_, i) => padL + (i / Math.max(series.length - 1, 1)) * iw);
-        this._incomeTrendMeta = { padL, padR, padT, padB, iw, ih, w, h, rect, series, labels, minVal, range, xs };
+        this._incomeTrendMeta = { padL, padR, padT, padB, iw, ih, w, h, rect, series, expenseSeries, labels, minVal, range, xs };
         const sel = typeof this._incomeTrendSelectedIdx === 'number' ? this._incomeTrendSelectedIdx : -1;
         if (sel >= 0 && sel < series.length) {
           const x = xs[sel];
-          const y = padT + (1 - ((series[sel] - minVal) / (range || 1))) * ih;
+          const yIncome = padT + (1 - ((series[sel] - minVal) / (range || 1))) * ih;
+          const yExpense = hasExpense ? padT + (1 - ((expenseSeries[sel] - minVal) / (range || 1))) * ih : null;
           ctx.strokeStyle = 'rgba(17,24,39,0.25)';
           ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(x, padT);
           ctx.lineTo(x, h - padB);
           ctx.stroke();
-          ctx.fillStyle = '#22c55e';
-          ctx.beginPath();
-          ctx.arc(x, y, 4, 0, Math.PI * 2);
-          ctx.fill();
-          const boxW = 120, boxH = 54;
+          if (hasIncome) {
+            ctx.fillStyle = '#22c55e';
+            ctx.beginPath();
+            ctx.arc(x, yIncome, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          if (hasExpense && yExpense != null) {
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(x, yExpense, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          const boxW = 160, boxH = hasExpense ? 78 : 54;
           const bx = Math.min(x + 8, w - padR - boxW);
           const by = padT + 8;
           ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -946,8 +979,14 @@ Page({
           ctx.textAlign = 'left';
           ctx.textBaseline = 'top';
           ctx.fillText(labels[sel] || '', bx + 8, by + 6);
-          ctx.fillStyle = '#22c55e';
-          ctx.fillText(`收入 ${this.formatAxisValue(series[sel])}`, bx + 8, by + 26);
+          if (hasIncome) {
+            ctx.fillStyle = '#22c55e';
+            ctx.fillText(`收入 ${this.formatAxisValue(series[sel])}`, bx + 8, by + 26);
+          }
+          if (hasExpense) {
+            ctx.fillStyle = '#ef4444';
+            ctx.fillText(`支出 ${this.formatAxisValue(expenseSeries[sel])}`, bx + 8, by + (hasIncome ? 46 : 26));
+          }
         }
       });
     });
