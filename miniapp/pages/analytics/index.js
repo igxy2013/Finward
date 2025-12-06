@@ -458,6 +458,44 @@ Page({
   async updateIncomeExpenseTrends() {
     const months = this.data.monthly || [];
     if (!months || months.length === 0) return;
+    let globalStart = null;
+    let globalEnd = null;
+    try {
+      const ys = months.map(p => (String(p.month || '').split('-')[0] || '0')).map(s => parseInt(s || '0')).filter(n => !!n);
+      const ms = months.map(p => (String(p.month || '').split('-')[1] || '0')).map(s => parseInt(s || '0')).filter(n => !!n);
+      if (ys.length && ms.length) {
+        const minY = Math.min(...ys);
+        const minM = Math.min(...ms);
+        const maxY = Math.max(...ys);
+        const maxM = Math.max(...ms);
+        const startDate = new Date(minY, minM - 1, 1);
+        const endDate = new Date(maxY, maxM, 0);
+        globalStart = this.formatDate(startDate);
+        globalEnd = this.formatDate(endDate);
+      }
+    } catch (eG) { globalStart = null; globalEnd = null; }
+    let recurringDefsIncome = [];
+    let recurringDefsExpense = [];
+    if (globalStart && globalEnd) {
+      try {
+        const allPlanned = await api.listCashflows({ start: globalStart, end: globalEnd, planned: true });
+        const defs = (allPlanned || []).filter(i => !!i.recurring_monthly);
+        recurringDefsIncome = defs.filter(i => i.type === 'income').map(i => ({
+          key: `${i.type}:${i.category}:${i.note ? i.note : i.category}`,
+          amount: Number(i.amount || 0),
+          start: String(i.recurring_start_date || i.date || ''),
+          end: String(i.recurring_end_date || ''),
+          category: i.category || ''
+        }));
+        recurringDefsExpense = defs.filter(i => i.type === 'expense').map(i => ({
+          key: `${i.type}:${i.category}:${i.note ? i.note : i.category}`,
+          amount: Number(i.amount || 0),
+          start: String(i.recurring_start_date || i.date || ''),
+          end: String(i.recurring_end_date || ''),
+          category: i.category || ''
+        }));
+      } catch (eAll) { recurringDefsIncome = []; recurringDefsExpense = []; }
+    }
     const buildRange = (monthStr) => {
       const parts = String(monthStr || '').split('-');
       const y = parseInt(parts[0] || '0');
@@ -480,7 +518,6 @@ Page({
           const plannedIncome = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'income' && !!x.planned ? Number(x.amount || 0) : 0); }, 0);
           const actualIncome = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'income' && !x.planned ? Number(x.amount || 0) : 0); }, 0);
           const plannedExpense = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'expense' && !!x.planned ? Number(x.amount || 0) : 0); }, 0);
-          const backendExpectedExpense = Number(sumRes && sumRes.expected_expense ? sumRes.expected_expense : 0);
 
           let mastersIncome = 0;
 
@@ -550,8 +587,50 @@ Page({
             });
           } catch (eL) { liabilitiesMonthlySum = 0; }
 
-          const income = plannedIncome + mastersIncome + assetMonthlyIncomeSum;
-          const expense = backendExpectedExpense;
+          let recurringExpenseSum = 0;
+          try {
+            const monthStr = `${rng.y}-${String(rng.m).padStart(2, '0')}-01`;
+            const md = new Date(String(monthStr).replace(/-/g, '/'));
+            const recordedKeys = new Set((list || [])
+              .filter(i => !!i.recurring_monthly && !!i.planned && i.type === 'expense')
+              .map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
+            const recordedRecurringExpenseSum = (list || [])
+              .reduce((sum, x) => sum + (x && x.type === 'expense' && !!x.planned && !!x.recurring_monthly ? Number(x.amount || 0) : 0), 0);
+            let syntheticRecurringExpenseSum = 0;
+            (recurringDefsExpense || []).forEach(d => {
+              const s = d.start ? new Date(String(d.start).replace(/-/g, '/')) : null;
+              const e = d.end ? new Date(String(d.end).replace(/-/g, '/')) : null;
+              if (s && isNaN(s.getTime())) return;
+              if (e && isNaN(e.getTime())) return;
+              if (s && md < new Date(s.getFullYear(), s.getMonth(), 1)) return;
+              if (e && md > new Date(e.getFullYear(), e.getMonth(), 1)) return;
+              const key = d.key;
+              if (recordedKeys.has(key)) return;
+              syntheticRecurringExpenseSum += Number(d.amount || 0);
+            });
+            recurringExpenseSum = recordedRecurringExpenseSum + syntheticRecurringExpenseSum;
+          } catch (eRE) { recurringExpenseSum = 0; }
+
+          let recurringIncomeSum = 0;
+          try {
+            const monthStr = `${rng.y}-${String(rng.m).padStart(2, '0')}-01`;
+            const md = new Date(String(monthStr).replace(/-/g, '/'));
+            const mk = `${rng.y}${String(rng.m).padStart(2, '0')}`;
+            const recordedKeys = new Set((list || []).filter(i => !!i.recurring_monthly && !!i.planned && i.type === 'income').map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
+            recurringDefsIncome.forEach(d => {
+              const s = d.start ? new Date(String(d.start).replace(/-/g, '/')) : null;
+              const e = d.end ? new Date(String(d.end).replace(/-/g, '/')) : null;
+              if (s && isNaN(s.getTime())) return;
+              if (e && isNaN(e.getTime())) return;
+              if (s && md < new Date(s.getFullYear(), s.getMonth(), 1)) return;
+              if (e && md > new Date(e.getFullYear(), e.getMonth(), 1)) return;
+              const key = d.key;
+              if (recordedKeys.has(key)) return;
+              recurringIncomeSum += Number(d.amount || 0);
+            });
+          } catch (eRI) { recurringIncomeSum = 0; }
+          const income = plannedIncome + mastersIncome + assetMonthlyIncomeSum + recurringIncomeSum;
+          const expense = recurringExpenseSum + liabilitiesMonthlySum;
           return { income, expense, y: rng.y, m: rng.m, plannedIncome, actualIncome };
         }).catch(() => ({ income: 0, expense: 0, y: rng.y, m: rng.m }));
       });
@@ -1287,8 +1366,56 @@ Page({
           localMasters = [];
       }
 
+      let yearSynthIncome = [];
+      let yearSynthExpense = [];
+      try {
+        const yearStart = `${y}-01-01`;
+        const yearEnd = `${y}-12-31`;
+        const allPlanned = await api.listCashflows({ start: yearStart, end: yearEnd, planned: true });
+        const defs = (allPlanned || []).filter(i => !!i.recurring_monthly);
+        const recIncomeDefs = defs.filter(i => i.type === 'income').map(i => ({
+          key: `${i.type}:${i.category}:${i.note ? i.note : i.category}`,
+          amount: Number(i.amount || 0),
+          start: String(i.recurring_start_date || i.date || ''),
+          end: String(i.recurring_end_date || ''),
+          category: i.category || ''
+        }));
+        const recExpenseDefs = defs.filter(i => i.type === 'expense').map(i => ({
+          key: `${i.type}:${i.category}:${i.note ? i.note : i.category}`,
+          amount: Number(i.amount || 0),
+          start: String(i.recurring_start_date || i.date || ''),
+          end: String(i.recurring_end_date || ''),
+          category: i.category || ''
+        }));
+        const recordedKeys = new Set((list || []).filter(i => !!i.recurring_monthly && !!i.planned).map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
+        const synthKeys = new Set([...recurringSynth, ...recurringSynthExpense].map(i => `${i.type}:${i.category}:${i.note ? i.note : i.category}`));
+        const md = new Date(y, m - 1, 1);
+        recIncomeDefs.forEach(d => {
+          const s = d.start ? new Date(String(d.start).replace(/-/g, '/')) : null;
+          const e = d.end ? new Date(String(d.end).replace(/-/g, '/')) : null;
+          if (s && isNaN(s.getTime())) return;
+          if (e && isNaN(e.getTime())) return;
+          if (s && md < new Date(s.getFullYear(), s.getMonth(), 1)) return;
+          if (e && md > new Date(e.getFullYear(), e.getMonth(), 1)) return;
+          const key = d.key;
+          if (recordedKeys.has(key) || synthKeys.has(key)) return;
+          yearSynthIncome.push({ id: `recurring:year:${key}:${y}${String(m).padStart(2, '0')}`, type: 'income', category: d.category || '其他收入', amount: Number(d.amount || 0), date: end, planned: true });
+        });
+        recExpenseDefs.forEach(d => {
+          const s = d.start ? new Date(String(d.start).replace(/-/g, '/')) : null;
+          const e = d.end ? new Date(String(d.end).replace(/-/g, '/')) : null;
+          if (s && isNaN(s.getTime())) return;
+          if (e && isNaN(e.getTime())) return;
+          if (s && md < new Date(s.getFullYear(), s.getMonth(), 1)) return;
+          if (e && md > new Date(e.getFullYear(), e.getMonth(), 1)) return;
+          const key = d.key;
+          if (recordedKeys.has(key) || synthKeys.has(key)) return;
+          yearSynthExpense.push({ id: `recurring:year:${key}:${y}${String(m).padStart(2, '0')}`, type: 'expense', category: d.category || '其他支出', amount: Number(d.amount || 0), date: end, planned: true });
+        });
+      } catch (eYear) { yearSynthIncome = []; yearSynthExpense = []; }
+
       const recorded = (list || []).map(x => ({ type: x.type, category: x.category, note: x.note, amount: Number(x.amount || 0), planned: !!x.planned }));
-      const combinedAll = [...recorded, ...rents, ...assetIncomes, ...debts, ...designServiceIncome, ...recurringSynth, ...recurringSynthExpense, ...localMasters];
+      const combinedAll = [...recorded, ...rents, ...assetIncomes, ...debts, ...designServiceIncome, ...recurringSynth, ...recurringSynthExpense, ...localMasters, ...yearSynthIncome, ...yearSynthExpense];
       const incomeItems = combinedAll.filter(i => i.type === 'income');
       const expenseItems = combinedAll.filter(i => i.type === 'expense' && i.planned);
       const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
