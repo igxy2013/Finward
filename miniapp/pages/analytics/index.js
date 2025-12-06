@@ -990,21 +990,42 @@ Page({
     const localX = (typeof touch.x === 'number') ? touch.x : ((touch.clientX || 0) - (meta.rect.left || 0));
     const localY = (typeof touch.y === 'number') ? touch.y : ((touch.clientY || 0) - (meta.rect.top || 0));
     const inside = localX >= meta.padL && localX <= meta.padL + meta.iw && localY >= meta.padT && localY <= meta.padT + meta.ih;
+    
+    // 清除已有的定时器
+    if (this._incomeTrendTouchTimer) {
+      clearTimeout(this._incomeTrendTouchTimer);
+      this._incomeTrendTouchTimer = null;
+    }
+
     if (!inside) {
-      this._incomeTrendSelectedIdx = -1;
-      this.drawIncomeTrend();
-      this.fetchCashflowDistribution();
+      if (this._incomeTrendSelectedIdx !== -1) {
+        this._incomeTrendSelectedIdx = -1;
+        this.drawIncomeTrend();
+        // 只有当停止滑动后才恢复默认数据
+        this._incomeTrendTouchTimer = setTimeout(() => {
+          this.fetchCashflowDistribution();
+        }, 500);
+      }
       return;
     }
+
     const xs = meta.xs || new Array(meta.series.length).fill(0).map((_, i) => meta.padL + (i / Math.max(meta.series.length - 1, 1)) * meta.iw);
     let idx = 0, best = Infinity;
     for (let i = 0; i < xs.length; i++) {
       const d = Math.abs(localX - xs[i]);
       if (d < best) { best = d; idx = i; }
     }
-    this._incomeTrendSelectedIdx = idx;
-    this.drawIncomeTrend();
-    this.updateDistributionByMonthIndex(idx);
+
+    // 立即更新图表选中状态
+    if (this._incomeTrendSelectedIdx !== idx) {
+      this._incomeTrendSelectedIdx = idx;
+      this.drawIncomeTrend();
+    }
+
+    // 延迟更新分布数据，仅当用户停留时触发
+    this._incomeTrendTouchTimer = setTimeout(() => {
+      this.updateDistributionByMonthIndex(idx);
+    }, 500);
   },
   onExpenseTrendTouch(e) {
     const meta = this._expenseTrendMeta;
@@ -1014,21 +1035,42 @@ Page({
     const localX = (typeof touch.x === 'number') ? touch.x : ((touch.clientX || 0) - (meta.rect.left || 0));
     const localY = (typeof touch.y === 'number') ? touch.y : ((touch.clientY || 0) - (meta.rect.top || 0));
     const inside = localX >= meta.padL && localX <= meta.padL + meta.iw && localY >= meta.padT && localY <= meta.padT + meta.ih;
+
+    // 清除已有的定时器
+    if (this._expenseTrendTouchTimer) {
+      clearTimeout(this._expenseTrendTouchTimer);
+      this._expenseTrendTouchTimer = null;
+    }
+
     if (!inside) {
-      this._expenseTrendSelectedIdx = -1;
-      this.drawExpenseTrend();
-      this.fetchCashflowDistribution();
+      if (this._expenseTrendSelectedIdx !== -1) {
+        this._expenseTrendSelectedIdx = -1;
+        this.drawExpenseTrend();
+        // 只有当停止滑动后才恢复默认数据
+        this._expenseTrendTouchTimer = setTimeout(() => {
+          this.fetchCashflowDistribution();
+        }, 500);
+      }
       return;
     }
+
     const xs = meta.xs || new Array(meta.series.length).fill(0).map((_, i) => meta.padL + (i / Math.max(meta.series.length - 1, 1)) * meta.iw);
     let idx = 0, best = Infinity;
     for (let i = 0; i < xs.length; i++) {
       const d = Math.abs(localX - xs[i]);
       if (d < best) { best = d; idx = i; }
     }
-    this._expenseTrendSelectedIdx = idx;
-    this.drawExpenseTrend();
-    this.updateDistributionByMonthIndex(idx);
+
+    // 立即更新图表选中状态
+    if (this._expenseTrendSelectedIdx !== idx) {
+      this._expenseTrendSelectedIdx = idx;
+      this.drawExpenseTrend();
+    }
+
+    // 延迟更新分布数据，仅当用户停留时触发
+    this._expenseTrendTouchTimer = setTimeout(() => {
+      this.updateDistributionByMonthIndex(idx);
+    }, 500);
   },
   async updateDistributionByMonthIndex(idx) {
     try {
