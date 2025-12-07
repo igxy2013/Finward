@@ -68,6 +68,9 @@ def create_tenant(payload: schemas.TenancyCreate, session: Session = Depends(get
         note=payload.note,
     )
     session.add(t)
+    # Sync monthly_rent to account.monthly_income
+    acc.monthly_income = float(payload.monthly_rent)
+    session.add(acc)
     session.commit()
     session.refresh(t)
     return t
@@ -84,6 +87,14 @@ def update_tenant(tenancy_id: int, payload: schemas.TenancyUpdate, session: Sess
         setattr(t, k, v)
     if ("due_day" in data or "start_date" in data or "frequency" in data) and t.due_day and t.start_date:
         t.next_due_date = compute_next_due(t.start_date, t.due_day, t.frequency or "monthly")
+    
+    # Sync monthly_rent to account.monthly_income if changed
+    if "monthly_rent" in data:
+        acc = session.get(models.Account, t.account_id)
+        if acc:
+            acc.monthly_income = float(data["monthly_rent"])
+            session.add(acc)
+
     session.commit()
     session.refresh(t)
     return t

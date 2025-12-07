@@ -78,36 +78,10 @@ const externalRequest = (url, options = {}) => {
     
     // 如果是财务统计API，添加user_id和token参数
     if (url.includes('/api/public/finance/stats')) {
-      // 从环境变量或全局数据中获取用户ID和token
-      const app = getApp();
-      
-      // 导入配置文件
       const config = require('../config.js');
-      
-      // 如果有用户ID，添加到参数中
-      if (app?.globalData?.userId) {
-        params.user_id = app.globalData.userId;
-      }
-      
-      // 如果没有用户ID，使用配置文件中的用户ID
-      if (!params.user_id) {
-        params.user_id = config.financeApi.userId;
-      }
-      
-      // 根据邮箱生成token
-      if (app?.globalData?.userEmail) {
-        // 根据后端代码，token格式为 finance_token_{user.email}
-        params.token = `finance_token_${app.globalData.userEmail}`;
-      } else if (!params.token) {
-        // 如果没有token，使用配置文件中的用户邮箱生成token
-        params.token = `finance_token_${config.financeApi.userEmail}`;
-      }
-      
+      params.user_id = config.financeApi.userId;
+      params.token = `finance_token_${config.financeApi.userEmail}`;
       console.log('财务统计API参数:', params);
-      console.log('请确保以下信息正确：');
-      console.log('- user_id在数据库中存在');
-      console.log('- 用户邮箱与token匹配');
-      console.log('- token格式为: finance_token_{user_email}');
     }
     
     if (params) {
