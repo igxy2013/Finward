@@ -8,10 +8,6 @@
     <text class="loading-text">加载中...</text>
   </view>
   <view wx:else class="content">
-    <view class="top-refresh" wx:if="{{refreshing}}">
-      <view class="refresh-spinner"></view>
-      <text class="refresh-text">数据更新中</text>
-    </view>
     <!-- 顶部英雄区域 -->
     <view class="hero-section fade-in-up">
       <view class="hero-card">
