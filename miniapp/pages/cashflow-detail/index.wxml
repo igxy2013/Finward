@@ -24,9 +24,9 @@
       <view class="detail-list">
         <view class="row"><text class="label">类别</text><text class="value">{{display.category}}</text></view>
         <view class="row"><text class="label">日期</text><text class="value">{{display.date}}</text></view>
-        <view class="row" wx:if="{{display.endDate}}"><text class="label">结束日期</text><text class="value">{{display.endDate}}</text></view>
         <view class="row" wx:if="{{item.recurring_monthly && display.recurringStartDate}}"><text class="label">开始日期</text><text class="value">{{display.recurringStartDate}}</text></view>
         <view class="row" wx:if="{{item.recurring_monthly && display.recurringEndDate}}"><text class="label">结束日期</text><text class="value">{{display.recurringEndDate}}</text></view>
+        <view class="row" wx:if="{{display.endDate}}"><text class="label">结束日期</text><text class="value">{{display.endDate}}</text></view>
         <view class="row" wx:if="{{display.recurringLabel}}"><text class="label">重复</text><text class="value">{{display.recurringLabel}}</text></view>
         <view class="row" wx:if="{{display.accountName}}"><text class="label">关联账户</text><text class="value">{{display.accountName}}</text></view>
         <view class="row" wx:if="{{display.tenantName}}"><text class="label">租户</text><text class="value">{{display.tenantName}}</text></view>

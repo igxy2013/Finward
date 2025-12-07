@@ -13,6 +13,7 @@ const ASSET_CATEGORY_ICONS = {
   "应收款": "money-cny-circle-line.svg",
   "光伏发电站": "building-line.svg",
   "新能源充电站": "building-line.svg",
+  "对外投资": "building-line.svg",
   "其他": "wallet-line.svg"
 };
 

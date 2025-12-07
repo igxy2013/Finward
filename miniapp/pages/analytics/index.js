@@ -14,6 +14,7 @@ const ASSET_CATEGORY_ICONS = {
   "应收款": "money-cny-circle-line.svg",
   "光伏发电站": "building-line.svg",
   "新能源充电站": "building-line.svg",
+  "对外投资": "building-line.svg",
   "其他": "wallet-line.svg"
 };
 
@@ -36,6 +37,13 @@ const getAssetCategoryIcon = (category) => {
 // 获取负债类别图标
 const getLiabilityCategoryIcon = (category) => {
   return LIABILITY_CATEGORY_ICONS[category] || "bill-line.svg";
+};
+
+const normalizeAssetCategory = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return "其他";
+  if (/(新能源)?充电站|光伏(发电站)?/i.test(s)) return "对外投资";
+  return s;
 };
 
  
@@ -2237,19 +2245,25 @@ Page({
     };
   },
   prepareCategories(list, type) {
-    return (list || []).map((item) => ({
-      ...item,
-      amountText: `￥${this.formatNumber(item.amount)}`,
-      percentageText: `${Number(item.percentage || 0).toFixed(2)}%`,
-      barClass: type === "asset" ? "asset-bar" : "liability-bar",
-      icon: type === "asset" ? getAssetCategoryIcon(item.category) : getLiabilityCategoryIcon(item.category)
-    }));
+    return (list || []).map((item) => {
+      const cat = type === "asset" ? normalizeAssetCategory(item.category) : item.category;
+      return {
+        ...item,
+        category: cat,
+        amountText: `￥${this.formatNumber(item.amount)}`,
+        percentageText: `${Number(item.percentage || 0).toFixed(2)}%`,
+        barClass: type === "asset" ? "asset-bar" : "liability-bar",
+        icon: type === "asset" ? getAssetCategoryIcon(cat) : getLiabilityCategoryIcon(cat)
+      };
+    });
   },
   formatHighlights(highlights) {
+    const best = normalizeAssetCategory(highlights.best_category || "");
+    const risk = normalizeAssetCategory(highlights.risk_category || "");
     return {
-      bestCategory: highlights.best_category || "-",
+      bestCategory: best || "-",
       bestCategoryAmount: `￥${this.formatNumber(highlights.best_category_amount)}`,
-      riskCategory: highlights.risk_category || "-",
+      riskCategory: risk || "-",
       riskCategoryAmount: `￥${this.formatNumber(highlights.risk_category_amount)}`
     };
   },

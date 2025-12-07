@@ -48,8 +48,7 @@ Page({
       { label: "房产" },
       { label: "车辆" },
       { label: "应收款" },
-      { label: "光伏发电站" },
-      { label: "新能源充电站" },
+      { label: "对外投资" },
       { label: "其他" }
     ],
     assetCategoryOptions: [
@@ -63,8 +62,7 @@ Page({
       { label: "房产" },
       { label: "车辆" },
       { label: "应收款" },
-      { label: "光伏发电站" },
-      { label: "新能源充电站" },
+      { label: "对外投资" },
       { label: "其他" }
     ],
     liabilityCategoryOptions: [
@@ -118,13 +116,20 @@ Page({
       const api = require("../../utils/api");
       const item = await api.getAccount(id);
       const typeIndex = item.type === "liability" ? 1 : 0;
+      const normalizeCat = (raw) => {
+        const s = String(raw || "").trim();
+        if (!s) return "其他";
+        if (/(新能源)?充电站|光伏(发电站)?/i.test(s)) return "对外投资";
+        return s;
+      };
+      const displayCat = item.type === "asset" ? normalizeCat(item.category) : item.category;
       const categoryOptions = item.type === "asset" ? this.data.assetCategoryOptions : this.data.liabilityCategoryOptions;
-      const categoryIndex = Math.max(0, categoryOptions.findIndex((opt) => opt.label === item.category));
+      const categoryIndex = Math.max(0, categoryOptions.findIndex((opt) => opt.label === displayCat));
       this.setData({
         form: {
           name: item.name || "",
           type: item.type || "asset",
-          category: item.category || "",
+          category: displayCat || "",
           amount: (item.initial_amount != null ? this.clipTwoDecimals(String(item.initial_amount)) : (item.amount != null ? this.clipTwoDecimals(String(item.amount)) : "")),
           note: item.note || "",
           loan_term_months: item.loan_term_months != null ? String(item.loan_term_months) : "",

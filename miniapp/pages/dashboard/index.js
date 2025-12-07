@@ -14,6 +14,7 @@ const ASSET_CATEGORY_ICONS = {
   "应收款": "money-cny-circle-line.svg",
   "光伏发电站": "building-line.svg",
   "新能源充电站": "building-line.svg",
+  "对外投资": "building-line.svg",
   "其他": "wallet-line.svg"
 };
 
@@ -31,6 +32,13 @@ const LIABILITY_CATEGORY_ICONS = {
 // 获取资产类别图标
 const getAssetCategoryIcon = (category) => {
   return ASSET_CATEGORY_ICONS[category] || "wallet-3-line.svg";
+};
+
+const normalizeAssetCategory = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return "其他";
+  if (/(新能源)?充电站|光伏(发电站)?/i.test(s)) return "对外投资";
+  return s;
 };
 
 // 获取负债类别图标
@@ -169,12 +177,16 @@ Page({
         liquid_assets: this.formatNumber(liquidAssets) // 添加流动资金
       };
 
-      let formattedAssets = assets.map(item => ({
-        ...item,
-        amount: this.formatNumber(item.current_value != null ? item.current_value : item.amount),
-        updated_at: this.formatDate(item.updated_at),
-        icon: getAssetCategoryIcon(item.category)
-      }));
+      let formattedAssets = assets.map(item => {
+        const cat = normalizeAssetCategory(item.category);
+        return {
+          ...item,
+          category: cat,
+          amount: this.formatNumber(item.current_value != null ? item.current_value : item.amount),
+          updated_at: this.formatDate(item.updated_at),
+          icon: getAssetCategoryIcon(cat)
+        };
+      });
       let formattedLiabilities = liabilities.map(item => ({
         ...item,
         amount: this.formatNumber(item.current_value != null ? item.current_value : item.amount),
@@ -186,7 +198,8 @@ Page({
         const filter = wx.getStorageSync('dashboard_filter');
         if (filter && filter.category) {
           if (filter.type === 'asset') {
-            formattedAssets = formattedAssets.filter(x => String(x.category) === String(filter.category));
+            const fc = normalizeAssetCategory(filter.category);
+            formattedAssets = formattedAssets.filter(x => String(x.category) === String(fc));
           } else if (filter.type === 'liability') {
             formattedLiabilities = formattedLiabilities.filter(x => String(x.category) === String(filter.category));
           }
@@ -262,7 +275,7 @@ Page({
   },
   calculateAssetDistribution(assetList = []) {
     const toHalfWidth = (s) => String(s || "").replace(/[\uFF01-\uFF5E]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0));
-    const baseLabels = ["现金","储蓄卡","活期","定期","基金","股票","理财","房产","车辆","应收款","其他"];
+    const baseLabels = ["现金","储蓄卡","活期","定期","基金","股票","理财","房产","车辆","应收款","对外投资","其他"];
     const normalizeCat = (raw) => {
       const half = toHalfWidth(String(raw || "其他"));
       let s = half.replace(/\s+/g, " ").trim();
@@ -280,7 +293,8 @@ Page({
         { re: /理财|理财产品|wealth|financial/i, label: "理财" },
         { re: /房产|房屋|房地产|不动产|公寓|住宅|real\s*estate|property/i, label: "房产" },
         { re: /车辆|汽车|车|vehicle|car/i, label: "车辆" },
-        { re: /应收款|应收|receivable/i, label: "应收款" }
+        { re: /应收款|应收|receivable/i, label: "应收款" },
+        { re: /(新能源)?充电站|光伏(发电站)?|对外投资/i, label: "对外投资" }
       ];
       const hit = rules.find(r => r.re.test(s));
       return hit ? hit.label : "其他";
@@ -346,6 +360,7 @@ Page({
       "房产": "#4ADE80",
       "车辆": "#FB923C",
       "应收款": "#A78BFA",
+      "对外投资": "#0EA5E9",
       "其他": "#E5E7EB"
     };
     return processed.map((entry, idx) => ({

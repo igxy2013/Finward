@@ -14,12 +14,20 @@ const ASSET_CATEGORY_ICONS = {
   "应收款": "money-cny-circle-line.svg",
   "光伏发电站": "building-line.svg",
   "新能源充电站": "building-line.svg",
+  "对外投资": "building-line.svg",
   "其他": "wallet-line.svg"
 };
 
 // 获取资产类别图标
 const getAssetCategoryIcon = (category) => {
   return ASSET_CATEGORY_ICONS[category] || "wallet-3-line.svg";
+};
+
+const normalizeCategory = (raw) => {
+  const s = String(raw || "").trim();
+  if (!s) return "其他";
+  if (/(新能源)?充电站|光伏(发电站)?/i.test(s)) return "对外投资";
+  return s;
 };
 
 Page({
@@ -42,12 +50,16 @@ Page({
   async fetchAssets() {
     try {
       const list = await api.listAccounts("asset");
-      const formatted = (list || []).map(item => ({
-        ...item,
-        amount: this.formatNumber(item.current_value != null ? item.current_value : item.amount),
-        updated_at: this.formatDate(item.updated_at),
-        icon: getAssetCategoryIcon(item.category)
-      }));
+      const formatted = (list || []).map(item => {
+        const cat = normalizeCategory(item.category);
+        return {
+          ...item,
+          category: cat,
+          amount: this.formatNumber(item.current_value != null ? item.current_value : item.amount),
+          updated_at: this.formatDate(item.updated_at),
+          icon: getAssetCategoryIcon(cat)
+        };
+      });
       this.updateCategoryOptionsAndData(formatted);
     } catch (e) {
       // 游客模式下不显示演示数据
@@ -78,7 +90,7 @@ Page({
     }, () => this.applyCategoryFilter());
   },
   applyCategoryFilter() {
-    const fc = this.data.filterCategory;
+    const fc = normalizeCategory(this.data.filterCategory);
     const filtered = fc ? (this.data.allAssets || []).filter(i => String(i.category) === String(fc)) : (this.data.allAssets || []);
     this.setData({ assets: filtered });
   },
