@@ -3,6 +3,7 @@
     "pages/dashboard/index",
     "pages/assets/index",
     "pages/asset-detail/index",
+    "pages/rent-detail/index",
     "pages/liability-detail/index",
     "pages/liabilities/index",
     "pages/wealth/index",

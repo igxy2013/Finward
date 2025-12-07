@@ -87,6 +87,7 @@ Page({
     ]
     ,tenantFrequencyIndex: 0
     ,tenantFrequencyLabel: "每月"
+    ,pageTitle: "记录资产/负债"
   },
   clipTwoDecimals(val) {
     const s = String(val || "");
@@ -107,7 +108,7 @@ Page({
     const id = options?.id ? Number(options.id) : null;
     const tenancyId = options?.tenancy_id ? Number(options.tenancy_id) : null;
     if (edit && id) {
-      this.setData({ editId: id, incomingTenancyId: tenancyId || null });
+      this.setData({ editId: id, incomingTenancyId: tenancyId || null, pageTitle: "编辑资产/负债" });
       this.prefillFromServer(id);
     }
   },
@@ -249,26 +250,22 @@ Page({
     if (key === "loan_term_months") this.recomputeEndDates();
   },
   handleTenantDueDayChange(e) {
-    const idx = Number(e.detail.value || 0);
-    const day = this.data.tenantDueDays[idx];
-    this.setData({ tenantDueDayIndex: idx, "form.tenant_due_day": Number(day) });
+    // 已移除出租详细表单，此方法不再使用
   },
   handleTenantStartDate(e) {
-    this.setData({ "form.tenant_start_date": e.detail.value });
+    // 已移除出租详细表单，此方法不再使用
   },
   handleTenantEndDate(e) {
-    this.setData({ "form.tenant_end_date": e.detail.value });
+    // 已移除出租详细表单，此方法不再使用
   },
   handleTenantReminderToggle(e) {
-    this.setData({ "form.tenant_reminder_enabled": !!e.detail.value });
+    // 已移除出租详细表单，此方法不再使用
   },
   handleRentalToggle(e) {
     this.setData({ "form.rental_enabled": !!e.detail.value });
   },
   handleTenantFrequencyChange(e) {
-    const idx = Number(e.detail.value || 0);
-    const opt = this.data.tenantFrequencyOptions[idx] || this.data.tenantFrequencyOptions[0];
-    this.setData({ tenantFrequencyIndex: idx, tenantFrequencyLabel: opt.label, "form.tenant_frequency": opt.value });
+    // 已移除出租详细表单，此方法不再使用
   },
   recomputeCurrentValue() {
     const base = Number(this.data.form.amount || 0);
@@ -416,32 +413,7 @@ Page({
         accountId = created?.id || null;
         wx.showToast({ title: "记录成功", icon: "success" });
       }
-      if (this.data.form.type === "asset" && this.data.form.category === "房产" && accountId && this.data.form.rental_enabled) {
-        const tf = this.data.form;
-        const tenantPayload = {
-          account_id: accountId,
-          tenant_name: tf.tenant_name || "",
-          monthly_rent: tf.tenant_monthly_rent !== "" ? Number(tf.tenant_monthly_rent) : 0,
-          frequency: tf.tenant_frequency || (this.data.tenantFrequencyOptions[this.data.tenantFrequencyIndex]?.value || "monthly"),
-          due_day: Number(tf.tenant_due_day || 0),
-          start_date: tf.tenant_start_date || null,
-          end_date: tf.tenant_end_date || null,
-          contract_number: tf.tenant_contract_number || null,
-          contract_url: tf.tenant_contract_url || null,
-          reminder_enabled: !!tf.tenant_reminder_enabled,
-          note: tf.note || null
-        };
-        try {
-          if (this.data.currentTenancyId) {
-            await api.updateTenant(this.data.currentTenancyId, tenantPayload);
-          } else {
-            const hasCore = !!(tf.tenant_name || tf.tenant_monthly_rent || tf.tenant_start_date);
-            if (hasCore) {
-              await api.createTenant(tenantPayload);
-            }
-          }
-        } catch (e) {}
-      }
+      // 出租相关信息交由“出租详情”页面与弹窗组件单独管理
       if (this.data.editId) {
         try {
           const pages = getCurrentPages();
@@ -484,5 +456,13 @@ Page({
     } finally {
       this.setData({ submitting: false });
     }
+  }
+  ,goRentDetail() {
+    const id = Number(this.data.editId || 0);
+    if (!id) {
+      wx.showToast({ title: "请先保存资产", icon: "none" });
+      return;
+    }
+    wx.navigateTo({ url: `/pages/rent-detail/index?id=${id}` });
   }
 });

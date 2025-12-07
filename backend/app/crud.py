@@ -903,6 +903,17 @@ def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.Mo
                 debt_ratio=round(debt_ratio, 2),
             )
         )
+    if points:
+        from .crud import overview as _ov
+        ov = _ov(session, user_id)
+        last = points[-1]
+        points[-1] = schemas.MonthlyPoint(
+            month=last.month,
+            total_assets=ov.total_assets,
+            total_liabilities=ov.total_liabilities,
+            net_worth=ov.net_worth,
+            debt_ratio=round(float((ov.total_liabilities / ov.total_assets * 100) if ov.total_assets else 0.0), 2),
+        )
     return schemas.MonthlyOut(months=months, points=points)
 
 

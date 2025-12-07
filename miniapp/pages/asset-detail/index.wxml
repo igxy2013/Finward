@@ -82,59 +82,10 @@
       </view>
     </view>
 
-    <view class="card tenants-card" wx:if="{{tenants.length > 0}}">
+    <view class="card" wx:if="{{detail.category === '房产'}}">
       <view class="card-header">
-        <view class="card-title-wrap">
-          <text class="card-title">出租信息</text>
-          <text class="card-subtitle">Rental Details</text>
-        </view>
-        <button class="rent-btn" bindtap="collectRent">收取租金</button>
-      </view>
-      <view class="tenant-list">
-        <view class="tenant-card" wx:for="{{tenants}}" wx:key="id">
-          <view class="tenant-header">
-            <text class="tenant-name">{{item.tenant_name}}</text>
-            <text class="freq-pill">{{item.frequency_label}}</text>
-          </view>
-          <view class="rental-info">
-            <view class="r-row"><text class="r-label">出租方式</text><text class="r-value">{{item.frequency_label}}</text></view>
-            <view class="r-row"><text class="r-label">月租</text><text class="r-value">￥{{item.monthly_rent_display}}</text></view>
-            <view class="r-row"><text class="r-label">下次收租</text><text class="r-value">{{item.next_due_date_display}}</text></view>
-            <view class="r-row"><text class="r-label">收租日</text><text class="r-value">{{item.due_day_display}}</text></view>
-            <view class="r-row"><text class="r-label">开始日期</text><text class="r-value">{{item.start_date_display}}</text></view>
-            <view class="r-row" wx:if="{{item.end_date_display}}"><text class="r-label">结束日期</text><text class="r-value">{{item.end_date_display}}</text></view>
-            <view class="r-row" wx:if="{{item.contract_number}}"><text class="r-label">合同编号</text><text class="r-value">{{item.contract_number}}</text></view>
-            <view class="r-row" wx:if="{{item.contract_url}}"><text class="r-label">合同链接</text><button class="link-btn" data-url="{{item.contract_url}}" bindtap="copyContractUrl">复制</button></view>
-            <view class="r-row"><text class="r-label">提醒</text><text class="r-value">{{item.reminder_display}}</text></view>
-            <view class="r-row note-row" wx:if="{{item.note}}"><text class="r-label">备注</text><text class="r-value multiline">{{item.note}}</text></view>
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <view class="card list-card" wx:if="{{tenants.length > 0 || rentRecords.length > 0}}">
-      <view class="card-header">
-        <text class="card-title">租金收取记录</text>
-        <text class="card-count" wx:if="{{rentRecords.length > 0}}">{{rentRecords.length}} 条</text>
-      </view>
-      <view class="list-container" wx:if="{{rentRecords.length > 0}}">
-        <view class="list-item" wx:for="{{rentRecords}}" wx:key="id" data-id="{{item.id}}" bindlongpress="openRentRecordActions">
-          <view class="item-content">
-            <view class="item-name">租金收取</view>
-            <view class="item-meta">
-              <text class="item-category">{{item.note}}</text>
-              <text class="item-date">{{item.date_display}}</text>
-            </view>
-          </view>
-          <view class="item-amount positive">+￥{{item.amount_display}}</view>
-          <view class="item-actions">
-            <image class="action-icon" src="/assets/icons/edit-line.svg" mode="aspectFit" data-id="{{item.id}}" bindtap="editRentRecord"></image>
-            <image class="action-icon" src="/assets/icons/delete-bin-line.svg" mode="aspectFit" data-id="{{item.id}}" bindtap="deleteRentRecord"></image>
-          </view>
-        </view>
-      </view>
-      <view class="empty-state" wx:else>
-        <view class="empty-text">暂无租金收取记录</view>
+        <text class="card-title">出租信息</text>
+        <button class="rent-btn" bindtap="goRentDetail">查看详情</button>
       </view>
     </view>
 

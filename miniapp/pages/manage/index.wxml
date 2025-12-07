@@ -1,4 +1,4 @@
-<navbar title="记录资产/负债"></navbar>
+<navbar title="{{pageTitle}}"></navbar>
 <view class="page">
   <view class="card form-card">
     <view class="form-item">
@@ -85,53 +85,8 @@
         <text class="label">是否出租</text>
         <switch checked="{{form.rental_enabled}}" bindchange="handleRentalToggle"></switch>
       </view>
-      <view wx:if="{{form.rental_enabled}}">
-        <view class="form-item">
-          <text class="label">租客姓名</text>
-          <input placeholder="可选" data-key="tenant_name" value="{{form.tenant_name}}" bindinput="handleInput" />
-        </view>
-        <view class="form-item">
-          <text class="label">月租金</text>
-          <input type="number" placeholder="可选" data-key="tenant_monthly_rent" value="{{form.tenant_monthly_rent}}" bindinput="handleInput" />
-        </view>
-        <view class="form-item">
-          <text class="label">收租方式</text>
-          <picker mode="selector" range="{{tenantFrequencyOptions}}" range-key="label" value="{{tenantFrequencyIndex}}" bindchange="handleTenantFrequencyChange">
-            <view class="picker-value">{{tenantFrequencyLabel}}</view>
-          </picker>
-        </view>
-        <view class="form-item">
-          <text class="label">收租日({{tenantFrequencyLabel}})</text>
-          <picker mode="selector" range="{{tenantDueDays}}" value="{{tenantDueDayIndex}}" bindchange="handleTenantDueDayChange">
-            <view class="picker-value">{{form.tenant_due_day ? (tenantFrequencyLabel + form.tenant_due_day + '日') : '可选'}}</view>
-          </picker>
-        </view>
-        <view class="form-item">
-          <text class="label">出租开始日期</text>
-          <picker mode="date" value="{{form.tenant_start_date}}" bindchange="handleTenantStartDate">
-            <view class="picker-value">{{form.tenant_start_date || '可选'}}
-            </view>
-          </picker>
-        </view>
-        <view class="form-item">
-          <text class="label">合同截止日期</text>
-          <picker mode="date" value="{{form.tenant_end_date}}" bindchange="handleTenantEndDate">
-            <view class="picker-value">{{form.tenant_end_date || '可选'}}
-            </view>
-          </picker>
-        </view>
-        <view class="form-item">
-          <text class="label">合同编号</text>
-          <input placeholder="可选" data-key="tenant_contract_number" value="{{form.tenant_contract_number}}" bindinput="handleInput" />
-        </view>
-        <view class="form-item">
-          <text class="label">合同链接</text>
-          <input placeholder="可选" data-key="tenant_contract_url" value="{{form.tenant_contract_url}}" bindinput="handleInput" />
-        </view>
-        <view class="form-item row">
-          <text class="label">启用收租提醒</text>
-          <switch checked="{{form.tenant_reminder_enabled}}" bindchange="handleTenantReminderToggle"></switch>
-        </view>
+      <view wx:if="{{form.rental_enabled}}" class="form-item">
+        <button size="mini" bindtap="goRentDetail" style="background-color:#10B981;color:#fff;">查看出租信息</button>
       </view>
     </view>
     <view class="form-item">
@@ -141,6 +96,4 @@
     <button bindtap="submit" loading="{{submitting}}" style="background-color: #43B176; color: #ffffff;">保存</button>
   </view>
 </view>
-
-
 

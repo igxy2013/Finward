@@ -38,7 +38,8 @@ Page({
     valueUpdates: [],
     valueUpdatesRaw: [],
     editingUpdateId: null,
-    editingUpdateTs: null
+    editingUpdateTs: null,
+    isDepreciating: false
   },
   collectRent() {
     const { tenants = [], detail = {} } = this.data;
@@ -85,14 +86,6 @@ Page({
     const id = Number(this.data.id || 0);
     if (!id) return;
     this.fetchDetail(id);
-  },
-  onShow() {
-    const { id, detail } = this.data;
-    if (!id) return;
-    if (String(detail?.category) === "房产") {
-      this.fetchRentRecords();
-    }
-    this.loadValueUpdates();
   },
   openEditMenu() {
     wx.showActionSheet({
@@ -195,27 +188,16 @@ Page({
         change_sign,
         loading: false
       });
+      this.autoDepreciationUpdateIfNeeded();
       this.loadValueUpdates();
-      if (String(data.category) === "房产") {
-        try {
-          const tenants = await api.listTenants(id);
-          const formatted = (tenants || []).map(t => ({
-            ...t,
-            monthly_rent_display: this.formatNumber(t.monthly_rent),
-            next_due_date_display: t.next_due_date ? this.formatDate(t.next_due_date) : "",
-            frequency_label: this.mapFrequency(t.frequency || 'monthly'),
-            due_day_display: t.due_day ? `每期${String(t.due_day)}日` : "",
-            start_date_display: t.start_date ? this.formatDate(t.start_date) : "",
-            end_date_display: t.end_date ? this.formatDate(t.end_date) : "",
-            reminder_display: t.reminder_enabled ? "已开启" : "已关闭"
-          }));
-          this.setData({ tenants: formatted });
-        } catch (e) {}
-        await this.fetchRentRecords();
-      }
     } catch (error) {
       this.setData({ loading: false, error: "加载失败" });
     }
+  },
+  goRentDetail() {
+    const id = Number(this.data.id || this.data.detail?.id || 0);
+    if (!id) return;
+    wx.navigateTo({ url: `/pages/rent-detail/index?id=${id}` });
   },
   loadValueUpdates() {
     const id = Number(this.data.id || 0);
@@ -283,7 +265,91 @@ Page({
       }
     })();
   },
-  openUpdateModal() {
+  autoDepreciationUpdateIfNeeded() {
+    if (this.data.isDepreciating) return;
+    const detail = this.data.detail || {};
+    const rate = Number(detail.depreciation_rate || 0);
+    const base = this.parseNumber(detail.initial_amount ?? detail.amount);
+    const startStr = detail.invest_start_date || null;
+    if (!(rate > 0) || !startStr || !(base > 0)) return;
+    const endStr = detail.invest_end_date || null;
+    const start = new Date(String(startStr).replace(/-/g, "/"));
+    if (isNaN(start.getTime())) return;
+    const now = new Date();
+    if (endStr) {
+      const end = new Date(String(endStr).replace(/-/g, "/"));
+      if (!isNaN(end.getTime()) && now > end) return;
+    }
+    const clampDay = (y, m, d) => {
+      const end = new Date(y, m + 1, 0);
+      const day = Math.min(d, end.getDate());
+      return new Date(y, m, day);
+    };
+    const anniv = clampDay(now.getFullYear(), start.getMonth(), start.getDate());
+    const isAnniversaryToday = anniv.getFullYear() === now.getFullYear()
+      && anniv.getMonth() === now.getMonth()
+      && anniv.getDate() === now.getDate();
+    if (!isAnniversaryToday) return;
+    const todayY = now.getFullYear();
+    const todayM = String(now.getMonth() + 1).padStart(2, '0');
+    const todayD = String(now.getDate()).padStart(2, '0');
+    const todayStr = `${todayY}-${todayM}-${todayD}`;
+    const createdTodayAuto = (this.data.valueUpdatesRaw || []).some(r => {
+      const s = r.created_at || r.ts;
+      const d = s ? new Date(String(s).replace(' ', 'T')) : null;
+      if (!d || isNaN(d.getTime())) return false;
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      const ds = `${y}-${m}-${dd}`;
+      return ds === todayStr && String(r.note || '') === '折旧自动更新';
+    });
+    if (createdTodayAuto) return;
+    const yearsElapsed = now.getFullYear() - start.getFullYear();
+    if (!(yearsElapsed >= 1)) return;
+    const id = Number(this.data.id || 0);
+    if (!id) return;
+    const lifeYears = (() => {
+      const termMonths = Number(detail.investment_term_months || 0);
+      if (termMonths > 0) return Math.max(1, Math.floor(termMonths / 12));
+      if (rate > 0) return Math.max(1, Math.round(1 / rate));
+      return Math.max(1, yearsElapsed);
+    })();
+    const method = String(detail.depreciation_method || '').toLowerCase();
+    const computeValue = (m, base0, years, life) => {
+      const salvage = 0;
+      if (m === 'syd') {
+        const n = Math.max(1, life);
+        const sumYears = n * (n + 1) / 2;
+        let dep = 0;
+        for (let k = 1; k <= Math.min(years, n); k++) {
+          const remaining = n - (k - 1);
+          dep += (remaining / sumYears) * (base0 - salvage);
+        }
+        return Math.max(salvage, base0 - dep);
+      }
+      // 默认双倍余额递减法（DDB）
+      const n = Math.max(1, life);
+      const ddbRate = 2 / n;
+      let value = base0;
+      for (let k = 1; k <= Math.min(years, n); k++) {
+        value = value * (1 - ddbRate);
+        if (value < salvage) { value = salvage; break; }
+      }
+      return Math.max(salvage, value);
+    };
+    const newValue = computeValue(method || 'ddb', base, yearsElapsed, lifeYears);
+    this.setData({ isDepreciating: true });
+    (async () => {
+      try {
+        try { await api.createAccountValueUpdate(id, Number(newValue.toFixed(2)), anniv.getTime(), '折旧自动更新'); } catch (e) {}
+        this.loadValueUpdates();
+      } finally {
+        this.setData({ isDepreciating: false });
+      }
+    })();
+  }
+  ,openUpdateModal() {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');

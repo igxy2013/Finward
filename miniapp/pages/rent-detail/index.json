@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "出租详情",
+  "usingComponents": {
+    "rent-editor": "/components/rent-editor/index"
+  }
+}
