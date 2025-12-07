@@ -581,7 +581,7 @@
 }
 
 .fade-in-up {
-  animation: fadeInUp 0.6s ease-out;
+  animation: none;
 }
 .login-state {
   min-height: calc(100vh - 120rpx);

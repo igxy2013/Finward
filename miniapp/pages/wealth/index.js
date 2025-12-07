@@ -70,7 +70,7 @@ Page({
       netIncomePositive: true,
       incomeExpenseRatio: "0.00"
     },
-    summaryReady: false,
+    summaryReady: true,
     typeTabs: [
       { label: "全部", value: "all" },
       { label: "收入", value: "income" },
@@ -130,7 +130,7 @@ Page({
     this.skipFilterOnce = true;
     let cached = null;
     try { cached = wx.getStorageSync('fw_summary_cache'); } catch (e) {}
-    this.setData({ summaryReady: false, activeType: this.data.activeType || 'all' }, () => {
+    this.setData({ summaryReady: true, activeType: this.data.activeType || 'all' }, () => {
       this.fetchSummary(false);
       this.fetchList(false);
     });

@@ -7,7 +7,7 @@
     <view class="nav-btn" bindtap="nextMonth">›</view>
   </view>
 
-  <view class="summary" wx:if="{{summaryReady}}">
+  <view class="summary">
     <view class="summary-item accent-expense">
       <view class="card-bg"></view>
       <view class="card-glow"></view>

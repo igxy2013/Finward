@@ -48,7 +48,7 @@ const getLiabilityCategoryIcon = (category) => {
 
 Page({
   data: {
-    loading: true,
+    loading: false,
     refreshing: false,
     needLogin: false,
     loggingIn: false,
@@ -79,8 +79,8 @@ Page({
     } else if (!app.globalData.token) {
       app.globalData.token = token;
     }
-    this.setData({ needLogin: false, loading: true });
-    this.fetchData();
+    this.setData({ needLogin: false, loading: false, refreshing: false });
+    this.fetchData(true);
     this.preloadDesignServiceStats();
   },
   openItemActions(e) {
@@ -137,7 +137,7 @@ Page({
     const app = getApp();
     const token = app?.globalData?.token || wx.getStorageSync('fw_token');
     if (!token) app.globalData.guest = true; else if (!app.globalData.token) app.globalData.token = token;
-    this.setData({ needLogin: false, refreshing: true });
+    this.setData({ needLogin: false, refreshing: false });
     this.fetchData(true);
     this.preloadDesignServiceStats();
   },
@@ -148,9 +148,7 @@ Page({
     } catch (e) {}
   },
   async fetchData(quiet = false) {
-    if (quiet) {
-      this.setData({ refreshing: true });
-    } else {
+    if (!quiet) {
       this.setData({ loading: true });
     }
     try {

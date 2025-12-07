@@ -50,7 +50,7 @@ const normalizeAssetCategory = (raw) => {
 
 Page({
   data: {
-    loading: true,
+    loading: false,
     error: "",
     needLogin: false,
     loggingIn: false,
@@ -133,7 +133,7 @@ Page({
       });
       return;
     }
-    this.fetchAnalytics();
+    this.fetchAnalytics(true);
   },
   onShow() {
     const app = getApp();
