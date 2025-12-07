@@ -1196,10 +1196,21 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
     )
     rows = q.all()
     recorded: list[schemas.WealthItemOut] = []
+    recorded_income_account_ids: set[int] = set()
+    recorded_expense_account_ids: set[int] = set()
+
     for r in rows:
         tval = r.type.value if hasattr(r.type, "value") else r.type
         if type_filter and type_filter in {"income", "expense"} and tval != type_filter:
             continue
+
+        # 记录已存在的 account_id 以便后续排重
+        if r.account_id:
+            if tval == "income":
+                recorded_income_account_ids.add(r.account_id)
+            elif tval == "expense":
+                recorded_expense_account_ids.add(r.account_id)
+
         recorded.append(
             schemas.WealthItemOut(
                 id=str(r.id),
@@ -1219,11 +1230,16 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         )
 
     # 2. 计算当月租金提醒（Tenancy）
-    ten_stmt = session.query(models.Tenancy).filter(
-        models.Tenancy.household_id == hh_id,
-        models.Tenancy.reminder_enabled == True,
+    # 关联查询 Account 表以获取资产名称
+    ten_stmt = (
+        session.query(models.Tenancy, models.Account.name.label("account_name"))
+        .outerjoin(models.Account, models.Tenancy.account_id == models.Account.id)
+        .filter(
+            models.Tenancy.household_id == hh_id,
+            models.Tenancy.reminder_enabled == True,
+        )
     )
-    tenancies = ten_stmt.all()
+    tenancies_data = ten_stmt.all()
 
     def compute_next_due(start_dt: date, due_day: int, frequency: str = "monthly", ref_date: date | None = None) -> date:
         today2 = ref_date or datetime.now(timezone.utc).date()
@@ -1253,7 +1269,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
 
     rent_items: list[schemas.WealthItemOut] = []
     rented_asset_ids: set[int] = set()
-    for t in tenancies:
+    for t, acc_name in tenancies_data:
         if t.end_date and t.end_date < start:
             continue
         nd = t.next_due_date or compute_next_due(t.start_date, t.due_day, t.frequency or "monthly", ref_date=start)
@@ -1261,6 +1277,8 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
             if t.account_id:
                 rented_asset_ids.add(int(t.account_id))
             if not type_filter or type_filter == "income":
+                # 显示为 "资产名 - 租金" 或 "租客名 - 租金"
+                display_name = f"{acc_name} - 租金" if acc_name else (f"{t.tenant_name} - 租金" if t.tenant_name else "租金收入")
                 rent_items.append(
                     schemas.WealthItemOut(
                         id=f"tenancy:{t.id}",
@@ -1273,7 +1291,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
                         account_id=t.account_id,
                         tenancy_id=t.id,
                         tenant_name=t.tenant_name,
-                        name="租金收入",
+                        name=display_name,
                         synthetic_kind="rent",
                     )
                 )
@@ -1290,6 +1308,9 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         if mi <= 0:
             continue
         if a.id and int(a.id) in rented_asset_ids:
+            continue
+        # 若本月已记录该账户的收入，则跳过自动生成
+        if a.id and int(a.id) in recorded_income_account_ids:
             continue
         # 起止限定
         started = True
@@ -1312,6 +1333,8 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
             if (y * 12 + m) > ei:
                 continue
         if not type_filter or type_filter == "income":
+            # 优化名称显示：账户名 - 类别
+            display_name = f"{a.name} - {a.category or '资产收益'}"
             asset_income_items.append(
                 schemas.WealthItemOut(
                     id=f"asset-income:{a.id}:{y}{str(m).zfill(2)}",
@@ -1323,7 +1346,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
                     date=end,
                     account_id=a.id,
                     account_name=a.name,
-                    name=a.category or "资产收益",
+                    name=display_name,
                     synthetic_kind="asset-income",
                 )
             )
@@ -1336,6 +1359,9 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
             continue
         mp = Decimal(a.monthly_payment or 0)
         if mp <= 0:
+            continue
+        # 若本月已记录该账户的支出（还款），则跳过自动生成
+        if a.id and int(a.id) in recorded_expense_account_ids:
             continue
         start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else start)
         due_day = start_base.day
@@ -1359,6 +1385,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
             if term > 0 and months_elapsed >= term:
                 break
             if not type_filter or type_filter == "expense":
+                display_name = f"{a.name} - {(a.category or '负债')}月供"
                 debt_items.append(
                     schemas.WealthItemOut(
                         id=f"loan:{a.id}:{yy}{str(mm).zfill(2)}",
@@ -1370,7 +1397,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
                         date=cand,
                         account_id=a.id,
                         account_name=a.name,
-                        name=(a.category or "负债") + "月供",
+                        name=display_name,
                         synthetic_kind="loan-payment",
                     )
                 )
@@ -1379,60 +1406,13 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
                 mm = 1
                 yy += 1
 
-    # 5. 上月的循环计划项补齐（收入/支出），若当前月未记录
-    prev_y = y if m > 1 else y - 1
-    prev_m = (m - 1) if m > 1 else 12
-    from calendar import monthrange as mr
-    prev_start = date(prev_y, prev_m, 1)
-    prev_end = date(prev_y, prev_m, mr(prev_y, prev_m)[1])
-    prev_rows = (
-        session.query(models.Cashflow)
-        .filter(models.Cashflow.household_id == hh_id)
-        .filter(models.Cashflow.date >= prev_start)
-        .filter(models.Cashflow.date <= prev_end)
-        .order_by(models.Cashflow.date.asc())
-        .all()
-    )
+    # 5. 基于主数据的循环计划项（按起止日期生成历史月份条目）
     recorded_keys = set(
         f"{i.type}:{(i.category or '')}:{(i.name or i.category or '')}"
         for i in recorded
         if i.recurring_monthly and i.planned
     )
-    synth_items: list[schemas.WealthItemOut] = []
-    for r in prev_rows:
-        if not r.planned or not getattr(r, "recurring_monthly", False):
-            continue
-        key = f"{r.type.value}:{(r.category or '')}:{(r.note or r.category or '')}"
-        if key in recorded_keys:
-            continue
-        prev_day = r.date.day
-        dnum = clamp_day(y, m, prev_day)
-        cand = date(y, m, dnum)
-        # 结束/开始日期限定
-        if getattr(r, "recurring_end_date", None) and cand > r.recurring_end_date:
-            continue
-        if getattr(r, "recurring_start_date", None) and cand < r.recurring_start_date:
-            continue
-        if start <= cand <= end:
-            tval2 = r.type.value if hasattr(r.type, "value") else r.type
-            if not type_filter or type_filter == tval2:
-                synth_items.append(
-                    schemas.WealthItemOut(
-                        id=f"recurring:{r.id}:{y}{str(m).zfill(2)}",
-                        type=tval2,
-                        category=r.category or ("其他收入" if tval2 == "income" else "其他支出"),
-                        amount=Decimal(r.amount or 0),
-                        planned=True,
-                        recurring_monthly=True,
-                        date=cand,
-                        account_id=r.account_id,
-                        account_name=r.account_name,
-                        name=r.note or r.category,
-                        synthetic_kind=f"recurring-{tval2}",
-                    )
-                )
 
-    # 5a. 基于主数据的循环计划项（按起止日期生成历史月份条目）
     recurring_master_items: list[schemas.WealthItemOut] = []
     master_rows = (
         session.query(models.Cashflow)
@@ -1498,7 +1478,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
                 )
             )
 
-    items = recorded + rent_items + asset_income_items + debt_items + synth_items + recurring_master_items + external_items
+    items = recorded + rent_items + asset_income_items + debt_items + recurring_master_items + external_items
     # 去重（以 id 唯一）
     seen: set[str] = set()
     result: list[schemas.WealthItemOut] = []
