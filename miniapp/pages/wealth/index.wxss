@@ -89,3 +89,13 @@
 .period-display { font-size: 28rpx; color: #374151; padding: 6rpx 16rpx; background: #fff; border: 1rpx solid #e5e7eb; border-radius: 999rpx; }
 .nav-btn { width: 48rpx; height: 48rpx; display: flex; align-items: center; justify-content: center; border-radius: 999rpx; border: 1rpx solid #e5e7eb; background: #fff; color: #374151; }
 .nav-btn:active { background: #f3f4f6; }
+
+.swipe-mask {
+  position: fixed;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  background: transparent;
+}

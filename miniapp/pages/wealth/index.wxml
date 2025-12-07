@@ -1,4 +1,5 @@
-<view class="page">
+<view class="page" bindtouchstart="handleSwipeStart" bindtouchmove="handleSwipeMove" bindtouchend="handleSwipeEnd" bindtouchcancel="handleSwipeCancel">
+  <view wx:if="{{swipeLock}}" class="swipe-mask" catchtouchmove="handleMaskMove" bindtouchend="handleSwipeEnd" bindtouchcancel="handleSwipeCancel"></view>
   <view class="period-switcher">
     <view class="nav-btn" bindtap="prevMonth">‹</view>
     <picker mode="multiSelector" range="{{monthSelectorRange}}" value="{{monthSelectorIndex}}" bindchange="handlePeriodMultiChange">
@@ -8,7 +9,7 @@
   </view>
 
   <view class="summary">
-    <view class="summary-item accent-expense">
+    <view class="summary-item accent-expense" bindtap="applyExpenseFilter">
       <view class="card-bg"></view>
       <view class="card-glow"></view>
       <view class="summary-top">
@@ -22,7 +23,7 @@
         <text class="amount negative">{{summary.expectedExpense}}</text>
       </view>
     </view>
-    <view class="summary-item accent-income">
+    <view class="summary-item accent-income" bindtap="applyIncomeFilter">
       <view class="card-bg"></view>
       <view class="card-glow"></view>
       <view class="summary-top">

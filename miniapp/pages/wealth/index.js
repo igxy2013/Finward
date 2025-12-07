@@ -77,8 +77,53 @@ Page({
       { label: "支出", value: "expense" }
     ],
     activeType: "all",
-    cashflows: []
+    cashflows: [],
+    swipeLock: false
   },
+  handleSwipeStart(e) {
+    const t = (e && (e.changedTouches && e.changedTouches[0])) || (e && (e.touches && e.touches[0])) || {};
+    this._swipeStartX = Number(t.pageX || t.clientX || 0);
+    this._swipeStartY = Number(t.pageY || t.clientY || 0);
+    this._swipeStartTime = Date.now();
+    this.setData({ swipeLock: false });
+  },
+  handleSwipeMove(e) {
+    const t = (e && (e.changedTouches && e.changedTouches[0])) || (e && (e.touches && e.touches[0])) || {};
+    const endX = Number(t.pageX || t.clientX || 0);
+    const endY = Number(t.pageY || t.clientY || 0);
+    const dx = endX - (this._swipeStartX || 0);
+    const dy = endY - (this._swipeStartY || 0);
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    if (absX > 20 && absX > absY * 1.2) {
+      if (!this.data.swipeLock) this.setData({ swipeLock: true });
+    } else {
+      if (this.data.swipeLock) this.setData({ swipeLock: false });
+    }
+  },
+  handleSwipeEnd(e) {
+    const t = (e && (e.changedTouches && e.changedTouches[0])) || (e && (e.touches && e.touches[0])) || {};
+    const endX = Number(t.pageX || t.clientX || 0);
+    const endY = Number(t.pageY || t.clientY || 0);
+    const dx = endX - (this._swipeStartX || 0);
+    const dy = endY - (this._swipeStartY || 0);
+    const dt = Date.now() - (this._swipeStartTime || 0);
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    if (dt > 800) return;
+    if (absX < 60) return;
+    if (absX < absY * 1.2) return;
+    if (dx < 0) {
+      this.nextMonth();
+    } else {
+      this.prevMonth();
+    }
+    this.setData({ swipeLock: false });
+  },
+  handleSwipeCancel() {
+    this.setData({ swipeLock: false });
+  },
+  handleMaskMove() {},
   onTabItemTap() {
     try {
       const now = new Date();
@@ -781,6 +826,20 @@ Page({
     const val = String(e.currentTarget.dataset.value || "all");
     if (val === this.data.activeType) return;
     this.setData({ activeType: val }, () => this.fetchList(true));
+  },
+  applyExpenseFilter() {
+    if (this.data.activeType !== 'expense') {
+      this.setData({ activeType: 'expense' }, () => this.fetchList(true));
+    } else {
+      this.fetchList(true);
+    }
+  },
+  applyIncomeFilter() {
+    if (this.data.activeType !== 'income') {
+      this.setData({ activeType: 'income' }, () => this.fetchList(true));
+    } else {
+      this.fetchList(true);
+    }
   },
   openCashflowActions(e) {
     const rawId = String(e.currentTarget.dataset.id || "");
