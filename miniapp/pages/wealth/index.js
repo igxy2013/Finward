@@ -293,27 +293,6 @@ Page({
         }
         this.setData({ cashflows: combined });
         this.skipFilterOnce = false;
-        if (!skipSummary) {
-          const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
-          const totalExpectedIncome = combinedAll.filter(i => i.type === 'income' && !!i.planned).reduce((sum, i) => sum + toNum(i.amount), 0);
-          const totalExpectedExpense = combinedAll.filter(i => i.type === 'expense' && !!i.planned).reduce((sum, i) => sum + toNum(i.amount), 0);
-          const totalActualIncome = combinedAll.filter(i => i.type === 'income' && !i.planned).reduce((sum, i) => sum + toNum(i.amount), 0);
-          const netExpected = totalExpectedIncome - totalExpectedExpense;
-          const netPositive = netExpected >= 0;
-          const ratioDisplay = totalExpectedExpense > 0 ? (totalExpectedIncome / totalExpectedExpense).toFixed(2) : '—';
-          this.setData({
-            summary: {
-              ...this.data.summary,
-              expectedExpense: this.formatNumber(totalExpectedExpense),
-              expectedIncome: this.formatNumber(totalExpectedIncome),
-              actualIncome: this.formatNumber(totalActualIncome),
-              netIncome: this.formatNumber(netExpected),
-              netIncomePositive: netPositive,
-              incomeExpenseRatio: ratioDisplay
-            },
-            summaryReady: true
-          });
-        }
         return;
       }
       
@@ -789,38 +768,6 @@ Page({
       }
       this.setData({ cashflows: combined });
       this.skipFilterOnce = false;
-
-      // 用全部记录重算预计/实际收入，确保与列表来源一致但不受过滤影响
-      if (!skipSummary) {
-        const toNum = (s) => {
-          const n = Number(String(s).replace(/,/g, ''));
-          return Number.isNaN(n) ? 0 : n;
-        };
-        const totalExpectedIncome = combinedAll
-          .filter(i => i.type === 'income' && !!i.planned)
-          .reduce((sum, i) => sum + toNum(i.amount), 0);
-        const totalExpectedExpense = combinedAll
-          .filter(i => i.type === 'expense' && !!i.planned)
-          .reduce((sum, i) => sum + toNum(i.amount), 0);
-        const totalActualIncome = combinedAll
-          .filter(i => i.type === 'income' && !i.planned)
-          .reduce((sum, i) => sum + toNum(i.amount), 0);
-        const netExpected = totalExpectedIncome - totalExpectedExpense;
-        const netPositive = netExpected >= 0;
-        const ratioDisplay = totalExpectedExpense > 0 ? (totalExpectedIncome / totalExpectedExpense).toFixed(2) : '—';
-        this.setData({
-          summary: {
-            ...this.data.summary,
-            expectedExpense: this.formatNumber(totalExpectedExpense),
-            expectedIncome: this.formatNumber(totalExpectedIncome),
-            actualIncome: this.formatNumber(totalActualIncome),
-            netIncome: this.formatNumber(netExpected),
-            netIncomePositive: netPositive,
-            incomeExpenseRatio: ratioDisplay
-          },
-          summaryReady: true
-        });
-      }
 
       // 汇总数值仅在 fetchSummary 中计算，这里不覆盖以避免受过滤器影响
 

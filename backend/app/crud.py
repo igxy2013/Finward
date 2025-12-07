@@ -390,34 +390,60 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
         hh_id2 = hh_id
         stmt_acc = select(models.Account).where(models.Account.household_id == hh_id2)
         accs = session.scalars(stmt_acc).all()
-        # 统一以传入的区间 [start, end] 为准，按账户起始日期截断
         end_date = end or datetime.now(timezone.utc).date()
         range_start = start or end_date
+        from calendar import monthrange as _mr
+        def _clamp_day(yy: int, mm: int, dd: int) -> int:
+            return max(1, min(_mr(yy, mm)[1], int(dd or 1)))
+        start_idx = range_start.year * 12 + range_start.month
+        end_idx = end_date.year * 12 + end_date.month
         for a in accs:
-            # 负债：月供累计，起始为贷款开始或创建日期
-            if a.monthly_payment and (a.loan_term_months is None or a.loan_term_months > 0):
-                start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else end_date)
-                s_eff = max(range_start, start_base)
-                months_eff = 0 if end_date < s_eff else ((end_date.year - s_eff.year) * 12 + (end_date.month - s_eff.month) + 1)
-                limit = a.loan_term_months if a.loan_term_months is not None else months_eff
-                if getattr(a, "loan_end_date", None):
-                    ei = a.loan_end_date.year * 12 + a.loan_end_date.month
-                    si = s_eff.year * 12 + s_eff.month
-                    end_cap = max(0, ei - si + 1)
-                    limit = min(limit, end_cap)
-                exp_exp += Decimal(a.monthly_payment) * Decimal(min(months_eff, limit))
-            # 资产：月收益累计，起始为投资开始或创建日期
-            if a.monthly_income and (a.investment_term_months is None or a.investment_term_months > 0):
-                start_base2 = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else end_date)
-                s_eff2 = max(range_start, start_base2)
-                months_eff2 = 0 if end_date < s_eff2 else ((end_date.year - s_eff2.year) * 12 + (end_date.month - s_eff2.month) + 1)
-                limit2 = a.investment_term_months if a.investment_term_months is not None else months_eff2
-                if getattr(a, "invest_end_date", None):
-                    ei2 = a.invest_end_date.year * 12 + a.invest_end_date.month
-                    si2 = s_eff2.year * 12 + s_eff2.month
-                    end_cap2 = max(0, ei2 - si2 + 1)
-                    limit2 = min(limit2, end_cap2)
-                exp_inc += Decimal(a.monthly_income) * Decimal(min(months_eff2, limit2))
+            if a.monthly_payment and Decimal(a.monthly_payment) > 0 and (a.loan_term_months is None or a.loan_term_months > 0):
+                start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else range_start)
+                sidx = start_base.year * 12 + start_base.month
+                term = int(a.loan_term_months or 0)
+                loan_end = getattr(a, "loan_end_date", None)
+                for idx in range(start_idx, end_idx + 1):
+                    if idx < sidx:
+                        continue
+                    yy = idx // 12
+                    mm = idx % 12
+                    if mm == 0:
+                        yy -= 1
+                        mm = 12
+                    dd = _clamp_day(yy, mm, start_base.day)
+                    cand = date(yy, mm, dd)
+                    if cand < start_base:
+                        continue
+                    if loan_end and cand > loan_end:
+                        break
+                    months_elapsed = idx - sidx
+                    if term > 0 and months_elapsed >= term:
+                        break
+                    exp_exp += Decimal(a.monthly_payment)
+            if a.monthly_income and Decimal(a.monthly_income) > 0 and (a.investment_term_months is None or a.investment_term_months > 0):
+                start_base2 = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else range_start)
+                sidx2 = start_base2.year * 12 + start_base2.month
+                term2 = int(a.investment_term_months or 0)
+                invest_end = getattr(a, "invest_end_date", None)
+                for idx in range(start_idx, end_idx + 1):
+                    if idx < sidx2:
+                        continue
+                    yy = idx // 12
+                    mm = idx % 12
+                    if mm == 0:
+                        yy -= 1
+                        mm = 12
+                    dd = _clamp_day(yy, mm, start_base2.day)
+                    cand = date(yy, mm, dd)
+                    if cand < start_base2:
+                        continue
+                    if invest_end and cand > invest_end:
+                        break
+                    months_elapsed2 = idx - sidx2
+                    if term2 > 0 and months_elapsed2 >= term2:
+                        break
+                    exp_inc += Decimal(a.monthly_income)
     elif effective_scope_key == "all":
         # 全部范围：账号的月供/月收益按各自起始日至“end”进行月度累加，并受期限限制
         hh_id2 = hh_id

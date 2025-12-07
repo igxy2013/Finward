@@ -390,6 +390,15 @@ Page({
             const y = rangeStart.getFullYear();
             const m = rangeStart.getMonth() + 1;
             const d = clampDay(y, m, 1);
+            const loanEndStr = acc.loan_end_date;
+            if (loanEndStr) {
+              const e = new Date(String(loanEndStr).trim().replace(/-/g, "/"));
+              if (!isNaN(e.getTime())) {
+                const ei = e.getFullYear() * 12 + (e.getMonth() + 1);
+                const mi = y * 12 + m;
+                if (mi > ei) return;
+              }
+            }
             pushPayment(acc, y, m, d);
             return;
           }
@@ -735,10 +744,15 @@ Page({
       const centerX = width / 2;
       const centerY = height / 2;
       const radius = Math.min(width, height) * 0.38;
+      const innerRadius = radius * 0.58;
       if (!data.length || data.every(x => Number(x.value) <= 0)) {
         ctx.fillStyle = 'rgba(255,255,255,0.1)';
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI);
         ctx.fill();
         return;
       }
@@ -749,8 +763,8 @@ Page({
         const angle = percentage * 2 * Math.PI;
         ctx.fillStyle = item.color;
         ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + angle);
+        ctx.arc(centerX, centerY, innerRadius, currentAngle + angle, currentAngle, true);
         ctx.closePath();
         ctx.fill();
         currentAngle += angle;
@@ -774,10 +788,15 @@ Page({
       const centerX = width / 2;
       const centerY = height / 2;
       const radius = Math.min(width, height) * 0.38;
+      const innerRadius = radius * 0.58;
       if (!data.length || data.every(x => Number(x.value) <= 0)) {
         ctx.fillStyle = 'rgba(255,255,255,0.1)';
         ctx.beginPath();
         ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI);
         ctx.fill();
         return;
       }
@@ -788,8 +807,8 @@ Page({
         const angle = percentage * 2 * Math.PI;
         ctx.fillStyle = item.color;
         ctx.beginPath();
-        ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + angle);
+        ctx.arc(centerX, centerY, innerRadius, currentAngle + angle, currentAngle, true);
         ctx.closePath();
         ctx.fill();
         currentAngle += angle;
@@ -1261,7 +1280,8 @@ Page({
 
       let debts = [];
       try {
-        const liabilities = await api.listAccounts("liability");
+        let liabilities = [];
+        try { liabilities = await api.listAccounts("liability"); } catch (eL) { liabilities = []; }
         const clampDay = (yy, mm, dd) => { const dim = new Date(yy, mm, 0).getDate(); return Math.max(1, Math.min(dim, Number(dd) || 1)); };
         const pushPayment = (acc, yy, mm, dd) => {
           const dt = `${yy}-${String(mm).padStart(2, '0')}-${String(dd).padStart(2, '0')}`;
@@ -1270,9 +1290,23 @@ Page({
         (liabilities || []).forEach((acc) => {
           const mp = Number(acc.monthly_payment || 0);
           const startStr = acc.loan_start_date;
+          const term = Number(acc.loan_term_months || 0);
+          const endStr = acc.loan_end_date;
           if (!mp) return;
           if (!rangeStart || !rangeEnd) return;
-          if (!startStr) { const dd = clampDay(y, m, 1); pushPayment(acc, y, m, dd); return; }
+          if (!startStr) {
+            const dd = clampDay(y, m, 1);
+            if (endStr) {
+              const e = new Date(String(endStr).trim().replace(/-/g, '/'));
+              if (!isNaN(e.getTime())) {
+                const ei = e.getFullYear() * 12 + (e.getMonth() + 1);
+                const mi = y * 12 + m;
+                if (mi > ei) return;
+              }
+            }
+            pushPayment(acc, y, m, dd);
+            return;
+          }
           const s = new Date(String(startStr).trim().replace(/-/g, "/"));
           if (isNaN(s.getTime())) return;
           const dueDay = s.getDate();
@@ -1282,6 +1316,18 @@ Page({
             const cand = new Date(yy, mm - 1, dd);
             if (cand < s) { mm += 1; if (mm > 12) { mm = 1; yy += 1; } continue; }
             if (cand > rangeEnd) break;
+            const monthIndex = yy * 12 + mm;
+            const startIndex = s.getFullYear() * 12 + (s.getMonth() + 1);
+            const monthsElapsed = monthIndex - startIndex;
+            if (monthsElapsed < 0) { mm += 1; if (mm > 12) { mm = 1; yy += 1; } continue; }
+            if (term > 0 && monthsElapsed >= term) break;
+            if (endStr) {
+              const e = new Date(String(endStr).trim().replace(/-/g, '/'));
+              if (!isNaN(e.getTime())) {
+                const ei = e.getFullYear() * 12 + (e.getMonth() + 1);
+                if (monthIndex > ei) break;
+              }
+            }
             if (cand >= rangeStart && cand <= rangeEnd) pushPayment(acc, yy, mm, dd);
             mm += 1; if (mm > 12) { mm = 1; yy += 1; }
           }
