@@ -76,12 +76,15 @@ const externalRequest = (url, options = {}) => {
     let requestUrl = url;
     const params = { ...options.data };
     
-    // 如果是财务统计API，添加user_id和token参数
     if (url.includes('/api/public/finance/stats')) {
-      const config = require('../config.js');
-      params.user_id = config.financeApi.userId;
-      params.token = `finance_token_${config.financeApi.userEmail}`;
-      console.log('财务统计API参数:', params);
+      const cfg = (app?.globalData?.financeApi) || {};
+      const def = require('../config.js').financeApi;
+      const userId = cfg.userId || def.userId;
+      const userEmail = cfg.userEmail || def.userEmail;
+      const baseUrl = cfg.baseUrl || def.baseUrl || 'https://acbim.cn';
+      requestUrl = `${baseUrl}/api/public/finance/stats`;
+      params.user_id = userId;
+      params.token = `finance_token_${userEmail}`;
     }
     
     if (params) {
@@ -155,7 +158,7 @@ module.exports = {
   ,listRentReminders: (days = 14) => request(`/tenants/rent/reminders`, { data: { days } })
   ,getFinanceStats: (timeRange, monthStr) => {
     const data = monthStr ? { time_range: timeRange, month: monthStr } : { time_range: timeRange };
-    return externalRequest(`https://acbim.cn/api/public/finance/stats`, { data });
+    return externalRequest(`/api/public/finance/stats`, { data });
   }
   ,testAuth: () => request(`/auth/me`)
   ,saveMonthlySnapshot: (year, month, external_income) => {

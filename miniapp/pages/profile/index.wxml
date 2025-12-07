@@ -74,7 +74,37 @@
       <button class="small-btn primary join-btn" bindtap="handleJoin" loading="{{joining}}">加入</button>
     </view>
   </view>
+  <view class="card" wx:if="{{isLoggedIn}}">
+    <view class="section-header">
+      <text class="section-title">工具</text>
+    </view>
+    <view class="tools-row">
+      <button class="big-action-btn primary" bindtap="openFinanceConfig">外部API配置</button>
+    </view>
+  </view>
   <view class="footer" wx:if="{{isLoggedIn}}">
     <button class="small-btn logout-btn" bindtap="handleLogout">退出登录</button>
+  </view>
+  <view class="finance-modal" wx:if="{{showFinanceModal}}">
+    <view class="modal-mask" bindtap="closeFinanceConfig"></view>
+    <view class="modal-body">
+      <text class="modal-title">外部API配置</text>
+      <view class="form-item">
+        <text class="label">用户ID</text>
+        <input class="text-input" placeholder="输入用户ID" value="{{financeUserId}}" bindinput="onFinanceUserIdInput" />
+      </view>
+      <view class="form-item">
+        <text class="label">邮箱</text>
+        <input class="text-input" placeholder="输入邮箱" value="{{financeEmail}}" bindinput="onFinanceEmailInput" />
+      </view>
+      <view class="form-item">
+        <text class="label">API地址</text>
+        <input class="text-input" placeholder="例如 https://acbim.cn" value="{{financeBaseUrl}}" bindinput="onFinanceBaseUrlInput" />
+      </view>
+      <view class="modal-actions">
+        <button class="modal-btn" bindtap="closeFinanceConfig">取消</button>
+        <button class="modal-btn primary" bindtap="saveFinanceApiConfig" loading="{{savingFinance}}">保存</button>
+      </view>
+    </view>
   </view>
 </view>

@@ -4,6 +4,7 @@ App({
     token: "",
     userId: null,
     userEmail: null,
+    financeApi: { userId: "", userEmail: "", baseUrl: "https://acbim.cn" },
     // 请在这里配置实际的用户信息
     // 配置方法：
     // 1. testUserId: 数据库中实际用户的ID
@@ -25,8 +26,15 @@ App({
         this.globalData.token = token;
       }
     } catch (e) {}
+    try {
+      const uid = wx.getStorageSync('fw_finance_api_user_id');
+      const email = wx.getStorageSync('fw_finance_api_email');
+      const base = wx.getStorageSync('fw_finance_api_base_url');
+      if (uid) this.globalData.financeApi.userId = String(uid);
+      if (email) this.globalData.financeApi.userEmail = String(email);
+      if (base) this.globalData.financeApi.baseUrl = String(base);
+    } catch (e) {}
     this.login().catch(() => {
-      // 登录失败不阻塞启动，允许游客模式
       this.globalData.guest = true;
     });
   },
@@ -106,9 +114,13 @@ App({
     return this._loginPromise;
   },
   logout() {
-    try { wx.removeStorageSync('fw_token'); } catch (e) {}
+    try {
+      wx.clearStorageSync();
+    } catch (e) {}
     this.globalData.token = "";
     this.globalData.userInfo = null;
+    this.globalData.userId = null;
+    this.globalData.userEmail = null;
     this.globalData.guest = true;
   }
 });

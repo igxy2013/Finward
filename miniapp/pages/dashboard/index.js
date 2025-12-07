@@ -143,6 +143,8 @@ Page({
     this.preloadDesignServiceStats();
   },
   async preloadDesignServiceStats() {
+    const app = getApp();
+    if (!app?.globalData?.token || app.globalData.guest) return;
     try {
       const stats = await api.getFinanceStats('month');
       try { wx.setStorageSync('fw_design_service_stats_month', { data: stats, ts: Date.now() }); } catch (e) {}

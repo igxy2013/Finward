@@ -176,6 +176,71 @@
   justify-content: flex-end;
   margin-top: 16rpx;
 }
+.big-action-btn {
+  width: 100%;
+  height: 84rpx;
+  border-radius: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 34rpx;
+  box-shadow: 0 12rpx 24rpx rgba(0,0,0,0.08);
+}
+.big-action-btn.primary {
+  background-color: #43B176;
+  color: #ffffff;
+}
+
+.finance-modal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 1000;
+}
+.modal-mask {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0,0,0,0.45);
+}
+.modal-body {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 84vw;
+  max-width: 680rpx;
+  background-color: #ffffff;
+  border-radius: 24rpx;
+  padding: 32rpx;
+  box-shadow: 0 20rpx 40rpx rgba(0,0,0,0.15);
+}
+.modal-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #111827;
+  margin-bottom: 16rpx;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+.modal-btn {
+  flex: 1;
+  height: 72rpx;
+  border-radius: 16rpx;
+  font-size: 30rpx;
+}
+.modal-btn.primary {
+  background-color: #43B176;
+  color: #ffffff;
+}
 
 .invite-row, .join-row {
   display: flex;

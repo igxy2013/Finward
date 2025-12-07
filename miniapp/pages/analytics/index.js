@@ -130,7 +130,7 @@ Page({
           riskCategory: "-",
           riskCategoryAmount: "￥0.00"
         }
-      });
+      }, () => { this.drawIncomePie(); this.drawExpensePie(); this.drawTrendChart(); this.drawCashflowChart(); this.drawIncomeExpenseRatioTrend(); });
       return;
     }
     this.fetchAnalytics(true);
@@ -171,7 +171,7 @@ Page({
           riskCategory: "-",
           riskCategoryAmount: "￥0.00"
         }
-      });
+      }, () => { this.drawIncomePie(); this.drawExpensePie(); this.drawTrendChart(); this.drawCashflowChart(); this.drawIncomeExpenseRatioTrend(); });
       return;
     }
     this.fetchAnalytics(true);
@@ -326,8 +326,8 @@ Page({
     try {
       const stats = await api.fetchStats(months);
       const decorate = (slices = [], kind = 'income') => {
-        const paletteIncome = ["#43B176", "#3b82f6", "#06b6d4", "#a855f7", "#f59e0b", "#22c55e"];
-        const paletteExpense = ["#ef4444", "#3b82f6", "#22c55e", "#a855f7", "#f59e0b", "#06b6d4"];
+        const paletteIncome = ["#10B981", "#3B82F6", "#8B5CF6", "#F59E0B", "#EC4899", "#06B6D4", "#6366F1", "#14B8A6"];
+        const paletteExpense = ["#EF4444", "#F59E0B", "#3B82F6", "#8B5CF6", "#10B981", "#EC4899", "#F97316", "#06B6D4"];
         const palette = kind === 'income' ? paletteIncome : paletteExpense;
         return (slices || []).map((it, idx) => ({ name: it.category, value: Number(it.amount || 0), percentage: Number(it.percentage || 0).toFixed(1), color: palette[idx % palette.length] }));
       };
@@ -801,7 +801,7 @@ Page({
       const centerX = width / 2;
       const centerY = height / 2;
       const radius = Math.min(width, height) * 0.38;
-      const innerRadius = radius * 0.58;
+      const innerRadius = radius * 0.65;
       if (!data.length || data.every(x => Number(x.value) <= 0)) {
         ctx.fillStyle = 'rgba(255,255,255,0.1)';
         ctx.beginPath();
@@ -818,12 +818,25 @@ Page({
         const percentage = parseFloat(item.percentage) / 100;
         if (!percentage || percentage <= 0) return;
         const angle = percentage * 2 * Math.PI;
+        
+        // 增加间隙
+        const gap = data.length > 1 ? 0.02 : 0;
+        const start = currentAngle + (percentage > gap ? gap / 2 : 0);
+        const end = currentAngle + angle - (percentage > gap ? gap / 2 : 0);
+        
         ctx.fillStyle = item.color;
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + angle);
-        ctx.arc(centerX, centerY, innerRadius, currentAngle + angle, currentAngle, true);
+        ctx.arc(centerX, centerY, radius, start, end);
+        ctx.arc(centerX, centerY, innerRadius, end, start, true);
         ctx.closePath();
+        
+        ctx.save();
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = 'rgba(0,0,0,0.1)';
+        ctx.shadowOffsetY = 2;
         ctx.fill();
+        ctx.restore();
+        
         currentAngle += angle;
       });
       let angleStart = -Math.PI / 2;
@@ -835,16 +848,16 @@ Page({
         const mid = angleStart + ang / 2;
         const sx = centerX + Math.cos(mid) * radius;
         const sy = centerY + Math.sin(mid) * radius;
-        const ex = centerX + Math.cos(mid) * (radius + 8);
-        let ey = centerY + Math.sin(mid) * (radius + 8);
+        const ex = centerX + Math.cos(mid) * (radius + 12);
+        let ey = centerY + Math.sin(mid) * (radius + 12);
         const right = Math.cos(mid) >= 0;
-        const hx = right ? ex + 28 : ex - 28;
+        const hx = right ? ex + 20 : ex - 20;
         const text = `￥${this.formatNumber(item.value)}`;
-        labelsInc.push({ sx, sy, ex, ey, hx, right, text });
+        labelsInc.push({ sx, sy, ex, ey, hx, right, text, color: item.color });
         angleStart += ang;
       });
-      const minGapInc = 14;
-      const clampYInc = (y) => Math.max(12, Math.min(height - 12, y));
+      const minGapInc = 16;
+      const clampYInc = (y) => Math.max(14, Math.min(height - 14, y));
       const adjustGroupInc = (group) => {
         group.sort((a, b) => a.ey - b.ey);
         for (let i = 1; i < group.length; i++) {
@@ -864,26 +877,36 @@ Page({
       const leftInc = labelsInc.filter(l => !l.right);
       adjustGroupInc(rightInc);
       adjustGroupInc(leftInc);
-      ctx.strokeStyle = '#94a3b8';
+      
       ctx.lineWidth = 1;
       labelsInc.forEach(l => {
+        ctx.strokeStyle = l.color;
         ctx.beginPath();
         ctx.moveTo(l.sx, l.sy);
         ctx.lineTo(l.ex, l.ey);
         ctx.lineTo(l.hx, l.ey);
         ctx.stroke();
-        ctx.fillStyle = '#374151';
+        
+        ctx.fillStyle = l.color;
+        ctx.beginPath();
+        ctx.arc(l.sx, l.sy, 2, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.fillStyle = '#4B5563';
         ctx.font = '11px sans-serif';
         ctx.textAlign = l.right ? 'left' : 'right';
         ctx.textBaseline = 'middle';
         ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
       });
       const totalInc = (data || []).reduce((s, it) => s + (Number(it.value) > 0 ? Number(it.value) : 0), 0);
-      ctx.fillStyle = '#374151';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '14px sans-serif';
-      ctx.fillText(`￥${this.formatNumber(totalInc)}`, centerX, centerY);
+      ctx.fillStyle = '#9CA3AF';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('总收入', centerX, centerY - 10);
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText(`￥${this.formatNumber(totalInc)}`, centerX, centerY + 10);
     });
   },
   drawExpensePie() {
@@ -903,7 +926,7 @@ Page({
       const centerX = width / 2;
       const centerY = height / 2;
       const radius = Math.min(width, height) * 0.38;
-      const innerRadius = radius * 0.58;
+      const innerRadius = radius * 0.65;
       if (!data.length || data.every(x => Number(x.value) <= 0)) {
         ctx.fillStyle = 'rgba(255,255,255,0.1)';
         ctx.beginPath();
@@ -920,12 +943,25 @@ Page({
         const percentage = parseFloat(item.percentage) / 100;
         if (!percentage || percentage <= 0) return;
         const angle = percentage * 2 * Math.PI;
+        
+        // 增加间隙
+        const gap = data.length > 1 ? 0.02 : 0;
+        const start = currentAngle + (percentage > gap ? gap / 2 : 0);
+        const end = currentAngle + angle - (percentage > gap ? gap / 2 : 0);
+        
         ctx.fillStyle = item.color;
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + angle);
-        ctx.arc(centerX, centerY, innerRadius, currentAngle + angle, currentAngle, true);
+        ctx.arc(centerX, centerY, radius, start, end);
+        ctx.arc(centerX, centerY, innerRadius, end, start, true);
         ctx.closePath();
+        
+        ctx.save();
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = 'rgba(0,0,0,0.1)';
+        ctx.shadowOffsetY = 2;
         ctx.fill();
+        ctx.restore();
+        
         currentAngle += angle;
       });
       let angleStart = -Math.PI / 2;
@@ -937,16 +973,16 @@ Page({
         const mid = angleStart + ang / 2;
         const sx = centerX + Math.cos(mid) * radius;
         const sy = centerY + Math.sin(mid) * radius;
-        const ex = centerX + Math.cos(mid) * (radius + 8);
-        let ey = centerY + Math.sin(mid) * (radius + 8);
+        const ex = centerX + Math.cos(mid) * (radius + 12);
+        let ey = centerY + Math.sin(mid) * (radius + 12);
         const right = Math.cos(mid) >= 0;
-        const hx = right ? ex + 28 : ex - 28;
+        const hx = right ? ex + 20 : ex - 20;
         const text = `￥${this.formatNumber(item.value)}`;
-        labelsExp.push({ sx, sy, ex, ey, hx, right, text });
+        labelsExp.push({ sx, sy, ex, ey, hx, right, text, color: item.color });
         angleStart += ang;
       });
-      const minGapExp = 14;
-      const clampYExp = (y) => Math.max(12, Math.min(height - 12, y));
+      const minGapExp = 16;
+      const clampYExp = (y) => Math.max(14, Math.min(height - 14, y));
       const adjustGroupExp = (group) => {
         group.sort((a, b) => a.ey - b.ey);
         for (let i = 1; i < group.length; i++) {
@@ -966,26 +1002,36 @@ Page({
       const leftExp = labelsExp.filter(l => !l.right);
       adjustGroupExp(rightExp);
       adjustGroupExp(leftExp);
-      ctx.strokeStyle = '#94a3b8';
+      
       ctx.lineWidth = 1;
       labelsExp.forEach(l => {
+        ctx.strokeStyle = l.color;
         ctx.beginPath();
         ctx.moveTo(l.sx, l.sy);
         ctx.lineTo(l.ex, l.ey);
         ctx.lineTo(l.hx, l.ey);
         ctx.stroke();
-        ctx.fillStyle = '#374151';
+        
+        ctx.fillStyle = l.color;
+        ctx.beginPath();
+        ctx.arc(l.sx, l.sy, 2, 0, 2 * Math.PI);
+        ctx.fill();
+        
+        ctx.fillStyle = '#4B5563';
         ctx.font = '11px sans-serif';
         ctx.textAlign = l.right ? 'left' : 'right';
         ctx.textBaseline = 'middle';
         ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
       });
       const totalExp = (data || []).reduce((s, it) => s + (Number(it.value) > 0 ? Number(it.value) : 0), 0);
-      ctx.fillStyle = '#374151';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '14px sans-serif';
-      ctx.fillText(`￥${this.formatNumber(totalExp)}`, centerX, centerY);
+      ctx.fillStyle = '#9CA3AF';
+      ctx.font = '12px sans-serif';
+      ctx.fillText('总支出', centerX, centerY - 10);
+      ctx.fillStyle = '#111827';
+      ctx.font = 'bold 16px sans-serif';
+      ctx.fillText(`￥${this.formatNumber(totalExp)}`, centerX, centerY + 10);
     });
   },
   prepareDailySeries(items, startDate, endDate) {
@@ -1018,21 +1064,17 @@ Page({
         const ctx = canvas.getContext('2d');
         ctx.scale(dpr, dpr);
         const w = rect.width, h = rect.height;
-        let padL = 40; const padR = 16, padT = 16, padB = 24;
+        let padL = 40; const padR = 16, padT = 20, padB = 30;
         let iw = 0, ih = 0;
         const drawEmpty = (text) => {
           ctx.clearRect(0, 0, w, h);
-          ctx.fillStyle = 'rgba(255,255,255,0.04)';
-          ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = 'rgba(17,24,39,0.4)';
+          ctx.fillStyle = '#9CA3AF';
           ctx.font = '14px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(text, w / 2, h / 2);
         };
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = 'rgba(255,255,255,0.04)';
-        ctx.fillRect(0, 0, w, h);
         const hasIncome = !!series && series.length > 0 && !series.every(v => Number(v) <= 0);
         const hasExpense = !!expenseSeries && expenseSeries.length > 0 && !expenseSeries.every(v => Number(v) <= 0);
         if (!hasIncome && !hasExpense) { drawEmpty('暂无收支趋势'); return; }
@@ -1050,23 +1092,19 @@ Page({
         );
         const minVal = 0;
         const range = (maxVal - minVal) || 1;
-        ctx.font = '12px sans-serif';
+        ctx.font = '10px sans-serif';
         const labelW = (ctx.measureText(this.formatAxisValue(maxVal)).width || 0);
         padL = Math.max(40, Math.ceil(labelW) + 12);
         iw = w - padL - padR;
         ih = h - padT - padB;
-        ctx.strokeStyle = 'rgba(17,24,39,0.15)';
+        
+        ctx.strokeStyle = '#E5E7EB';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(padL, h - padB);
         ctx.lineTo(w - padR, h - padB);
         ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(padL, padT);
-        ctx.lineTo(padL, h - padB);
-        ctx.stroke();
         const ticks = 4;
-        ctx.strokeStyle = 'rgba(17,24,39,0.08)';
         for (let i = 0; i <= ticks; i++) {
           const y = padT + (i / ticks) * ih;
           ctx.beginPath();
@@ -1074,255 +1112,150 @@ Page({
           ctx.lineTo(w - padR, y);
           ctx.stroke();
           const val = maxVal - (i / ticks) * range;
-          ctx.fillStyle = 'rgba(17,24,39,0.6)';
-          ctx.font = '12px sans-serif';
+          ctx.fillStyle = '#9CA3AF';
           ctx.textAlign = 'right';
           ctx.textBaseline = 'middle';
-          ctx.fillText(this.formatAxisValue(val), padL - 6, y);
+          ctx.fillText(this.formatAxisValue(val), padL - 8, y);
         }
         const toXY = (idx, arr) => {
           const x = padL + (idx / Math.max(arr.length - 1, 1)) * iw;
           const y = padT + (1 - ((arr[idx] - minVal) / range)) * ih;
           return { x, y };
         };
-        if (hasIncome) {
-          const pts = new Array(series.length).fill(0).map((_, i) => toXY(i, series));
-          ctx.fillStyle = 'rgba(34,197,94,0.2)';
+        const drawArea = (dataSeries, colorStart, colorEnd, strokeColor) => {
+          const pts = new Array(dataSeries.length).fill(0).map((_, i) => toXY(i, dataSeries));
+          if (pts.length === 0) return;
+          const gradient = ctx.createLinearGradient(0, padT, 0, h - padB);
+          gradient.addColorStop(0, colorStart);
+          gradient.addColorStop(1, colorEnd);
+          ctx.fillStyle = gradient;
           ctx.beginPath();
-          if (pts.length === 1) {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
-            ctx.lineTo(pts[0].x, h - padB);
-          } else if (pts.length === 2) {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
-            ctx.lineTo(pts[1].x, pts[1].y);
-            ctx.lineTo(pts[1].x, h - padB);
-          } else {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
+          ctx.moveTo(pts[0].x, h - padB);
+          ctx.lineTo(pts[0].x, pts[0].y);
+          if (pts.length > 1) {
             for (let i = 0; i < pts.length - 1; i++) {
               const p0 = i > 0 ? pts[i - 1] : pts[i];
               const p1 = pts[i];
               const p2 = pts[i + 1];
               const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-              const t = 1;
-              const cp1x = p1.x + (p2.x - p0.x) * t / 6;
-              const cp1y = p1.y + (p2.y - p0.y) * t / 6;
-              const cp2x = p2.x - (p3.x - p1.x) * t / 6;
-              const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+              const cp1x = p1.x + (p2.x - p0.x) / 6;
+              const cp1y = p1.y + (p2.y - p0.y) / 6;
+              const cp2x = p2.x - (p3.x - p1.x) / 6;
+              const cp2y = p2.y - (p3.y - p1.y) / 6;
               ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
             }
-            ctx.lineTo(pts[pts.length - 1].x, h - padB);
           }
+          ctx.lineTo(pts[pts.length - 1].x, h - padB);
           ctx.closePath();
           ctx.fill();
-          ctx.strokeStyle = '#22c55e';
+          ctx.strokeStyle = strokeColor;
           ctx.lineWidth = 2;
           ctx.beginPath();
-          if (pts.length > 0) {
-            ctx.moveTo(pts[0].x, pts[0].y);
-            if (pts.length === 2) {
-              ctx.lineTo(pts[1].x, pts[1].y);
-            } else {
-              for (let i = 0; i < pts.length - 1; i++) {
-                const p0 = i > 0 ? pts[i - 1] : pts[i];
-                const p1 = pts[i];
-                const p2 = pts[i + 1];
-                const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-                const t = 1;
-                const cp1x = p1.x + (p2.x - p0.x) * t / 6;
-                const cp1y = p1.y + (p2.y - p0.y) * t / 6;
-                const cp2x = p2.x - (p3.x - p1.x) * t / 6;
-                const cp2y = p2.y - (p3.y - p1.y) * t / 6;
-                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-              }
-            }
-          }
-          ctx.stroke();
-          
-        }
-        if (hasExpense) {
-          const pts = new Array(expenseSeries.length).fill(0).map((_, i) => toXY(i, expenseSeries));
-          ctx.fillStyle = 'rgba(239,68,68,0.2)';
-          ctx.beginPath();
-          if (pts.length === 1) {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
-            ctx.lineTo(pts[0].x, h - padB);
-          } else if (pts.length === 2) {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
-            ctx.lineTo(pts[1].x, pts[1].y);
-            ctx.lineTo(pts[1].x, h - padB);
-          } else {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
+          ctx.moveTo(pts[0].x, pts[0].y);
+          if (pts.length > 1) {
             for (let i = 0; i < pts.length - 1; i++) {
               const p0 = i > 0 ? pts[i - 1] : pts[i];
               const p1 = pts[i];
               const p2 = pts[i + 1];
               const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-              const t = 1;
-              const cp1x = p1.x + (p2.x - p0.x) * t / 6;
-              const cp1y = p1.y + (p2.y - p0.y) * t / 6;
-              const cp2x = p2.x - (p3.x - p1.x) * t / 6;
-              const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+              const cp1x = p1.x + (p2.x - p0.x) / 6;
+              const cp1y = p1.y + (p2.y - p0.y) / 6;
+              const cp2x = p2.x - (p3.x - p1.x) / 6;
+              const cp2y = p2.y - (p3.y - p1.y) / 6;
               ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-            }
-            ctx.lineTo(pts[pts.length - 1].x, h - padB);
-          }
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          if (pts.length > 0) {
-            ctx.moveTo(pts[0].x, pts[0].y);
-            if (pts.length === 2) {
-              ctx.lineTo(pts[1].x, pts[1].y);
-            } else {
-              for (let i = 0; i < pts.length - 1; i++) {
-                const p0 = i > 0 ? pts[i - 1] : pts[i];
-                const p1 = pts[i];
-                const p2 = pts[i + 1];
-                const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-                const t = 1;
-                const cp1x = p1.x + (p2.x - p0.x) * t / 6;
-                const cp1y = p1.y + (p2.y - p0.y) * t / 6;
-                const cp2x = p2.x - (p3.x - p1.x) * t / 6;
-                const cp2y = p2.y - (p3.y - p1.y) * t / 6;
-                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-              }
             }
           }
           ctx.stroke();
-          
-        }
-        if (hasNet) {
-          const pts = new Array(netSeries.length).fill(0).map((_, i) => toXY(i, netSeries));
-          ctx.fillStyle = 'rgba(99,102,241,0.2)';
-          ctx.beginPath();
-          if (pts.length === 1) {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
-            ctx.lineTo(pts[0].x, h - padB);
-          } else if (pts.length === 2) {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
-            ctx.lineTo(pts[1].x, pts[1].y);
-            ctx.lineTo(pts[1].x, h - padB);
-          } else {
-            ctx.moveTo(pts[0].x, h - padB);
-            ctx.lineTo(pts[0].x, pts[0].y);
-            for (let i = 0; i < pts.length - 1; i++) {
-              const p0 = i > 0 ? pts[i - 1] : pts[i];
-              const p1 = pts[i];
-              const p2 = pts[i + 1];
-              const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-              const t = 1;
-              const cp1x = p1.x + (p2.x - p0.x) * t / 6;
-              const cp1y = p1.y + (p2.y - p0.y) * t / 6;
-              const cp2x = p2.x - (p3.x - p1.x) * t / 6;
-              const cp2y = p2.y - (p3.y - p1.y) * t / 6;
-              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-            }
-            ctx.lineTo(pts[pts.length - 1].x, h - padB);
-          }
-          ctx.closePath();
-          ctx.fill();
-          ctx.strokeStyle = '#6366f1';
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          if (pts.length > 0) {
-            ctx.moveTo(pts[0].x, pts[0].y);
-            if (pts.length === 2) {
-              ctx.lineTo(pts[1].x, pts[1].y);
-            } else {
-              for (let i = 0; i < pts.length - 1; i++) {
-                const p0 = i > 0 ? pts[i - 1] : pts[i];
-                const p1 = pts[i];
-                const p2 = pts[i + 1];
-                const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-                const t = 1;
-                const cp1x = p1.x + (p2.x - p0.x) * t / 6;
-                const cp1y = p1.y + (p2.y - p0.y) * t / 6;
-                const cp2x = p2.x - (p3.x - p1.x) * t / 6;
-                const cp2y = p2.y - (p3.y - p1.y) * t / 6;
-                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-              }
-            }
-          }
-          ctx.stroke();
-          
-        }
-        ctx.fillStyle = 'rgba(17,24,39,0.5)';
-        ctx.font = '12px sans-serif';
+        };
+        if (hasIncome) drawArea(series, 'rgba(34,197,94,0.3)', 'rgba(34,197,94,0.0)', '#22c55e');
+        if (hasExpense) drawArea(expenseSeries, 'rgba(239,68,68,0.3)', 'rgba(239,68,68,0.0)', '#ef4444');
+        if (hasNet) drawArea(netSeries, 'rgba(99,102,241,0.3)', 'rgba(99,102,241,0.0)', '#6366f1');
+        
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         for (let i = 0; i < series.length; i++) {
           const x = padL + (i / Math.max(series.length - 1, 1)) * iw;
           const label = labels[i] || '';
-          ctx.fillText(label, x, h - 6);
+          ctx.fillText(label, x, h - 10);
         }
         const xs = new Array(series.length).fill(0).map((_, i) => padL + (i / Math.max(series.length - 1, 1)) * iw);
         this._incomeTrendMeta = { padL, padR, padT, padB, iw, ih, w, h, rect, series, expenseSeries, labels, minVal, range, xs, netSeries };
         const sel = typeof this._incomeTrendSelectedIdx === 'number' ? this._incomeTrendSelectedIdx : -1;
         if (sel >= 0 && sel < series.length) {
           const x = xs[sel];
-          const yIncome = padT + (1 - ((series[sel] - minVal) / (range || 1))) * ih;
-          const yExpense = hasExpense ? padT + (1 - ((expenseSeries[sel] - minVal) / (range || 1))) * ih : null;
-          const yNet = hasNet ? padT + (1 - (((netSeries[sel] || 0) - minVal) / (range || 1))) * ih : null;
-          ctx.strokeStyle = 'rgba(17,24,39,0.25)';
-          ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.moveTo(x, padT);
           ctx.lineTo(x, h - padB);
-          ctx.stroke();
-          if (hasIncome) {
-            ctx.fillStyle = '#22c55e';
-            ctx.beginPath();
-            ctx.arc(x, yIncome, 4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          if (hasExpense && yExpense != null) {
-            ctx.fillStyle = '#ef4444';
-            ctx.beginPath();
-            ctx.arc(x, yExpense, 4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          if (hasNet && yNet != null) {
-            ctx.fillStyle = '#6366f1';
-            ctx.beginPath();
-            ctx.arc(x, yNet, 4, 0, Math.PI * 2);
-            ctx.fill();
-          }
-          const boxW = 180, boxH = hasExpense ? (hasNet ? 100 : 78) : (hasNet ? 78 : 54);
-          const bx = Math.min(x + 8, w - padR - boxW);
-          const by = padT + 8;
-          ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          ctx.strokeStyle = 'rgba(17,24,39,0.15)';
+          ctx.strokeStyle = '#9CA3AF';
           ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.rect(bx, by, boxW, boxH);
-          ctx.fill();
+          ctx.setLineDash([4, 4]);
           ctx.stroke();
+          ctx.setLineDash([]);
+          const drawPoint = (val, color) => {
+            const y = padT + (1 - ((val - minVal) / (range || 1))) * ih;
+            ctx.beginPath();
+            ctx.arc(x, y, 4, 0, Math.PI * 2);
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fill();
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          };
+          if (hasIncome) drawPoint(series[sel], '#22c55e');
+          if (hasExpense) drawPoint(expenseSeries[sel], '#ef4444');
+          if (hasNet) drawPoint(netSeries[sel], '#6366f1');
+          
+          const boxW = 160;
+          const boxH = hasExpense ? (hasNet ? 90 : 70) : (hasNet ? 70 : 50);
+          let bx = x + 10;
+          if (bx + boxW > w - padR) bx = x - 10 - boxW;
+          const by = padT + 10;
+          
+          ctx.save();
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = 'rgba(0,0,0,0.15)';
+          ctx.fillStyle = 'rgba(255,255,255,0.95)';
+          ctx.beginPath();
+          const r = 6;
+          ctx.beginPath();
+          ctx.moveTo(bx + r, by);
+          ctx.lineTo(bx + boxW - r, by);
+          ctx.arc(bx + boxW - r, by + r, r, -Math.PI / 2, 0);
+          ctx.lineTo(bx + boxW, by + boxH - r);
+          ctx.arc(bx + boxW - r, by + boxH - r, r, 0, Math.PI / 2);
+          ctx.lineTo(bx + r, by + boxH);
+          ctx.arc(bx + r, by + boxH - r, r, Math.PI / 2, Math.PI);
+          ctx.lineTo(bx, by + r);
+          ctx.arc(bx, by + r, r, Math.PI, Math.PI * 3 / 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+          
           ctx.fillStyle = '#374151';
           ctx.textAlign = 'left';
           ctx.textBaseline = 'top';
-          ctx.fillText(labels[sel] || '', bx + 8, by + 6);
-          if (hasIncome) {
-            ctx.fillStyle = '#22c55e';
-            ctx.fillText(`收入 ${this.formatAxisValue(series[sel])}`, bx + 8, by + 26);
-          }
-          if (hasExpense) {
-            ctx.fillStyle = '#ef4444';
-            ctx.fillText(`支出 ${this.formatAxisValue(expenseSeries[sel])}`, bx + 8, by + (hasIncome ? 46 : 26));
-          }
-          if (hasNet) {
-            ctx.fillStyle = '#6366f1';
-            const yLine = hasIncome ? (hasExpense ? 66 : 46) : (hasExpense ? 46 : 26);
-            ctx.fillText(`净收入 ${this.formatAxisValue(netSeries[sel] || 0)}`, bx + 8, by + yLine);
-          }
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(labels[sel] || '', bx + 10, by + 10);
+          let currentY = by + 30;
+          const drawItem = (label, val, color) => {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(bx + 14, currentY + 6, 3, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#4B5563';
+            ctx.font = '11px sans-serif';
+            ctx.fillText(label, bx + 24, currentY);
+            ctx.textAlign = 'right';
+            ctx.fillStyle = '#111827';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText(this.formatAxisValue(val), bx + boxW - 10, currentY);
+            ctx.textAlign = 'left';
+            currentY += 20;
+          };
+          if (hasIncome) drawItem('收入', series[sel], '#22c55e');
+          if (hasExpense) drawItem('支出', expenseSeries[sel], '#ef4444');
+          if (hasNet) drawItem('净收入', netSeries[sel], '#6366f1');
         }
       });
     });
@@ -1344,7 +1277,7 @@ Page({
         const ctx = canvas.getContext('2d');
         ctx.scale(dpr, dpr);
         const w = rect.width, h = rect.height;
-        let padL = 48; const padR = 16, padT = 16, padB = 24;
+        let padL = 40; const padR = 16, padT = 20, padB = 30;
         let iw = 0, ih = 0;
         const ratios = new Array(Math.max(income.length, expense.length)).fill(0).map((_, i) => {
           const inVal = Number(income[i] || 0);
@@ -1355,150 +1288,156 @@ Page({
         const hasData = ratios.some(r => r > 0);
         const drawEmpty = (text) => {
           ctx.clearRect(0, 0, w, h);
-          ctx.fillStyle = 'rgba(255,255,255,0.04)';
-          ctx.fillRect(0, 0, w, h);
-          ctx.fillStyle = 'rgba(17,24,39,0.4)';
+          ctx.fillStyle = '#9CA3AF';
           ctx.font = '14px sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(text, w / 2, h / 2);
         };
         ctx.clearRect(0, 0, w, h);
-        ctx.fillStyle = 'rgba(255,255,255,0.04)';
-        ctx.fillRect(0, 0, w, h);
         if (!hasData) { drawEmpty('暂无收支比趋势'); return; }
         const maxR = Math.max(...ratios);
-        const minR = Math.min(...ratios.filter(r => r > 0));
-        const rangeR = (maxR - (minR || 0)) || 1;
-        ctx.font = '12px sans-serif';
+        const minR = 0;
+        const rangeR = (maxR - minR) || 1;
+        ctx.font = '10px sans-serif';
         const labelW = (ctx.measureText(`${Math.round(maxR)}%`).width || 0);
-        padL = Math.max(48, Math.ceil(labelW) + 14);
+        padL = Math.max(40, Math.ceil(labelW) + 12);
         iw = w - padL - padR; ih = h - padT - padB;
-        ctx.strokeStyle = 'rgba(17,24,39,0.15)';
+        
+        ctx.strokeStyle = '#E5E7EB';
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.moveTo(padL, h - padB);
         ctx.lineTo(w - padR, h - padB);
         ctx.stroke();
-        ctx.beginPath();
-        ctx.moveTo(padL, padT);
-        ctx.lineTo(padL, h - padB);
-        ctx.stroke();
         const ticks = 4;
-        ctx.strokeStyle = 'rgba(17,24,39,0.08)';
         for (let i = 0; i <= ticks; i++) {
           const y = padT + (i / ticks) * ih;
           ctx.beginPath();
           ctx.moveTo(padL, y);
           ctx.lineTo(w - padR, y);
+          ctx.strokeStyle = '#F3F4F6';
           ctx.stroke();
           const val = maxR - (i / ticks) * rangeR;
-          ctx.fillStyle = 'rgba(17,24,39,0.6)';
-          ctx.font = '12px sans-serif';
+          ctx.fillStyle = '#9CA3AF';
           ctx.textAlign = 'right';
           ctx.textBaseline = 'middle';
-          ctx.fillText(`${Math.round(val)}%`, padL - 6, y);
+          ctx.fillText(`${Math.round(val)}%`, padL - 8, y);
         }
+        
         const toXY = (idx) => {
           const x = padL + (idx / Math.max(ratios.length - 1, 1)) * iw;
-          const y = padT + (1 - ((ratios[idx] - (minR || 0)) / rangeR)) * ih;
+          const y = padT + (1 - ((ratios[idx] - minR) / rangeR)) * ih;
           return { x, y };
         };
         const pts = new Array(ratios.length).fill(0).map((_, i) => toXY(i));
-        ctx.fillStyle = 'rgba(139,92,246,0.2)';
-        ctx.beginPath();
-        if (pts.length === 1) {
-          ctx.moveTo(pts[0].x, h - padB);
-          ctx.lineTo(pts[0].x, pts[0].y);
-          ctx.lineTo(pts[0].x, h - padB);
-        } else if (pts.length === 2) {
-          ctx.moveTo(pts[0].x, h - padB);
-          ctx.lineTo(pts[0].x, pts[0].y);
-          ctx.lineTo(pts[1].x, pts[1].y);
-          ctx.lineTo(pts[1].x, h - padB);
-        } else {
-          ctx.moveTo(pts[0].x, h - padB);
-          ctx.lineTo(pts[0].x, pts[0].y);
-          for (let i = 0; i < pts.length - 1; i++) {
-            const p0 = i > 0 ? pts[i - 1] : pts[i];
-            const p1 = pts[i];
-            const p2 = pts[i + 1];
-            const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-            const t = 1;
-            const cp1x = p1.x + (p2.x - p0.x) * t / 6;
-            const cp1y = p1.y + (p2.y - p0.y) * t / 6;
-            const cp2x = p2.x - (p3.x - p1.x) * t / 6;
-            const cp2y = p2.y - (p3.y - p1.y) * t / 6;
-            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
-          }
-          ctx.lineTo(pts[pts.length - 1].x, h - padB);
-        }
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = '#8b5cf6';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
+        
         if (pts.length > 0) {
-          ctx.moveTo(pts[0].x, pts[0].y);
-          if (pts.length === 2) {
-            ctx.lineTo(pts[1].x, pts[1].y);
-          } else {
+          const gradient = ctx.createLinearGradient(0, padT, 0, h - padB);
+          gradient.addColorStop(0, 'rgba(139, 92, 246, 0.3)');
+          gradient.addColorStop(1, 'rgba(139, 92, 246, 0.0)');
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, h - padB);
+          ctx.lineTo(pts[0].x, pts[0].y);
+          if (pts.length > 1) {
             for (let i = 0; i < pts.length - 1; i++) {
               const p0 = i > 0 ? pts[i - 1] : pts[i];
               const p1 = pts[i];
               const p2 = pts[i + 1];
               const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
-              const t = 1;
-              const cp1x = p1.x + (p2.x - p0.x) * t / 6;
-              const cp1y = p1.y + (p2.y - p0.y) * t / 6;
-              const cp2x = p2.x - (p3.x - p1.x) * t / 6;
-              const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+              const cp1x = p1.x + (p2.x - p0.x) / 6;
+              const cp1y = p1.y + (p2.y - p0.y) / 6;
+              const cp2x = p2.x - (p3.x - p1.x) / 6;
+              const cp2y = p2.y - (p3.y - p1.y) / 6;
               ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
             }
           }
+          ctx.lineTo(pts[pts.length - 1].x, h - padB);
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#8B5CF6';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          if (pts.length > 1) {
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p0 = i > 0 ? pts[i - 1] : pts[i];
+              const p1 = pts[i];
+              const p2 = pts[i + 1];
+              const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+              const cp1x = p1.x + (p2.x - p0.x) / 6;
+              const cp1y = p1.y + (p2.y - p0.y) / 6;
+              const cp2x = p2.x - (p3.x - p1.x) / 6;
+              const cp2y = p2.y - (p3.y - p1.y) / 6;
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+          }
+          ctx.stroke();
         }
-        ctx.stroke();
         
-        ctx.fillStyle = 'rgba(17,24,39,0.5)';
-        ctx.font = '12px sans-serif';
+        ctx.fillStyle = '#6B7280';
+        ctx.font = '10px sans-serif';
         ctx.textAlign = 'center';
         for (let i = 0; i < ratios.length; i++) {
           const x = padL + (i / Math.max(ratios.length - 1, 1)) * iw;
           const label = labels[i] || '';
-          ctx.fillText(label, x, h - 6);
+          ctx.fillText(label, x, h - 10);
         }
         const xs = new Array(ratios.length).fill(0).map((_, i) => padL + (i / Math.max(ratios.length - 1, 1)) * iw);
-        this._incomeExpenseRatioMeta = { padL, padR, padT, padB, iw, ih, w, h, rect, ratios, labels, xs, minR: (minR || 0), rangeR };
+        this._incomeExpenseRatioMeta = { padL, padR, padT, padB, iw, ih, w, h, rect, ratios, labels, xs, minR, rangeR };
         const sel = typeof this._incomeExpenseRatioSelectedIdx === 'number' ? this._incomeExpenseRatioSelectedIdx : -1;
         if (sel >= 0 && sel < ratios.length) {
           const x = xs[sel];
-          const y = padT + (1 - ((ratios[sel] - (minR || 0)) / (rangeR || 1))) * ih;
-          ctx.strokeStyle = 'rgba(17,24,39,0.25)';
-          ctx.lineWidth = 1;
+          const y = padT + (1 - ((ratios[sel] - minR) / rangeR)) * ih;
           ctx.beginPath();
           ctx.moveTo(x, padT);
           ctx.lineTo(x, h - padB);
+          ctx.strokeStyle = '#9CA3AF';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([4, 4]);
           ctx.stroke();
-          ctx.fillStyle = '#8b5cf6';
+          ctx.setLineDash([]);
           ctx.beginPath();
           ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#FFFFFF';
           ctx.fill();
-          const boxW = 160, boxH = 54;
-          const bx = Math.min(x + 8, w - padR - boxW);
-          const by = padT + 8;
-          ctx.fillStyle = 'rgba(255,255,255,0.9)';
-          ctx.strokeStyle = 'rgba(17,24,39,0.15)';
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.rect(bx, by, boxW, boxH);
-          ctx.fill();
+          ctx.strokeStyle = '#8B5CF6';
+          ctx.lineWidth = 2;
           ctx.stroke();
+          
+          const boxW = 120, boxH = 50;
+          let bx = x + 10;
+          if (bx + boxW > w - padR) bx = x - 10 - boxW;
+          const by = padT + 10;
+          
+          ctx.save();
+          ctx.shadowBlur = 8;
+          ctx.shadowColor = 'rgba(0,0,0,0.15)';
+          ctx.fillStyle = 'rgba(255,255,255,0.95)';
+          const r = 6;
+          ctx.beginPath();
+          ctx.moveTo(bx + r, by);
+          ctx.lineTo(bx + boxW - r, by);
+          ctx.arc(bx + boxW - r, by + r, r, -Math.PI / 2, 0);
+          ctx.lineTo(bx + boxW, by + boxH - r);
+          ctx.arc(bx + boxW - r, by + boxH - r, r, 0, Math.PI / 2);
+          ctx.lineTo(bx + r, by + boxH);
+          ctx.arc(bx + r, by + boxH - r, r, Math.PI / 2, Math.PI);
+          ctx.lineTo(bx, by + r);
+          ctx.arc(bx, by + r, r, Math.PI, Math.PI * 3 / 2);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+          
           ctx.fillStyle = '#374151';
           ctx.textAlign = 'left';
           ctx.textBaseline = 'top';
-          ctx.fillText(labels[sel] || '', bx + 8, by + 6);
-          ctx.fillStyle = '#8b5cf6';
-          ctx.fillText(`收支比 ${Math.round(ratios[sel] || 0)}%`, bx + 8, by + 26);
+          ctx.font = 'bold 12px sans-serif';
+          ctx.fillText(labels[sel] || '', bx + 10, by + 8);
+          ctx.fillStyle = '#8B5CF6';
+          ctx.font = 'bold 14px sans-serif';
+          ctx.fillText(`${Math.round(ratios[sel])}%`, bx + 10, by + 28);
         }
       });
     });

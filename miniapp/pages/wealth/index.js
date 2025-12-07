@@ -233,19 +233,24 @@ Page({
       const res = await api.fetchWealthSummary(start, end, sel);
       let designServiceIncome = 0;
       try {
-        const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
-        const monthStr = `${y}-${String(m).padStart(2, '0')}`;
-        const cacheKey = `fw_design_service_stats_month:${monthStr}`;
-        let cached = null;
-        try { cached = wx.getStorageSync(cacheKey); } catch (e) { cached = null; }
-        const fresh = cached && cached.data && cached.data.success && (Date.now() - (cached.ts || 0) < 5 * 60 * 1000);
-        if (fresh) {
-          designServiceIncome = Number(cached.data.data?.total_revenue || 0);
+        const app = getApp();
+        if (!app?.globalData?.token || app.globalData.guest) {
+          designServiceIncome = 0;
         } else {
-          const stats = isCurrentMonth ? await api.getFinanceStats('month') : await api.getFinanceStats('month', monthStr);
-          if (stats.success) {
-            designServiceIncome = Number(stats.data.total_revenue || 0);
-            try { wx.setStorageSync(cacheKey, { data: stats, ts: Date.now() }); } catch (e) {}
+          const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
+          const monthStr = `${y}-${String(m).padStart(2, '0')}`;
+          const cacheKey = `fw_design_service_stats_month:${monthStr}`;
+          let cached = null;
+          try { cached = wx.getStorageSync(cacheKey); } catch (e) { cached = null; }
+          const fresh = cached && cached.data && cached.data.success && (Date.now() - (cached.ts || 0) < 5 * 60 * 1000);
+          if (fresh) {
+            designServiceIncome = Number(cached.data.data?.total_revenue || 0);
+          } else {
+            const stats = isCurrentMonth ? await api.getFinanceStats('month') : await api.getFinanceStats('month', monthStr);
+            if (stats.success) {
+              designServiceIncome = Number(stats.data.total_revenue || 0);
+              try { wx.setStorageSync(cacheKey, { data: stats, ts: Date.now() }); } catch (e) {}
+            }
           }
         }
       } catch (err) {}
@@ -821,7 +826,8 @@ Page({
       
       let designServiceIncome = [];
       try {
-        if (sel === 'month') {
+        const app = getApp();
+        if (sel === 'month' && app?.globalData?.token && !app.globalData.guest) {
           const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
           const monthStr = `${y}-${String(m).padStart(2, '0')}`;
           const cacheKey = `fw_design_service_stats_month:${monthStr}`;

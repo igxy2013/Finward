@@ -16,7 +16,12 @@ Page({
     invite: { code: "", expiresAt: "" },
     joining: false,
     joinCode: "",
-    backfilling: false
+    backfilling: false,
+    financeUserId: '',
+    financeEmail: '',
+    financeBaseUrl: '',
+    savingFinance: false,
+    showFinanceModal: false
   },
   onShow() {
     const app = getApp();
@@ -29,6 +34,25 @@ Page({
       this.refreshMembers();
     }
     this.computeDisplay();
+  },
+  openFinanceConfig() {
+    let uid = '';
+    let email = '';
+    let base = '';
+    try {
+      uid = wx.getStorageSync('fw_finance_api_user_id') || '';
+      email = wx.getStorageSync('fw_finance_api_email') || '';
+      base = wx.getStorageSync('fw_finance_api_base_url') || '';
+      const app = getApp();
+      const cfg = app?.globalData?.financeApi || {};
+      uid = uid || cfg.userId || '';
+      email = email || cfg.userEmail || '';
+      base = base || cfg.baseUrl || '';
+    } catch (e) {}
+    this.setData({ financeUserId: uid, financeEmail: email, financeBaseUrl: base, showFinanceModal: true });
+  },
+  closeFinanceConfig() {
+    this.setData({ showFinanceModal: false });
   },
   computeDisplay() {
     const dn = (this.data.profile?.nickname) || (this.data.userInfo?.nickName) || (this.data.isLoggedIn ? '点击编辑' : '未登录');
@@ -145,6 +169,40 @@ Page({
   onAvatarUrlInput(e) {
     this.setData({ 'profile.avatar_url': e.detail.value || '' });
     this.computeDisplay();
+  },
+  onFinanceUserIdInput(e) {
+    this.setData({ financeUserId: String(e.detail.value || '') });
+  },
+  onFinanceEmailInput(e) {
+    this.setData({ financeEmail: String(e.detail.value || '') });
+  },
+  onFinanceBaseUrlInput(e) {
+    this.setData({ financeBaseUrl: String(e.detail.value || '') });
+  },
+  async saveFinanceApiConfig() {
+    if (this.data.savingFinance) return;
+    this.setData({ savingFinance: true });
+    try {
+      const uid = String(this.data.financeUserId || '').trim();
+      const email = String(this.data.financeEmail || '').trim();
+      const base = String(this.data.financeBaseUrl || '').trim();
+      if (uid) wx.setStorageSync('fw_finance_api_user_id', uid);
+      if (email) wx.setStorageSync('fw_finance_api_email', email);
+      if (base) wx.setStorageSync('fw_finance_api_base_url', base);
+      const app = getApp();
+      if (app && app.globalData) {
+        if (!app.globalData.financeApi) app.globalData.financeApi = {};
+        if (uid) app.globalData.financeApi.userId = uid;
+        if (email) app.globalData.financeApi.userEmail = email;
+        if (base) app.globalData.financeApi.baseUrl = base;
+      }
+      wx.showToast({ title: '已保存', icon: 'success' });
+      this.setData({ showFinanceModal: false });
+    } catch (e) {
+      wx.showToast({ title: '保存失败', icon: 'none' });
+    } finally {
+      this.setData({ savingFinance: false });
+    }
   },
   onChooseAvatar(e) {
     const url = e?.detail?.avatarUrl || '';
