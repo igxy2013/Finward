@@ -13,11 +13,15 @@
     "pages/cashflow-detail/index"
   ],
   "window": {
+    "navigationStyle": "custom",
     "navigationBarTitleText": "Finward 鲨鱼资产",
     "navigationBarBackgroundColor": "#43B176",
     "navigationBarTextStyle": "white",
     "backgroundColor": "#f7f8fa",
     "enablePullDownRefresh": false
+  },
+  "usingComponents": {
+    "navbar": "/components/navbar/navbar"
   },
   "tabBar": {
     "color": "#6B7280",

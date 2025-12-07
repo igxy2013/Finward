@@ -1,0 +1,12 @@
+<view class="navbar custom-class" style="height: {{navHeight}}px; background-color: {{backgroundColor}}; padding-top: {{statusBarHeight}}px;">
+  <view class="navbar-content" style="height: {{navBarHeight}}px;">
+    <view class="navbar-left" bindtap="onBack" wx:if="{{showBack}}">
+      <image class="back-icon" src="/assets/icons/arrow-left-s-line.svg" mode="aspectFit" style="{{titleColor === '#ffffff' ? 'filter: brightness(0) invert(1);' : ''}}"></image>
+    </view>
+    <view class="navbar-title" style="color: {{titleColor}};">
+      {{title}}
+    </view>
+  </view>
+</view>
+<!-- 占位符，防止内容被导航栏遮挡 -->
+<view wx:if="{{placeholder}}" style="height: {{navHeight}}px;"></view>

@@ -1,3 +1,4 @@
+<navbar title="收支管理" showBack="{{false}}"></navbar>
 <view class="page" bindtouchstart="handleSwipeStart" bindtouchmove="handleSwipeMove" bindtouchend="handleSwipeEnd" bindtouchcancel="handleSwipeCancel">
   <view wx:if="{{swipeLock}}" class="swipe-mask" catchtouchmove="handleMaskMove" bindtouchend="handleSwipeEnd" bindtouchcancel="handleSwipeCancel"></view>
   <view class="period-switcher">

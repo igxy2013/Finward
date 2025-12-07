@@ -1,3 +1,4 @@
+<navbar title="个人中心" showBack="{{false}}"></navbar>
 <view class="page">
   <view class="card">
     <view class="icon-btn edit-btn" wx:if="{{isLoggedIn && !editing}}" bindtap="toggleEdit">

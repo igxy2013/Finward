@@ -1,3 +1,4 @@
+<navbar title="资产详情"></navbar>
 <view class="page">
   <view wx:if="{{loading}}" class="loading-container">
     <view class="loading-spinner"></view>
