@@ -839,6 +839,19 @@ def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.Mo
     points: list[schemas.MonthlyPoint] = []
     if not accounts:
         return schemas.MonthlyOut(months=months, points=points)
+
+    # 预加载所有账户价值更新，避免 N+1 查询
+    av_stmt = (
+        session.query(models.AccountValueUpdate)
+        .filter(models.AccountValueUpdate.household_id == hh_id)
+        .order_by(models.AccountValueUpdate.account_id, models.AccountValueUpdate.ts.asc())
+    )
+    updates_map: dict[int, list[models.AccountValueUpdate]] = {}
+    for u in av_stmt.all():
+        if u.account_id not in updates_map:
+            updates_map[u.account_id] = []
+        updates_map[u.account_id].append(u)
+
     from calendar import monthrange
     today = datetime.now(timezone.utc).date()
     start_year = today.year
@@ -877,15 +890,19 @@ def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.Mo
                 val = max(Decimal(0), base_amt * (Decimal(1) - rate * years))
             # 覆盖为该月末最新的现值更新（若存在，以 ts <= 月末为准）
             try:
-                latest = (
-                    session.query(models.AccountValueUpdate)
-                    .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
-                    .filter(models.AccountValueUpdate.ts <= end_of_month)
-                    .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
-                    .first()
-                )
-                if latest and latest.value is not None:
-                    val = Decimal(latest.value)
+                ac_updates = updates_map.get(a.id, [])
+                if ac_updates:
+                    # 构造月末最后一秒用于比较
+                    eom_dt = datetime(y, m, last_day, 23, 59, 59, tzinfo=timezone.utc)
+                    found_val = None
+                    # 倒序查找最近的一个
+                    for u in reversed(ac_updates):
+                        if u.ts <= eom_dt:
+                            if u.value is not None:
+                                found_val = Decimal(u.value)
+                            break
+                    if found_val is not None:
+                        val = found_val
             except Exception:
                 pass
             if t == "asset":
@@ -1054,43 +1071,47 @@ def analytics_stats(session: Session, months: int, user_id: int) -> schemas.Stat
             continue
         expense_debts.append(((acc.category or "负债") + "月供", mp))
 
-    # 上月的循环计划项，用于当前月补齐缺失的重复项（收入/支出）
-    prev_m = cur_m - 1
-    prev_y = cur_y
-    if prev_m <= 0:
-        prev_m += 12
-        prev_y -= 1
-    prev_start, prev_end = month_range(prev_y, prev_m)
-    prev_stmt = (
+    # 5. 基于主数据的循环计划项（按起止日期生成历史月份条目）
+    master_rows = (
         session.query(models.Cashflow)
         .filter(models.Cashflow.household_id == hh_id)
-        .filter(models.Cashflow.date >= prev_start)
-        .filter(models.Cashflow.date <= prev_end)
+        .filter(models.Cashflow.planned == True)
+        .filter(getattr(models.Cashflow, "recurring_monthly") == True)
+        .all()
     )
-    prev_cfs = prev_stmt.order_by(models.Cashflow.date.asc()).all()
+    
+    synth_income: list[tuple[str, Decimal]] = []
+    synth_expense: list[tuple[str, Decimal]] = []
+    
     recorded_income_keys = set(f"income:{(r.category or '')}:{(r.note or r.category or '')}" for r in recorded_income if r.recurring_monthly)
     recorded_expense_keys = set(f"expense:{(r.category or '')}:{(r.note or r.category or '')}" for r in recorded_expense if r.recurring_monthly)
 
-    synth_income: list[tuple[str, Decimal]] = []
-    synth_expense: list[tuple[str, Decimal]] = []
-    for r in prev_cfs:
-        key = f"{r.type.value}:{(r.category or '')}:{(r.note or r.category or '')}"
-        if not r.planned or not r.recurring_monthly:
+    for r in master_rows:
+        rsd = getattr(r, "recurring_start_date", None) or r.date
+        red = getattr(r, "recurring_end_date", None)
+        if rsd and rsd > cur_end:
             continue
-        # 对齐到当前月份的日期（沿用上月的 day）
-        prev_day = r.date.day
-        dnum2 = clamp_day(cur_y, cur_m, prev_day)
-        cand2 = date(cur_y, cur_m, dnum2)
-        # 结束/开始日期限定
-        if getattr(r, "recurring_end_date", None) and cand2 > r.recurring_end_date:
+        if red and red < cur_start:
             continue
-        if getattr(r, "recurring_start_date", None) and cand2 < r.recurring_start_date:
+            
+        base_day = (rsd if rsd else r.date).day
+        dnum = clamp_day(cur_y, cur_m, base_day)
+        cand = date(cur_y, cur_m, dnum)
+        
+        if not (cur_start <= cand <= cur_end):
             continue
-        if cur_start <= cand2 <= cur_end:
-            if r.type.value == "income" and key not in recorded_income_keys:
-                synth_income.append((r.category or "其他收入", Decimal(r.amount or 0)))
-            if r.type.value == "expense" and key not in recorded_expense_keys:
-                synth_expense.append((r.category or "其他支出", Decimal(r.amount or 0)))
+            
+        tval2 = r.type.value if hasattr(r.type, "value") else r.type
+        key = f"{tval2}:{(r.category or '')}:{(r.note or r.category or '')}"
+        
+        if tval2 == "income":
+            if key in recorded_income_keys:
+                continue
+            synth_income.append((r.category or "其他收入", Decimal(r.amount or 0)))
+        elif tval2 == "expense":
+            if key in recorded_expense_keys:
+                continue
+            synth_expense.append((r.category or "其他支出", Decimal(r.amount or 0)))
 
     # 组装分布
     def canon_income(name: str, note: str | None = None) -> str:
