@@ -46,6 +46,7 @@ def list_accounts(session: Session, account_type: schemas.AccountTypeLiteral | N
     stmt = select(models.Account)
     if account_type:
         stmt = stmt.where(models.Account.type == account_type)
+    hh_id: int | None = None
     if user_id is not None:
         hh_id = get_or_create_household_id(session, user_id)
         stmt = stmt.where(models.Account.household_id == hh_id)
@@ -75,6 +76,21 @@ def list_accounts(session: Session, account_type: schemas.AccountTypeLiteral | N
             years = Decimal(days) / Decimal(365.25)
             rate = Decimal(a.depreciation_rate)  # 存储为小数，如 0.1 表示 10%
             amt = max(Decimal(0), amt * (Decimal(1) - rate * years))
+        # 覆盖当前净值：若存在最新的现值更新记录，则以其为准
+        try:
+            if hh_id is None:
+                hh_id = a.household_id
+            latest = (
+                session.query(models.AccountValueUpdate)
+                .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
+                .first()
+            )
+            if latest and latest.value is not None:
+                amt = Decimal(latest.value)
+        except Exception:
+            pass
+
         result.append(
             schemas.AccountOut(
                 id=a.id,
@@ -130,6 +146,19 @@ def get_account(session: Session, account_id: int) -> schemas.AccountOut | None:
         years = Decimal(days) / Decimal(365.25)
         rate = Decimal(a.depreciation_rate)
         amt = max(Decimal(0), amt * (Decimal(1) - rate * years))
+    # 覆盖当前净值：若存在最新的现值更新记录，则以其为准
+    try:
+        latest = (
+            session.query(models.AccountValueUpdate)
+            .filter(models.AccountValueUpdate.household_id == a.household_id, models.AccountValueUpdate.account_id == a.id)
+            .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
+            .first()
+        )
+        if latest and latest.value is not None:
+            amt = Decimal(latest.value)
+    except Exception:
+        pass
+
     return schemas.AccountOut(
         id=a.id,
         name=a.name,
@@ -577,6 +606,17 @@ def overview(session: Session, user_id: int) -> schemas.OverviewOut:
                 years = Decimal(days) / Decimal(365.25)
                 rate = Decimal(a.depreciation_rate)
                 amt = max(Decimal(0), amt * (Decimal(1) - rate * years))
+            try:
+                latest = (
+                    session.query(models.AccountValueUpdate)
+                    .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                    .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
+                    .first()
+                )
+                if latest and latest.value is not None:
+                    amt = Decimal(latest.value)
+            except Exception:
+                pass
             total_assets += amt
         else:
             if a.monthly_payment and a.monthly_payment > 0:
@@ -591,6 +631,17 @@ def overview(session: Session, user_id: int) -> schemas.OverviewOut:
                     limit = min(limit, end_cap)
                 paid_months = min(months_elapsed, limit, payments_possible)
                 amt = max(Decimal(0), amt - Decimal(a.monthly_payment) * Decimal(paid_months))
+            try:
+                latest = (
+                    session.query(models.AccountValueUpdate)
+                    .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                    .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
+                    .first()
+                )
+                if latest and latest.value is not None:
+                    amt = Decimal(latest.value)
+            except Exception:
+                pass
             total_liabilities += amt
     net_worth = total_assets - total_liabilities
     return schemas.OverviewOut(
@@ -613,8 +664,8 @@ def analytics(session: Session, days: int, user_id: int) -> schemas.AnalyticsOut
 
     hh_id = get_or_create_household_id(session, user_id)
     stmt = select(models.Account).where(models.Account.household_id == hh_id).order_by(models.Account.created_at.asc())
-    all_accounts = session.scalars(stmt).all()
-    if not all_accounts:
+    accounts = session.scalars(stmt).all()
+    if not accounts:
         zero = Decimal(0)
         return schemas.AnalyticsOut(
             range_days=days,
@@ -632,94 +683,126 @@ def analytics(session: Session, days: int, user_id: int) -> schemas.AnalyticsOut
             highlights=schemas.AnalyticsHighlights(),
         )
 
-    window_accounts = [
-        account for account in all_accounts if to_utc(account.updated_at or account.created_at) >= cutoff
-    ] or all_accounts
+    start_day = cutoff.date()
+    end_day = datetime.now(timezone.utc).date()
 
-    daily_totals: dict[date, dict[str, Decimal]] = defaultdict(
-        lambda: {"assets": Decimal(0), "liabilities": Decimal(0)}
-    )
-    category_totals: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
-
-    # 使用计算后的现值而不是期初金额
-    for account in window_accounts:
-        # 获取账户的现值
-        current_account_value = get_account(session, account.id)
-        amount = current_account_value.current_value if current_account_value else Decimal(account.amount)
-        
-        timestamp = to_utc(account.updated_at or account.created_at)
-        day = timestamp.date()
-        account_type = account.type.value if hasattr(account.type, "value") else account.type
-
-        if account_type == "asset":
-            daily_totals[day]["assets"] += amount
-        else:
-            daily_totals[day]["liabilities"] += amount
-
-        category_totals[(account_type, account.category)] += amount
-
-    sorted_days = sorted(daily_totals.keys())
-    cumulative_assets = Decimal(0)
-    cumulative_liabilities = Decimal(0)
     trend: list[schemas.TrendPoint] = []
     cashflow: list[schemas.CashflowPoint] = []
 
-    for day in sorted_days:
-        day_assets = daily_totals[day]["assets"]
-        day_liabilities = daily_totals[day]["liabilities"]
-        cumulative_assets += day_assets
-        cumulative_liabilities += day_liabilities
-        net = cumulative_assets - cumulative_liabilities
-
-        trend.append(
-            schemas.TrendPoint(
-                date=day,
-                assets=cumulative_assets,
-                liabilities=cumulative_liabilities,
-                net_worth=net,
-            )
-        )
-        cashflow.append(
-            schemas.CashflowPoint(
-                date=day,
-                inflow=day_assets,
-                outflow=day_liabilities,
-                net=day_assets - day_liabilities,
-            )
-        )
+    cur_day = start_day
+    while cur_day <= end_day:
+        assets_total = Decimal(0)
+        liabilities_total = Decimal(0)
+        for a in accounts:
+            base_amt = Decimal(a.amount)
+            t = a.type.value if hasattr(a.type, "value") else a.type
+            val = base_amt
+            if t == "liability" and a.monthly_payment and a.monthly_payment > 0:
+                start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else cur_day)
+                months_elapsed = 0 if cur_day < start_base else ((cur_day.year - start_base.year) * 12 + (cur_day.month - start_base.month))
+                payments_possible = int((base_amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
+                limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+                if getattr(a, "loan_end_date", None):
+                    ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+                    si = start_base.year * 12 + start_base.month
+                    end_cap = max(0, ei - si + 1)
+                    limit = min(limit, end_cap)
+                paid_months = min(months_elapsed, limit, payments_possible)
+                val = max(Decimal(0), base_amt - Decimal(a.monthly_payment) * Decimal(paid_months))
+            elif t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
+                start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else cur_day)
+                days_elapsed = 0 if cur_day < start_date else (cur_day - start_date).days
+                years = Decimal(days_elapsed) / Decimal(365.25)
+                rate = Decimal(a.depreciation_rate)
+                val = max(Decimal(0), base_amt * (Decimal(1) - rate * years))
+            try:
+                latest = (
+                    session.query(models.AccountValueUpdate)
+                    .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                    .filter(models.AccountValueUpdate.ts <= datetime(cur_day.year, cur_day.month, cur_day.day, 23, 59, 59, tzinfo=timezone.utc))
+                    .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
+                    .first()
+                )
+                if latest and latest.value is not None:
+                    val = Decimal(latest.value)
+            except Exception:
+                pass
+            if t == "asset":
+                assets_total += val
+            else:
+                liabilities_total += val
+        net = assets_total - liabilities_total
+        trend.append(schemas.TrendPoint(date=cur_day, assets=assets_total, liabilities=liabilities_total, net_worth=net))
+        cashflow.append(schemas.CashflowPoint(date=cur_day, inflow=assets_total, outflow=liabilities_total, net=net))
+        cur_day = date.fromordinal(cur_day.toordinal() + 1)
 
     overview_totals = overview(session, user_id)
-
     total_assets = overview_totals.total_assets
     total_liabilities = overview_totals.total_liabilities
     net_worth = overview_totals.net_worth
 
-    net_change = (
-        trend[-1].net_worth - trend[0].net_worth if len(trend) >= 2 else (trend[0].net_worth if trend else Decimal(0))
-    )
+    net_change = trend[-1].net_worth - trend[0].net_worth if len(trend) >= 2 else (trend[0].net_worth if trend else Decimal(0))
     change_ratio = float(net_change / trend[0].net_worth * 100) if trend and trend[0].net_worth else 0.0
 
+    category_totals: dict[tuple[str, str], Decimal] = defaultdict(Decimal)
+    for a in accounts:
+        base_amt = Decimal(a.amount)
+        t = a.type.value if hasattr(a.type, "value") else a.type
+        val = base_amt
+        if t == "liability" and a.monthly_payment and a.monthly_payment > 0:
+            start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else end_day)
+            months_elapsed = 0 if end_day < start_base else ((end_day.year - start_base.year) * 12 + (end_day.month - start_base.month))
+            payments_possible = int((base_amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
+            limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+            if getattr(a, "loan_end_date", None):
+                ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+                si = start_base.year * 12 + start_base.month
+                end_cap = max(0, ei - si + 1)
+                limit = min(limit, end_cap)
+            paid_months = min(months_elapsed, limit, payments_possible)
+            val = max(Decimal(0), base_amt - Decimal(a.monthly_payment) * Decimal(paid_months))
+        elif t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
+            start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else end_day)
+            days_elapsed = 0 if end_day < start_date else (end_day - start_date).days
+            years = Decimal(days_elapsed) / Decimal(365.25)
+            rate = Decimal(a.depreciation_rate)
+            val = max(Decimal(0), base_amt * (Decimal(1) - rate * years))
+        try:
+            latest = (
+                session.query(models.AccountValueUpdate)
+                .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                .filter(models.AccountValueUpdate.ts <= datetime(end_day.year, end_day.month, end_day.day, 23, 59, 59, tzinfo=timezone.utc))
+                .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
+                .first()
+            )
+            if latest and latest.value is not None:
+                val = Decimal(latest.value)
+        except Exception:
+            pass
+        category_totals[(t, a.category)] += val
+
     def build_category_list(category_type: str) -> list[schemas.CategorySlice]:
-        total = (
-            total_assets if category_type == "asset" else total_liabilities
-        ) or Decimal(0)
+        total = total_assets if category_type == "asset" else total_liabilities
+        total = total or Decimal(0)
         slices: list[schemas.CategorySlice] = []
         for (type_key, category), amount in category_totals.items():
             if type_key != category_type:
                 continue
             percentage = float((amount / total * 100) if total else 0)
-            slices.append(
-                schemas.CategorySlice(
-                    category=category,
-                    amount=amount,
-                    percentage=round(percentage, 2),
-                )
-            )
+            slices.append(schemas.CategorySlice(category=category, amount=amount, percentage=round(percentage, 2)))
         slices.sort(key=lambda item: item.amount, reverse=True)
         return slices
 
     asset_categories = build_category_list("asset")
     liability_categories = build_category_list("liability")
+
+    # 确保走势最后一天与顶部统计卡片一致（以 overview 为准）
+    if trend:
+        last = trend[-1]
+        trend[-1] = schemas.TrendPoint(date=last.date, assets=total_assets, liabilities=total_liabilities, net_worth=net_worth)
+        if cashflow:
+            cf_last = cashflow[-1]
+            cashflow[-1] = schemas.CashflowPoint(date=cf_last.date, inflow=total_assets, outflow=total_liabilities, net=net_worth)
 
     highlights = schemas.AnalyticsHighlights(
         best_category=asset_categories[0].category if asset_categories else None,
@@ -792,6 +875,19 @@ def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.Mo
                 years = Decimal(days) / Decimal(365.25)
                 rate = Decimal(a.depreciation_rate)
                 val = max(Decimal(0), base_amt * (Decimal(1) - rate * years))
+            # 覆盖为该月末最新的现值更新（若存在，以 ts <= 月末为准）
+            try:
+                latest = (
+                    session.query(models.AccountValueUpdate)
+                    .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                    .filter(models.AccountValueUpdate.ts <= end_of_month)
+                    .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
+                    .first()
+                )
+                if latest and latest.value is not None:
+                    val = Decimal(latest.value)
+            except Exception:
+                pass
             if t == "asset":
                 assets_total += val
             else:

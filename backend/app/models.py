@@ -163,3 +163,16 @@ class MonthlySnapshot(Base):
     actual_expense: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     external_income: Mapped[float | None] = mapped_column(Numeric(18, 2))
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+
+class AccountValueUpdate(Base):
+    __tablename__ = "account_value_updates"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    account_id: Mapped[int] = mapped_column(Integer)
+    household_id: Mapped[int] = mapped_column(Integer)
+    value: Mapped[float] = mapped_column(Numeric(18, 2))
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(Text())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

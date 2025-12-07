@@ -24,7 +24,8 @@ Page({
     categoryOptions: [
       { label: "全部", value: "" }
     ],
-    activeCategoryIndex: 0
+    activeCategoryIndex: 0,
+    totalAmount: "0.00"
   },
   onLoad(options) {
     const fc = options && options.category ? decodeURIComponent(options.category) : "";
@@ -38,6 +39,7 @@ Page({
       const list = await api.listAccounts("liability");
       const formatted = (list || []).map(item => ({
         ...item,
+        amount_raw: Number(item.current_value != null ? item.current_value : item.amount),
         amount: this.formatNumber(item.current_value != null ? item.current_value : item.amount),
         updated_at: this.formatDate(item.updated_at),
         icon: getLiabilityCategoryIcon(item.category)
@@ -74,7 +76,8 @@ Page({
   applyCategoryFilter() {
     const fc = this.data.filterCategory;
     const filtered = fc ? (this.data.allLiabilities || []).filter(i => String(i.category) === String(fc)) : (this.data.allLiabilities || []);
-    this.setData({ liabilities: filtered });
+    const sum = (filtered || []).reduce((acc, it) => acc + Number(it.amount_raw || 0), 0);
+    this.setData({ liabilities: filtered, totalAmount: this.formatNumber(sum) });
   },
   handleCategoryTap(e) {
     const index = Number(e.currentTarget.dataset.index);

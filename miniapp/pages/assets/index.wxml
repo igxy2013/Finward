@@ -10,6 +10,7 @@
     <view class="card-header">
       <text class="card-title">全部资产</text>
       <text class="card-count">{{assets.length}} 项</text>
+      <text class="card-sum">总金额 +￥{{totalAmount}}</text>
     </view>
     <view class="list-container">
       <view class="list-item" wx:for="{{assets}}" wx:key="id" data-id="{{item.id}}" data-type="asset" bindtap="openAssetDetail" bindlongpress="openItemActions">

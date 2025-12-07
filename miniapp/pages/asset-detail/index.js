@@ -28,7 +28,17 @@ Page({
     rentRecords: [],
     change_positive: false,
     change_negative: false,
-    change_sign: ""
+    change_sign: "",
+    showUpdateModal: false,
+    updateValueInput: "",
+    updateDateInput: "",
+    updateTimeInput: "",
+    updateNoteInput: "",
+    savingUpdate: false,
+    valueUpdates: [],
+    valueUpdatesRaw: [],
+    editingUpdateId: null,
+    editingUpdateTs: null
   },
   collectRent() {
     const { tenants = [], detail = {} } = this.data;
@@ -82,6 +92,7 @@ Page({
     if (String(detail?.category) === "房产") {
       this.fetchRentRecords();
     }
+    this.loadValueUpdates();
   },
   openEditMenu() {
     wx.showActionSheet({
@@ -184,6 +195,7 @@ Page({
         change_sign,
         loading: false
       });
+      this.loadValueUpdates();
       if (String(data.category) === "房产") {
         try {
           const tenants = await api.listTenants(id);
@@ -203,6 +215,140 @@ Page({
       }
     } catch (error) {
       this.setData({ loading: false, error: "加载失败" });
+    }
+  },
+  loadValueUpdates() {
+    const id = Number(this.data.id || 0);
+    if (!id) return;
+    (async () => {
+      try {
+        const arr = await api.listAccountValueUpdates(id);
+        const formatted = (arr || []).map(r => ({
+          id: r.id != null ? r.id : null,
+          raw_ts: r.created_at || r.ts || null,
+          value_raw: Number(r.value || 0),
+          value_display: this.formatNumber(r.value),
+          date_display: this.formatDateTime(r.created_at || new Date(r.ts)),
+          note: r.note || ''
+        }));
+        this.setData({ valueUpdates: formatted, valueUpdatesRaw: arr || [] }, () => {
+          const latest = (formatted || []).sort((a, b) => {
+            const ta = a.raw_ts ? new Date(a.raw_ts).getTime() : 0;
+            const tb = b.raw_ts ? new Date(b.raw_ts).getTime() : 0;
+            return tb - ta;
+          })[0];
+          if (latest && typeof latest.value_raw === 'number') {
+            const initial = this.parseNumber(this.data.detail?.initial_amount ?? this.data.detail?.amount);
+            const current = Number(latest.value_raw || 0);
+            const change = current - initial;
+            const change_positive = change > 0;
+            const change_negative = change < 0;
+            const change_sign = change > 0 ? "+￥" : (change < 0 ? "-￥" : "￥");
+            this.setData({
+              detail: { ...this.data.detail, current_value: current, current_value_display: this.formatNumber(current), change_display: this.formatNumber(Math.abs(change)) },
+              change_positive,
+              change_negative,
+              change_sign
+            });
+          }
+        });
+      } catch (e) {
+        let arr = [];
+        try { arr = wx.getStorageSync(`fw_value_updates:${id}`) || []; } catch (err) { arr = []; }
+        const formatted = (arr || []).map(r => ({
+          id: null,
+          raw_ts: r.ts,
+          value_raw: Number(r.value || 0),
+          value_display: this.formatNumber(r.value),
+          date_display: this.formatDateTime(new Date(r.ts)),
+          note: r.note || ''
+        }));
+        this.setData({ valueUpdates: formatted, valueUpdatesRaw: arr || [] }, () => {
+          const latest = (formatted || [])[0];
+          if (latest && typeof latest.value_raw === 'number') {
+            const initial = this.parseNumber(this.data.detail?.initial_amount ?? this.data.detail?.amount);
+            const current = Number(latest.value_raw || 0);
+            const change = current - initial;
+            const change_positive = change > 0;
+            const change_negative = change < 0;
+            const change_sign = change > 0 ? "+￥" : (change < 0 ? "-￥" : "￥");
+            this.setData({
+              detail: { ...this.data.detail, current_value: current, current_value_display: this.formatNumber(current), change_display: this.formatNumber(Math.abs(change)) },
+              change_positive,
+              change_negative,
+              change_sign
+            });
+          }
+        });
+      }
+    })();
+  },
+  openUpdateModal() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    this.setData({ showUpdateModal: true, updateValueInput: "", updateDateInput: `${y}-${m}-${d}`, updateTimeInput: `${hh}:${mm}`, updateNoteInput: "", savingUpdate: false, editingUpdateId: null, editingUpdateTs: null });
+  },
+  closeUpdateModal() {
+    this.setData({ showUpdateModal: false, savingUpdate: false });
+  },
+  handleUpdateInput(e) {
+    const v = String(e.detail.value || "");
+    this.setData({ updateValueInput: v });
+  },
+  handleUpdateDateChange(e) {
+    const v = String(e.detail.value || "");
+    this.setData({ updateDateInput: v });
+  },
+  handleUpdateTimeChange(e) {
+    const v = String(e.detail.value || "");
+    this.setData({ updateTimeInput: v });
+  },
+  handleUpdateNoteInput(e) {
+    const v = String(e.detail.value || "");
+    this.setData({ updateNoteInput: v });
+  },
+  async saveUpdateValue() {
+    if (this.data.savingUpdate) return;
+    const id = Number(this.data.id || 0);
+    const vstr = String(this.data.updateValueInput || "").replace(/,/g, "");
+    const val = Number(vstr);
+    if (!id || Number.isNaN(val)) { wx.showToast({ title: "请输入有效金额", icon: "none" }); return; }
+    this.setData({ savingUpdate: true });
+    try {
+      await api.updateAccount(id, { current_value: val });
+      const updId = this.data.editingUpdateId;
+      const dateStr = String(this.data.updateDateInput || "");
+      const timeStr = String(this.data.updateTimeInput || "");
+      let ts = Date.now();
+      if (dateStr && timeStr) {
+        const dt = new Date(`${dateStr} ${timeStr}`.replace(' ', 'T'));
+        if (!isNaN(dt.getTime())) ts = dt.getTime();
+      }
+      const note = String(this.data.updateNoteInput || "");
+      if (updId) {
+        try { await api.updateAccountValueUpdate(id, updId, val, ts, note); } catch (e2) {}
+      } else {
+        try { await api.createAccountValueUpdate(id, val, ts, note); } catch (e2) {}
+      }
+      let arr = [];
+      try { arr = wx.getStorageSync(`fw_value_updates:${id}`) || []; } catch (e) { arr = []; }
+      if (updId) {
+        arr = (arr || []).map(r => ({ ...r, value: String(r.ts) === String(this.data.editingUpdateTs || '') ? val : r.value, ts: String(r.ts) === String(this.data.editingUpdateTs || '') ? ts : r.ts, note: String(r.ts) === String(this.data.editingUpdateTs || '') ? note : r.note }));
+      } else {
+        arr.unshift({ value: val, ts, note });
+      }
+      try { wx.setStorageSync(`fw_value_updates:${id}`, arr); } catch (e) {}
+      this.closeUpdateModal();
+      wx.showToast({ title: "已更新", icon: "success" });
+      this.fetchDetail(id);
+      this.loadValueUpdates();
+    } catch (e) {
+      this.setData({ savingUpdate: false });
+      wx.showToast({ title: "更新失败", icon: "none" });
     }
   },
   mapFrequency(f) {
@@ -367,5 +513,62 @@ Page({
     } catch (e) {
       return "";
     }
+  }
+  ,formatDateTime(input) {
+    if (!input) return "";
+    try {
+      const date = (input instanceof Date) ? input : new Date(String(input).replace(' ', 'T'));
+      if (isNaN(date.getTime())) return "";
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      const hh = String(date.getHours()).padStart(2, '0');
+      const mm = String(date.getMinutes()).padStart(2, '0');
+      return `${y}-${m}-${d} ${hh}:${mm}`;
+    } catch (e) { return ""; }
+  }
+  ,editValueUpdate(e) {
+    const id = Number(e.currentTarget.dataset.id || 0);
+    const ts = String(e.currentTarget.dataset.ts || "");
+    const rec = (this.data.valueUpdates || []).find(x => (id ? String(x.id) === String(id) : String(x.raw_ts || '') === ts));
+    if (!rec) return;
+    const dateTime = rec.raw_ts ? new Date(rec.raw_ts) : new Date();
+    const y = dateTime.getFullYear();
+    const m = String(dateTime.getMonth() + 1).padStart(2, '0');
+    const d = String(dateTime.getDate()).padStart(2, '0');
+    const hh = String(dateTime.getHours()).padStart(2, '0');
+    const mm = String(dateTime.getMinutes()).padStart(2, '0');
+    this.setData({ showUpdateModal: true, updateValueInput: String(rec.value_raw || ''), updateDateInput: `${y}-${m}-${d}`, updateTimeInput: `${hh}:${mm}`, updateNoteInput: String(rec.note || ''), savingUpdate: false, editingUpdateId: id || null, editingUpdateTs: ts || null });
+  }
+  ,async deleteValueUpdate(e) {
+    const id = Number(e.currentTarget.dataset.id || 0);
+    const ts = String(e.currentTarget.dataset.ts || "");
+    const accountId = Number(this.data.id || 0);
+    if (!accountId) return;
+    wx.showModal({
+      title: "删除确认",
+      content: "确定删除该更新记录吗？",
+      success: async (res) => {
+        if (!res.confirm) return;
+        let ok = false;
+        if (id) {
+          try { await api.deleteAccountValueUpdate(accountId, id); ok = true; } catch (e) { ok = false; }
+        }
+        if (!ok) {
+          try {
+            let arr = wx.getStorageSync(`fw_value_updates:${accountId}`) || [];
+            arr = (arr || []).filter(r => String(r.ts) !== ts);
+            wx.setStorageSync(`fw_value_updates:${accountId}`, arr);
+            ok = true;
+          } catch (e) { ok = false; }
+        }
+        if (ok) {
+          wx.showToast({ title: "已删除", icon: "success" });
+          this.loadValueUpdates();
+        } else {
+          wx.showToast({ title: "删除失败", icon: "none" });
+        }
+      }
+    });
   }
 });

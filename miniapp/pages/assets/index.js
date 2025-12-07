@@ -38,7 +38,8 @@ Page({
     categoryOptions: [
       { label: "全部", value: "" }
     ],
-    activeCategoryIndex: 0
+    activeCategoryIndex: 0,
+    totalAmount: "0.00"
   },
   onLoad(options) {
     const fc = options && options.category ? decodeURIComponent(options.category) : "";
@@ -55,6 +56,7 @@ Page({
         return {
           ...item,
           category: cat,
+          amount_raw: Number(item.current_value != null ? item.current_value : item.amount),
           amount: this.formatNumber(item.current_value != null ? item.current_value : item.amount),
           updated_at: this.formatDate(item.updated_at),
           icon: getAssetCategoryIcon(cat)
@@ -90,9 +92,17 @@ Page({
     }, () => this.applyCategoryFilter());
   },
   applyCategoryFilter() {
-    const fc = normalizeCategory(this.data.filterCategory);
-    const filtered = fc ? (this.data.allAssets || []).filter(i => String(i.category) === String(fc)) : (this.data.allAssets || []);
-    this.setData({ assets: filtered });
+    const raw = String(this.data.filterCategory || "");
+    if (!raw) {
+      const arr = this.data.allAssets || [];
+      const sum = (arr || []).reduce((acc, it) => acc + Number(it.amount_raw || 0), 0);
+      this.setData({ assets: arr, totalAmount: this.formatNumber(sum) });
+      return;
+    }
+    const fc = normalizeCategory(raw);
+    const filtered = (this.data.allAssets || []).filter(i => String(i.category) === String(fc));
+    const sum = (filtered || []).reduce((acc, it) => acc + Number(it.amount_raw || 0), 0);
+    this.setData({ assets: filtered, totalAmount: this.formatNumber(sum) });
   },
   handleCategoryTap(e) {
     const index = Number(e.currentTarget.dataset.index);

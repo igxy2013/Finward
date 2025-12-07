@@ -331,7 +331,28 @@ Page({
       const unifiedOk = Array.isArray(list) && list.length > 0 && String(list[0]?.id || '').length > 0;
       if (unifiedOk) {
         const activeType = this.data.activeType;
-        const combinedAll = formatted.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        let assets = [];
+        let liabilities = [];
+        try {
+          [assets, liabilities] = await Promise.all([api.listAccounts('asset'), api.listAccounts('liability')]);
+        } catch (eAcc) { assets = []; liabilities = []; }
+        const assetEndMap = Object.create(null);
+        const liabEndMap = Object.create(null);
+        (assets || []).forEach(a => { assetEndMap[Number(a.id)] = a.invest_end_date || ''; });
+        (liabilities || []).forEach(l => { liabEndMap[Number(l.id)] = l.loan_end_date || ''; });
+        const enriched = formatted.map(it => {
+          const idStr = String(it.id || '');
+          let endDate = it.end_date || '';
+          if (!endDate) {
+            if ((it._synthetic === 'asset-income') || idStr.startsWith('asset-income:')) {
+              endDate = assetEndMap[Number(it.account_id)] || '';
+            } else if ((it._synthetic === 'loan-payment') || idStr.startsWith('loan:')) {
+              endDate = liabEndMap[Number(it.account_id)] || '';
+            }
+          }
+          return { ...it, end_date: endDate };
+        });
+        const combinedAll = enriched.sort((a, b) => String(b.date).localeCompare(String(a.date)));
         let combined = (forceAll || this.skipFilterOnce) ? combinedAll : combinedAll.filter((x) => activeType === 'all' || x.type === activeType);
         if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
           combined = combinedAll;
@@ -599,6 +620,36 @@ Page({
               if (monthIndex > ei) return;
             }
           }
+          const fmt = (ds) => {
+            const dd = new Date(String(ds).replace(/-/g, '/'));
+            if (isNaN(dd.getTime())) return '';
+            const yy = dd.getFullYear();
+            const mm = String(dd.getMonth() + 1).padStart(2, '0');
+            const dd2 = String(dd.getDate()).padStart(2, '0');
+            return `${yy}-${mm}-${dd2}`;
+          };
+          const startDisp = acc.invest_start_date ? fmt(acc.invest_start_date) : '';
+          const endDisp = (() => {
+            if (acc.invest_end_date) return fmt(acc.invest_end_date);
+            const sd = acc.invest_start_date;
+            if (sd && term > 0) {
+              const s = new Date(String(sd).replace(/-/g, '/'));
+              if (!isNaN(s.getTime())) {
+                const yy = s.getFullYear();
+                const mm = s.getMonth();
+                const dd0 = s.getDate();
+                const endMonthIdx = mm + term - 1;
+                const endDate = new Date(yy, endMonthIdx + 1, 0);
+                const day = Math.min(dd0, endDate.getDate());
+                const final = new Date(yy, endMonthIdx, day);
+                const y2 = final.getFullYear();
+                const m2 = String(final.getMonth() + 1).padStart(2, '0');
+                const d2 = String(final.getDate()).padStart(2, '0');
+                return `${y2}-${m2}-${d2}`;
+              }
+            }
+            return '';
+          })();
           assetIncomes.push({
             id: `asset-income:${acc.id}`,
             type: 'income',
@@ -612,7 +663,10 @@ Page({
             account_name: acc.name,
             name: acc.name ? acc.name : (acc.category || '资产'),
             note: acc.name ? acc.name : (acc.category || '资产'),
-            icon: getCategoryIcon(acc.category || '资产收益', 'income')
+            icon: getCategoryIcon(acc.category || '资产收益', 'income'),
+            end_date: endDisp,
+            recurring_start_date: startDisp,
+            recurring_end_date: endDisp
           });
         });
       } catch (err) {
@@ -647,6 +701,37 @@ Page({
         };
         const pushPayment = (acc, y, m, d) => {
           const dt = `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+          const fmt = (ds) => {
+            const dd = new Date(String(ds).replace(/-/g, '/'));
+            if (isNaN(dd.getTime())) return '';
+            const yy = dd.getFullYear();
+            const mm = String(dd.getMonth() + 1).padStart(2, '0');
+            const dd2 = String(dd.getDate()).padStart(2, '0');
+            return `${yy}-${mm}-${dd2}`;
+          };
+          const startDisp = acc.loan_start_date ? fmt(acc.loan_start_date) : '';
+          const endDisp = (() => {
+            if (acc.loan_end_date) return fmt(acc.loan_end_date);
+            const sd = acc.loan_start_date;
+            const term = Number(acc.loan_term_months || 0);
+            if (sd && term > 0) {
+              const s = new Date(String(sd).replace(/-/g, '/'));
+              if (!isNaN(s.getTime())) {
+                const yy = s.getFullYear();
+                const mm = s.getMonth();
+                const dd0 = s.getDate();
+                const endMonthIdx = mm + term - 1;
+                const endDate = new Date(yy, endMonthIdx + 1, 0);
+                const day = Math.min(dd0, endDate.getDate());
+                const final = new Date(yy, endMonthIdx, day);
+                const y2 = final.getFullYear();
+                const m2 = String(final.getMonth() + 1).padStart(2, '0');
+                const d2 = String(final.getDate()).padStart(2, '0');
+                return `${y2}-${m2}-${d2}`;
+              }
+            }
+            return '';
+          })();
           debts.push({
             id: `loan:${acc.id}:${y}${String(m).padStart(2, "0")}`,
             type: 'expense',
@@ -659,7 +744,10 @@ Page({
             account_id: acc.id,
             account_name: acc.name,
             name: acc.name ? acc.name : (acc.category || '负债'),
-            icon: getCategoryIcon((acc.category || '负债') + '月供', 'expense')
+            icon: getCategoryIcon((acc.category || '负债') + '月供', 'expense'),
+            end_date: endDisp,
+            recurring_start_date: startDisp,
+            recurring_end_date: endDisp
           });
         };
         liabilities.forEach((acc) => {

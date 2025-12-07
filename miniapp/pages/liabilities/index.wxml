@@ -10,6 +10,7 @@
     <view class="card-header">
       <text class="card-title">全部负债</text>
       <text class="card-count">{{liabilities.length}} 项</text>
+      <text class="card-sum">总金额 -￥{{totalAmount}}</text>
     </view>
     <view class="list-container">
       <view class="list-item" wx:for="{{liabilities}}" wx:key="id" data-id="{{item.id}}" data-type="liability" bindtap="openLiabilityDetail" bindlongpress="openItemActions">

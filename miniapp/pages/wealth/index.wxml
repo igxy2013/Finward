@@ -96,6 +96,15 @@
             <text>{{item.recurring_monthly ? '每月重复' : ''}}</text>
             <text wx:if="{{item.account_name}}">{{item.account_name}}</text>
           </view>
+          <view class="item-note" wx:if="{{item.recurring_start_date}}">
+            <text class="note-text">开始 {{item.recurring_start_date}}</text>
+          </view>
+          <view class="item-note" wx:if="{{item.end_date}}">
+            <text class="note-text">结束 {{item.end_date}}</text>
+          </view>
+          <view class="item-note" wx:elif="{{item.recurring_end_date}}">
+            <text class="note-text">结束 {{item.recurring_end_date}}</text>
+          </view>
         </view>
       </view>
     </view>

@@ -73,6 +73,58 @@
       <view class="card-header"><text class="card-title">备注</text></view>
       <view class="note-content">{{detail.note}}</view>
     </view>
+    <view class="card list-card">
+      <view class="card-header">
+        <text class="card-title">更新现值记录</text>
+        <text class="card-count" wx:if="{{valueUpdates.length > 0}}">{{valueUpdates.length}} 条</text>
+      </view>
+      <view class="list-container" wx:if="{{valueUpdates.length > 0}}">
+        <view class="list-item" wx:for="{{valueUpdates}}" wx:key="date_display" data-id="{{item.id}}" data-ts="{{item.raw_ts}}">
+          <view class="item-content">
+            <view class="item-name">现值更新</view>
+            <view class="item-meta">
+              <text class="item-category">￥{{item.value_display}}</text>
+              <text class="item-date">{{item.date_display}}</text>
+            </view>
+          </view>
+          <view class="item-actions">
+            <image class="action-icon" src="/assets/icons/edit-line.svg" mode="aspectFit" bindtap="editValueUpdate" data-id="{{item.id}}" data-ts="{{item.raw_ts}}"></image>
+            <image class="action-icon" src="/assets/icons/delete-bin-line.svg" mode="aspectFit" bindtap="deleteValueUpdate" data-id="{{item.id}}" data-ts="{{item.raw_ts}}"></image>
+          </view>
+        </view>
+      </view>
+      <view class="empty-state" wx:else>
+        <view class="empty-text">暂无更新记录</view>
+      </view>
+    </view>
+
+    <view class="footer-actions">
+      <button class="primary-btn" bindtap="openUpdateModal">更新现值</button>
+    </view>
+
+    <view class="update-modal" wx:if="{{showUpdateModal}}">
+      <view class="modal-mask" bindtap="closeUpdateModal"></view>
+      <view class="modal-body">
+        <text class="modal-title">更新现值</text>
+        <input class="modal-input" type="digit" value="{{updateValueInput}}" bindinput="handleUpdateInput" placeholder="请输入现值金额" />
+        <view class="modal-row">
+          <text class="modal-label">记录日期</text>
+          <picker mode="date" value="{{updateDateInput}}" bindchange="handleUpdateDateChange">
+            <view class="picker-display">{{updateDateInput}}</view>
+          </picker>
+        </view>
+        <view class="modal-row">
+          <text class="modal-label">记录时间</text>
+          <picker mode="time" value="{{updateTimeInput}}" bindchange="handleUpdateTimeChange">
+            <view class="picker-display">{{updateTimeInput}}</view>
+          </picker>
+        </view>
+        <view class="modal-actions">
+          <button class="btn cancel" bindtap="closeUpdateModal">取消</button>
+          <button class="btn confirm" loading="{{savingUpdate}}" bindtap="saveUpdateValue">保存</button>
+        </view>
+      </view>
+    </view>
     
   </view>
 </view>

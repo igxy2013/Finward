@@ -360,6 +360,32 @@ class CashflowOut(BaseModel):
         from_attributes = True
 
 
+class AccountValueUpdateCreate(BaseModel):
+    value: Decimal
+    ts: datetime | None = None
+    note: str | None = None
+
+
+class AccountValueUpdateUpdate(BaseModel):
+    value: Decimal | None = None
+    ts: datetime | None = None
+    note: str | None = None
+
+
+class AccountValueUpdateOut(BaseModel):
+    id: int
+    account_id: int
+    household_id: int
+    value: Decimal
+    ts: datetime
+    note: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 
 class CashflowUpdate(BaseModel):
     type: CashflowTypeLiteral | None = None

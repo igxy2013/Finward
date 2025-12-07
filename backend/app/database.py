@@ -373,6 +373,31 @@ def ensure_schema_upgrade():
                         conn.commit()
             except OperationalError:
                 pass
+            # Ensure account_value_updates.note exists
+            try:
+                avu_tbl_exists = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+                        WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'account_value_updates'
+                        """
+                    ),
+                    {"db": settings.db_name},
+                ).scalar() or 0
+                if avu_tbl_exists:
+                    note_exists = conn.execute(
+                        text(
+                            """
+                            SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                            WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'account_value_updates' AND COLUMN_NAME = 'note'
+                            """
+                        ),
+                        {"db": settings.db_name},
+                    ).scalar() or 0
+                    if not note_exists:
+                        conn.execute(text("ALTER TABLE account_value_updates ADD COLUMN note TEXT NULL"))
+                        conn.commit()
+            except OperationalError:
+                pass
     except Exception as e:
         print(f"Warning: Could not ensure schema upgrade: {e}")
-

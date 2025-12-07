@@ -35,8 +35,8 @@ Component({
   },
   lifetimes: {
     attached() {
-      const systemInfo = wx.getSystemInfoSync();
-      const statusBarHeight = systemInfo.statusBarHeight;
+      const win = typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo() : wx.getSystemInfoSync();
+      const statusBarHeight = win.statusBarHeight;
       const menuButtonInfo = wx.getMenuButtonBoundingClientRect();
       
       // 计算导航栏高度
