@@ -27,8 +27,8 @@
 .positive { color: #10B981; }
 .negative { color: #ef4444; }
 
-.info-list { display: flex; flex-direction: column; gap: 18rpx; }
-.info-item { display: flex; justify-content: space-between; align-items: center; }
+.info-list { display: flex; flex-direction: column; gap: 16rpx; }
+.info-item { display: flex; justify-content: space-between; align-items: center; padding: 16rpx; background: #F3F4F6; border: 1px solid #e5e7eb; border-radius: 12rpx; box-shadow: 0 6rpx 12rpx rgba(0,0,0,0.04); }
 .info-label { font-size: 26rpx; color: #6b7280; }
 .info-value { font-size: 26rpx; color: #111827; }
 

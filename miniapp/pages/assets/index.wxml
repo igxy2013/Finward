@@ -24,6 +24,7 @@
         </view>
         <view class="item-amount positive">+￥{{item.amount}}</view>
       </view>
+      <view wx:if="{{assets.length === 0}}" class="empty-line">暂无数据</view>
     </view>
   </view>
 </view>

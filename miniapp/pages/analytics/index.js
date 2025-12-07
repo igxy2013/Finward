@@ -285,6 +285,7 @@ Page({
         this.drawIncomePie();
         this.drawExpensePie();
         this.drawIncomeTrend();
+        this.drawIncomeExpenseRatioTrend();
       });
     } catch (e) {
       this.setData({ incomeChartData: [], expenseChartData: [], incomeTrendSeries: [], expenseTrendSeries: [], incomeTrendLabels: [] });
@@ -769,6 +770,64 @@ Page({
         ctx.fill();
         currentAngle += angle;
       });
+      let angleStart = -Math.PI / 2;
+      const labelsInc = [];
+      data.forEach(item => {
+        const pct = parseFloat(item.percentage) / 100;
+        if (!pct || pct <= 0) return;
+        const ang = pct * 2 * Math.PI;
+        const mid = angleStart + ang / 2;
+        const sx = centerX + Math.cos(mid) * radius;
+        const sy = centerY + Math.sin(mid) * radius;
+        const ex = centerX + Math.cos(mid) * (radius + 8);
+        let ey = centerY + Math.sin(mid) * (radius + 8);
+        const right = Math.cos(mid) >= 0;
+        const hx = right ? ex + 28 : ex - 28;
+        const text = `￥${this.formatNumber(item.value)}`;
+        labelsInc.push({ sx, sy, ex, ey, hx, right, text });
+        angleStart += ang;
+      });
+      const minGapInc = 14;
+      const clampYInc = (y) => Math.max(12, Math.min(height - 12, y));
+      const adjustGroupInc = (group) => {
+        group.sort((a, b) => a.ey - b.ey);
+        for (let i = 1; i < group.length; i++) {
+          if (group[i].ey - group[i - 1].ey < minGapInc) {
+            group[i].ey = group[i - 1].ey + minGapInc;
+          }
+        }
+        for (let i = group.length - 2; i >= 0; i--) {
+          group[i].ey = clampYInc(group[i].ey);
+          if (group[i + 1].ey - group[i].ey < minGapInc) {
+            group[i].ey = group[i + 1].ey - minGapInc;
+          }
+        }
+        group.forEach(l => { l.ey = clampYInc(l.ey); });
+      };
+      const rightInc = labelsInc.filter(l => l.right);
+      const leftInc = labelsInc.filter(l => !l.right);
+      adjustGroupInc(rightInc);
+      adjustGroupInc(leftInc);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      labelsInc.forEach(l => {
+        ctx.beginPath();
+        ctx.moveTo(l.sx, l.sy);
+        ctx.lineTo(l.ex, l.ey);
+        ctx.lineTo(l.hx, l.ey);
+        ctx.stroke();
+        ctx.fillStyle = '#374151';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = l.right ? 'left' : 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
+      });
+      const totalInc = (data || []).reduce((s, it) => s + (Number(it.value) > 0 ? Number(it.value) : 0), 0);
+      ctx.fillStyle = '#374151';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(`￥${this.formatNumber(totalInc)}`, centerX, centerY);
     });
   },
   drawExpensePie() {
@@ -813,6 +872,64 @@ Page({
         ctx.fill();
         currentAngle += angle;
       });
+      let angleStart = -Math.PI / 2;
+      const labelsExp = [];
+      data.forEach(item => {
+        const pct = parseFloat(item.percentage) / 100;
+        if (!pct || pct <= 0) return;
+        const ang = pct * 2 * Math.PI;
+        const mid = angleStart + ang / 2;
+        const sx = centerX + Math.cos(mid) * radius;
+        const sy = centerY + Math.sin(mid) * radius;
+        const ex = centerX + Math.cos(mid) * (radius + 8);
+        let ey = centerY + Math.sin(mid) * (radius + 8);
+        const right = Math.cos(mid) >= 0;
+        const hx = right ? ex + 28 : ex - 28;
+        const text = `￥${this.formatNumber(item.value)}`;
+        labelsExp.push({ sx, sy, ex, ey, hx, right, text });
+        angleStart += ang;
+      });
+      const minGapExp = 14;
+      const clampYExp = (y) => Math.max(12, Math.min(height - 12, y));
+      const adjustGroupExp = (group) => {
+        group.sort((a, b) => a.ey - b.ey);
+        for (let i = 1; i < group.length; i++) {
+          if (group[i].ey - group[i - 1].ey < minGapExp) {
+            group[i].ey = group[i - 1].ey + minGapExp;
+          }
+        }
+        for (let i = group.length - 2; i >= 0; i--) {
+          group[i].ey = clampYExp(group[i].ey);
+          if (group[i + 1].ey - group[i].ey < minGapExp) {
+            group[i].ey = group[i + 1].ey - minGapExp;
+          }
+        }
+        group.forEach(l => { l.ey = clampYExp(l.ey); });
+      };
+      const rightExp = labelsExp.filter(l => l.right);
+      const leftExp = labelsExp.filter(l => !l.right);
+      adjustGroupExp(rightExp);
+      adjustGroupExp(leftExp);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      labelsExp.forEach(l => {
+        ctx.beginPath();
+        ctx.moveTo(l.sx, l.sy);
+        ctx.lineTo(l.ex, l.ey);
+        ctx.lineTo(l.hx, l.ey);
+        ctx.stroke();
+        ctx.fillStyle = '#374151';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = l.right ? 'left' : 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
+      });
+      const totalExp = (data || []).reduce((s, it) => s + (Number(it.value) > 0 ? Number(it.value) : 0), 0);
+      ctx.fillStyle = '#374151';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(`￥${this.formatNumber(totalExp)}`, centerX, centerY);
     });
   },
   prepareDailySeries(items, startDate, endDate) {
@@ -863,9 +980,17 @@ Page({
         const hasIncome = !!series && series.length > 0 && !series.every(v => Number(v) <= 0);
         const hasExpense = !!expenseSeries && expenseSeries.length > 0 && !expenseSeries.every(v => Number(v) <= 0);
         if (!hasIncome && !hasExpense) { drawEmpty('暂无收支趋势'); return; }
+        const netSeries = new Array(Math.max(series.length, expenseSeries.length)).fill(0).map((_, i) => {
+          const inc = Number(series[i] || 0);
+          const exp = Number(expenseSeries[i] || 0);
+          const net = inc - exp;
+          return net > 0 ? net : 0;
+        });
+        const hasNet = netSeries.some(v => v > 0);
         const maxVal = Math.max(
           ...(hasIncome ? series : [0]),
-          ...(hasExpense ? expenseSeries : [0])
+          ...(hasExpense ? expenseSeries : [0]),
+          ...(hasNet ? netSeries : [0])
         );
         const minVal = 0;
         const range = (maxVal - minVal) || 1;
@@ -938,6 +1063,23 @@ Page({
             ctx.fill();
           }
         }
+        if (hasNet) {
+          ctx.strokeStyle = '#6366f1';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          for (let i = 0; i < netSeries.length; i++) {
+            const pt = toXY(i, netSeries);
+            if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+          }
+          ctx.stroke();
+          ctx.fillStyle = '#6366f1';
+          for (let i = 0; i < netSeries.length; i++) {
+            const pt = toXY(i, netSeries);
+            ctx.beginPath();
+            ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
         ctx.fillStyle = 'rgba(17,24,39,0.5)';
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
@@ -947,12 +1089,13 @@ Page({
           ctx.fillText(label, x, h - 6);
         }
         const xs = new Array(series.length).fill(0).map((_, i) => padL + (i / Math.max(series.length - 1, 1)) * iw);
-        this._incomeTrendMeta = { padL, padR, padT, padB, iw, ih, w, h, rect, series, expenseSeries, labels, minVal, range, xs };
+        this._incomeTrendMeta = { padL, padR, padT, padB, iw, ih, w, h, rect, series, expenseSeries, labels, minVal, range, xs, netSeries };
         const sel = typeof this._incomeTrendSelectedIdx === 'number' ? this._incomeTrendSelectedIdx : -1;
         if (sel >= 0 && sel < series.length) {
           const x = xs[sel];
           const yIncome = padT + (1 - ((series[sel] - minVal) / (range || 1))) * ih;
           const yExpense = hasExpense ? padT + (1 - ((expenseSeries[sel] - minVal) / (range || 1))) * ih : null;
+          const yNet = hasNet ? padT + (1 - (((netSeries[sel] || 0) - minVal) / (range || 1))) * ih : null;
           ctx.strokeStyle = 'rgba(17,24,39,0.25)';
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -971,7 +1114,13 @@ Page({
             ctx.arc(x, yExpense, 4, 0, Math.PI * 2);
             ctx.fill();
           }
-          const boxW = 160, boxH = hasExpense ? 78 : 54;
+          if (hasNet && yNet != null) {
+            ctx.fillStyle = '#6366f1';
+            ctx.beginPath();
+            ctx.arc(x, yNet, 4, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          const boxW = 180, boxH = hasExpense ? (hasNet ? 100 : 78) : (hasNet ? 78 : 54);
           const bx = Math.min(x + 8, w - padR - boxW);
           const by = padT + 8;
           ctx.fillStyle = 'rgba(255,255,255,0.9)';
@@ -993,9 +1142,173 @@ Page({
             ctx.fillStyle = '#ef4444';
             ctx.fillText(`支出 ${this.formatAxisValue(expenseSeries[sel])}`, bx + 8, by + (hasIncome ? 46 : 26));
           }
+          if (hasNet) {
+            ctx.fillStyle = '#6366f1';
+            const yLine = hasIncome ? (hasExpense ? 66 : 46) : (hasExpense ? 46 : 26);
+            ctx.fillText(`净收入 ${this.formatAxisValue(netSeries[sel] || 0)}`, bx + 8, by + yLine);
+          }
         }
       });
     });
+  },
+  drawIncomeExpenseRatioTrend() {
+    const income = this.data.incomeTrendSeries || [];
+    const expense = this.data.expenseTrendSeries || [];
+    const labels = this.data.incomeTrendLabels || [];
+    const query = wx.createSelectorQuery().in(this);
+    wx.nextTick(() => {
+      query.select('#incomeExpenseRatioCanvas').node().select('#incomeExpenseRatioCanvas').boundingClientRect().exec((res) => {
+        const canvas = res && res[0] && res[0].node;
+        const rect = res && res[1];
+        if (!canvas || !rect) return;
+        const win = (typeof wx.getWindowInfo === 'function') ? wx.getWindowInfo() : wx.getSystemInfoSync();
+        const dpr = win.pixelRatio || 1;
+        canvas.width = Math.floor(rect.width * dpr);
+        canvas.height = Math.floor(rect.height * dpr);
+        const ctx = canvas.getContext('2d');
+        ctx.scale(dpr, dpr);
+        const w = rect.width, h = rect.height;
+        let padL = 48; const padR = 16, padT = 16, padB = 24;
+        let iw = 0, ih = 0;
+        const ratios = new Array(Math.max(income.length, expense.length)).fill(0).map((_, i) => {
+          const inVal = Number(income[i] || 0);
+          const exVal = Number(expense[i] || 0);
+          if (inVal <= 0 || exVal <= 0) return 0;
+          return (inVal / exVal) * 100;
+        });
+        const hasData = ratios.some(r => r > 0);
+        const drawEmpty = (text) => {
+          ctx.clearRect(0, 0, w, h);
+          ctx.fillStyle = 'rgba(255,255,255,0.04)';
+          ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = 'rgba(17,24,39,0.4)';
+          ctx.font = '14px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(text, w / 2, h / 2);
+        };
+        ctx.clearRect(0, 0, w, h);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(0, 0, w, h);
+        if (!hasData) { drawEmpty('暂无收支比趋势'); return; }
+        const maxR = Math.max(...ratios);
+        const minR = Math.min(...ratios.filter(r => r > 0));
+        const rangeR = (maxR - (minR || 0)) || 1;
+        ctx.font = '12px sans-serif';
+        const labelW = (ctx.measureText(`${Math.round(maxR)}%`).width || 0);
+        padL = Math.max(48, Math.ceil(labelW) + 14);
+        iw = w - padL - padR; ih = h - padT - padB;
+        ctx.strokeStyle = 'rgba(17,24,39,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padL, h - padB);
+        ctx.lineTo(w - padR, h - padB);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(padL, padT);
+        ctx.lineTo(padL, h - padB);
+        ctx.stroke();
+        const ticks = 4;
+        ctx.strokeStyle = 'rgba(17,24,39,0.08)';
+        for (let i = 0; i <= ticks; i++) {
+          const y = padT + (i / ticks) * ih;
+          ctx.beginPath();
+          ctx.moveTo(padL, y);
+          ctx.lineTo(w - padR, y);
+          ctx.stroke();
+          const val = maxR - (i / ticks) * rangeR;
+          ctx.fillStyle = 'rgba(17,24,39,0.6)';
+          ctx.font = '12px sans-serif';
+          ctx.textAlign = 'right';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(`${Math.round(val)}%`, padL - 6, y);
+        }
+        const toXY = (idx) => {
+          const x = padL + (idx / Math.max(ratios.length - 1, 1)) * iw;
+          const y = padT + (1 - ((ratios[idx] - (minR || 0)) / rangeR)) * ih;
+          return { x, y };
+        };
+        ctx.strokeStyle = '#8b5cf6';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        for (let i = 0; i < ratios.length; i++) {
+          const pt = toXY(i);
+          if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#8b5cf6';
+        for (let i = 0; i < ratios.length; i++) {
+          const pt = toXY(i);
+          ctx.beginPath();
+          ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = 'rgba(17,24,39,0.5)';
+        ctx.font = '12px sans-serif';
+        ctx.textAlign = 'center';
+        for (let i = 0; i < ratios.length; i++) {
+          const x = padL + (i / Math.max(ratios.length - 1, 1)) * iw;
+          const label = labels[i] || '';
+          ctx.fillText(label, x, h - 6);
+        }
+        const xs = new Array(ratios.length).fill(0).map((_, i) => padL + (i / Math.max(ratios.length - 1, 1)) * iw);
+        this._incomeExpenseRatioMeta = { padL, padR, padT, padB, iw, ih, w, h, rect, ratios, labels, xs, minR: (minR || 0), rangeR };
+        const sel = typeof this._incomeExpenseRatioSelectedIdx === 'number' ? this._incomeExpenseRatioSelectedIdx : -1;
+        if (sel >= 0 && sel < ratios.length) {
+          const x = xs[sel];
+          const y = padT + (1 - ((ratios[sel] - (minR || 0)) / (rangeR || 1))) * ih;
+          ctx.strokeStyle = 'rgba(17,24,39,0.25)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(x, padT);
+          ctx.lineTo(x, h - padB);
+          ctx.stroke();
+          ctx.fillStyle = '#8b5cf6';
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+          const boxW = 160, boxH = 54;
+          const bx = Math.min(x + 8, w - padR - boxW);
+          const by = padT + 8;
+          ctx.fillStyle = 'rgba(255,255,255,0.9)';
+          ctx.strokeStyle = 'rgba(17,24,39,0.15)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.rect(bx, by, boxW, boxH);
+          ctx.fill();
+          ctx.stroke();
+          ctx.fillStyle = '#374151';
+          ctx.textAlign = 'left';
+          ctx.textBaseline = 'top';
+          ctx.fillText(labels[sel] || '', bx + 8, by + 6);
+          ctx.fillStyle = '#8b5cf6';
+          ctx.fillText(`收支比 ${Math.round(ratios[sel] || 0)}%`, bx + 8, by + 26);
+        }
+      });
+    });
+  },
+  onIncomeExpenseRatioTouch(e) {
+    const meta = this._incomeExpenseRatioMeta;
+    if (!meta) return;
+    const touch = (e && e.touches && e.touches[0]) || e.detail;
+    if (!touch) return;
+    const localX = (typeof touch.x === 'number') ? touch.x : ((touch.clientX || 0) - (meta.rect.left || 0));
+    const localY = (typeof touch.y === 'number') ? touch.y : ((touch.clientY || 0) - (meta.rect.top || 0));
+    const inside = localX >= meta.padL && localX <= meta.padL + meta.iw && localY >= meta.padT && localY <= meta.padT + meta.ih;
+    if (!inside) {
+      this._incomeExpenseRatioSelectedIdx = -1;
+      this.drawIncomeExpenseRatioTrend();
+      return;
+    }
+    const len = meta.ratios.length;
+    const xs = new Array(len).fill(0).map((_, i) => meta.padL + (i / Math.max(len - 1, 1)) * meta.iw);
+    let idx = 0, best = Infinity;
+    for (let i = 0; i < len; i++) {
+      const d = Math.abs(localX - xs[i]);
+      if (d < best) { best = d; idx = i; }
+    }
+    this._incomeExpenseRatioSelectedIdx = idx;
+    this.drawIncomeExpenseRatioTrend();
   },
   drawExpenseTrend() {
     const series = this.data.expenseTrendSeries || [];

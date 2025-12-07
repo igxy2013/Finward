@@ -8,8 +8,9 @@
 .card-count { font-size: 24rpx; color: #6b7280; background: #F3F4F6; padding: 4rpx 12rpx; border-radius: 12rpx; }
 
 .list-container { display: flex; flex-direction: column; }
-.list-item { display: flex; align-items: center; padding: 24rpx 0; border-bottom: 1rpx solid #e5e7eb; }
-.list-item:last-child { border-bottom: none; }
+.list-item { display: flex; align-items: center; padding: 24rpx 0; position: relative; }
+.list-item::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background-color: #d1d5db; }
+.list-item:last-child::after { display: none; }
 .list-item:active { opacity: 0.75; transform: scale(0.98); transition: all 0.2s ease; }
 
 .item-icon { width: 80rpx; height: 80rpx; border-radius: 20rpx; display: flex; align-items: center; justify-content: center; margin-right: 24rpx; flex-shrink: 0; }

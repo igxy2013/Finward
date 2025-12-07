@@ -400,6 +400,64 @@ Page({
       ctx.beginPath();
       ctx.arc(centerX, centerY, radius * 0.45, 0, 2 * Math.PI);
       ctx.fill();
+      const total = (chartData || []).reduce((sum, item) => sum + (Number(item.value) > 0 ? Number(item.value) : 0), 0);
+      ctx.fillStyle = '#374151';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = '14px sans-serif';
+      ctx.fillText(`￥${this.formatNumber(total)}`, centerX, centerY);
+      let angleStart = -Math.PI / 2;
+      const labels = [];
+      chartData.forEach((item) => {
+        const pct = parseFloat(item.percentage) / 100;
+        if (!pct || pct <= 0) return;
+        const ang = pct * 2 * Math.PI;
+        const mid = angleStart + ang / 2;
+        const sx = centerX + Math.cos(mid) * radius;
+        const sy = centerY + Math.sin(mid) * radius;
+        const ex = centerX + Math.cos(mid) * (radius + 8);
+        let ey = centerY + Math.sin(mid) * (radius + 8);
+        const right = Math.cos(mid) >= 0;
+        const hx = right ? ex + 28 : ex - 28;
+        const text = `￥${this.formatNumber(item.value)}`;
+        labels.push({ sx, sy, ex, ey, hx, right, text });
+        angleStart += ang;
+      });
+      const minGap = 14;
+      const clampY = (y) => Math.max(12, Math.min(height - 12, y));
+      const adjustGroup = (group) => {
+        group.sort((a, b) => a.ey - b.ey);
+        for (let i = 1; i < group.length; i++) {
+          if (group[i].ey - group[i - 1].ey < minGap) {
+            group[i].ey = group[i - 1].ey + minGap;
+          }
+        }
+        for (let i = group.length - 2; i >= 0; i--) {
+          group[i].ey = clampY(group[i].ey);
+          if (group[i + 1].ey - group[i].ey < minGap) {
+            group[i].ey = group[i + 1].ey - minGap;
+          }
+        }
+        group.forEach(l => { l.ey = clampY(l.ey); });
+      };
+      const rightGroup = labels.filter(l => l.right);
+      const leftGroup = labels.filter(l => !l.right);
+      adjustGroup(rightGroup);
+      adjustGroup(leftGroup);
+      ctx.strokeStyle = '#94a3b8';
+      ctx.lineWidth = 1;
+      labels.forEach(l => {
+        ctx.beginPath();
+        ctx.moveTo(l.sx, l.sy);
+        ctx.lineTo(l.ex, l.ey);
+        ctx.lineTo(l.hx, l.ey);
+        ctx.stroke();
+        ctx.fillStyle = '#374151';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = l.right ? 'left' : 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
+      });
     });
   },
   async handleLogin() {

@@ -38,9 +38,8 @@
 .info-label { font-size: 26rpx; color: #6b7280; }
 .info-value { font-size: 26rpx; color: #111827; }
 
-.list-container { display: flex; flex-direction: column; }
-.list-item { display: flex; align-items: center; padding: 24rpx 0; border-bottom: 1rpx solid #e5e7eb; }
-.list-item:last-child { border-bottom: none; }
+.list-container { display: flex; flex-direction: column; gap: 16rpx; }
+.list-item { display: flex; align-items: center; padding: 20rpx 16rpx; background: #F3F4F6; border: 1px solid #e5e7eb; border-radius: 16rpx; box-shadow: 0 6rpx 12rpx rgba(0,0,0,0.04); }
 .item-content { flex: 1; min-width: 0; }
 .item-name { font-size: 28rpx; font-weight: 600; color: #111827; }
 .item-meta { margin-top: 6rpx; display: flex; gap: 14rpx; color: #6b7280; font-size: 22rpx; }

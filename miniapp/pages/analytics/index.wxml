@@ -109,8 +109,29 @@
         <text class="card-title">固定收支趋势</text>
         <text class="card-subtitle">Income Trend</text>
       </view>
+      <view class="chart-legend legend-inline">
+        <view class="legend-item">
+          <view class="legend-dot" style="background-color: #22c55e;"></view>
+          <text class="legend-text">收入</text>
+        </view>
+        <view class="legend-item">
+          <view class="legend-dot" style="background-color: #ef4444;"></view>
+          <text class="legend-text">支出</text>
+        </view>
+        <view class="legend-item">
+          <view class="legend-dot" style="background-color: #6366f1;"></view>
+          <text class="legend-text">净收入</text>
+        </view>
+      </view>
       <view class="chart-block">
         <canvas type="2d" id="incomeTrendCanvas" canvas-id="incomeTrendCanvas" class="chart-canvas" catchtap="noop" bindtouchstart="onIncomeTrendTouch" bindtouchmove="onIncomeTrendTouch"></canvas>
+      </view>
+      <view class="card-header card-header--spaced">
+        <text class="card-title">收支比趋势</text>
+        <text class="card-subtitle">Income/Expense Ratio</text>
+      </view>
+      <view class="chart-block">
+        <canvas type="2d" id="incomeExpenseRatioCanvas" canvas-id="incomeExpenseRatioCanvas" class="chart-canvas" catchtap="noop" bindtouchstart="onIncomeExpenseRatioTouch" bindtouchmove="onIncomeExpenseRatioTouch"></canvas>
       </view>
       <view class="card-header card-header--spaced">
         <text class="card-title">固定支出分布</text>
@@ -134,7 +155,7 @@
 
     <view class="card category-card">
       <view class="card-header">
-        <text class="card-title">分类分布</text>
+        <text class="card-title">资产/负债对比</text>
         <text class="card-subtitle">Category Breakdown</text>
       </view>
       <view class="category-columns">
