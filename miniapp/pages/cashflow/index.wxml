@@ -55,6 +55,6 @@
       <text class="label">备注</text>
       <textarea placeholder="可选" data-key="note" value="{{form.note}}" bindinput="handleInput" />
     </view>
-    <button type="primary" bindtap="submit" loading="{{submitting}}">保存</button>
+    <button bindtap="submit" loading="{{submitting}}" style="background-color: #43B176; color: #ffffff;">保存</button>
   </view>
 </view>
