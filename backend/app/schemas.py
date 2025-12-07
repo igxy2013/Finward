@@ -264,6 +264,10 @@ class MonthlySnapshotOut(BaseModel):
     actual_income: Decimal
     actual_expense: Decimal
     external_income: Decimal | None = None
+    total_assets: Decimal | None = None
+    total_liabilities: Decimal | None = None
+    net_worth: Decimal | None = None
+    debt_ratio: float | None = None
     computed_at: datetime
 
 

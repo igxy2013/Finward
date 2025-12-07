@@ -208,38 +208,86 @@ Page({
       });
       return;
     }
-    const days = 365;
     this.setData({ loading: !quiet, error: "" });
     try {
-      const res = await api.fetchAnalytics(days);
-      const summary = this.formatSummary(res.summary || {});
-      const assetCategories = this.prepareCategories(res.asset_categories || [], "asset");
-      const liabilityCategories = this.prepareCategories(res.liability_categories || [], "liability");
-      const highlights = this.formatHighlights(res.highlights || {});
+      const ov = await api.fetchOverview();
+      let monthlyPoints = [];
+      try {
+        const monthlyRes = await api.fetchMonthlyAnalytics(12);
+        monthlyPoints = monthlyRes.points || [];
+      } catch (e2) { monthlyPoints = []; }
+      const last = monthlyPoints.length ? monthlyPoints[monthlyPoints.length - 1] : null;
+      const first = monthlyPoints.length ? monthlyPoints[0] : null;
+      const netChangeValue = (last && first) ? (Number(last.net_worth || 0) - Number(first.net_worth || 0)) : 0;
+      const changeRatioValue = (first && Number(first.net_worth || 0) !== 0) ? (netChangeValue / Number(first.net_worth || 0) * 100) : 0;
+      const summary = {
+        netWorth: this.formatNumber(ov.net_worth || 0),
+        totalAssets: this.formatNumber(ov.total_assets || 0),
+        totalLiabilities: this.formatNumber(ov.total_liabilities || 0),
+        netChange: this.formatSignedNumber(netChangeValue || 0),
+        changeRatio: `${(changeRatioValue || 0).toFixed(2)}%`,
+        changeRatioValue: changeRatioValue || 0,
+        debtRatio: `${(Number(ov.total_assets || 0) ? (Number(ov.total_liabilities || 0) / Number(ov.total_assets || 0) * 100) : 0).toFixed(2)}%`,
+        debtRatioValue: Number(ov.total_assets || 0) ? (Number(ov.total_liabilities || 0) / Number(ov.total_assets || 0) * 100) : 0
+      };
+      let assetCategories = [];
+      let liabilityCategories = [];
+      let highlightsRaw = { best_category: null, best_category_amount: 0, risk_category: null, risk_category_amount: 0 };
+      try {
+        const resAcc = await Promise.all([
+          api.listAccounts("asset"),
+          api.listAccounts("liability")
+        ]);
+        const assets = Array.isArray(resAcc[0]) ? resAcc[0] : [];
+        const liabilities = Array.isArray(resAcc[1]) ? resAcc[1] : [];
+        const sumByCat = (list, type) => {
+          const map = Object.create(null);
+          list.forEach((a) => {
+            const rawCat = String(a.category || "其他");
+            const cat = type === "asset" ? normalizeAssetCategory(rawCat) : rawCat;
+            const amt = Number((a.current_value != null ? a.current_value : a.amount) || 0);
+            map[cat] = (map[cat] || 0) + amt;
+          });
+          const total = Object.values(map).reduce((s, v) => s + Number(v || 0), 0);
+          return Object.keys(map).map((cat) => ({ category: cat, amount: map[cat], percentage: total ? (map[cat] / total * 100) : 0 }));
+        };
+        const assetSlices = sumByCat(assets, "asset");
+        const liabilitySlices = sumByCat(liabilities, "liability");
+        const best = assetSlices.slice().sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+        const risk = liabilitySlices.slice().sort((a, b) => Number(b.amount || 0) - Number(a.amount || 0))[0];
+        if (best && Number(best.amount || 0) > 0) {
+          highlightsRaw.best_category = best.category;
+          highlightsRaw.best_category_amount = Number(best.amount || 0);
+        }
+        if (risk && Number(risk.amount || 0) > 0) {
+          highlightsRaw.risk_category = risk.category;
+          highlightsRaw.risk_category_amount = Number(risk.amount || 0);
+        }
+        assetCategories = this.prepareCategories(assetSlices, "asset");
+        liabilityCategories = this.prepareCategories(liabilitySlices, "liability");
+      } catch (eCats) {
+        assetCategories = [];
+        liabilityCategories = [];
+      }
+      const trendFromMonthly = (monthlyPoints || []).map((p) => ({ date: String(p.month), assets: Number(p.total_assets || 0), liabilities: Number(p.total_liabilities || 0), net_worth: Number(p.net_worth || 0) }));
+      const cashflowFromMonthly = (monthlyPoints || []).map((p) => ({ date: String(p.month), inflow: Number(p.total_assets || 0), outflow: Number(p.total_liabilities || 0), net: Number(p.net_worth || 0) }));
       this.setData(
         {
           loading: false,
           summary,
-          trend: res.trend || [],
+          trend: trendFromMonthly,
           assetCategories,
           liabilityCategories,
-          cashflow: res.cashflow || [],
-          highlights
+          cashflow: cashflowFromMonthly,
+          highlights: this.formatHighlights(highlightsRaw)
         },
         () => {
           this.drawTrendChart();
           this.drawCashflowChart();
           this.fetchStats(12);
+          this.setData({ monthly: monthlyPoints }, () => { this.drawMonthlyCharts(); });
         }
       );
-      try {
-        const monthlyRes = await api.fetchMonthlyAnalytics(12);
-        this.setData({ monthly: monthlyRes.points || [] }, () => {
-          this.drawMonthlyCharts();
-        });
-      } catch (e2) {
-        this.setData({ monthly: [] }, () => { this.drawMonthlyCharts(); });
-      }
     } catch (error) {
       // 游客模式下不显示演示数据
       this.setData({
@@ -1038,55 +1086,175 @@ Page({
           return { x, y };
         };
         if (hasIncome) {
-          ctx.strokeStyle = '#22c55e';
-          ctx.lineWidth = 3;
+          const pts = new Array(series.length).fill(0).map((_, i) => toXY(i, series));
+          ctx.fillStyle = 'rgba(34,197,94,0.2)';
           ctx.beginPath();
-          for (let i = 0; i < series.length; i++) {
-            const pt = toXY(i, series);
-            if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+          if (pts.length === 1) {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            ctx.lineTo(pts[0].x, h - padB);
+          } else if (pts.length === 2) {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            ctx.lineTo(pts[1].x, pts[1].y);
+            ctx.lineTo(pts[1].x, h - padB);
+          } else {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p0 = i > 0 ? pts[i - 1] : pts[i];
+              const p1 = pts[i];
+              const p2 = pts[i + 1];
+              const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+              const t = 1;
+              const cp1x = p1.x + (p2.x - p0.x) * t / 6;
+              const cp1y = p1.y + (p2.y - p0.y) * t / 6;
+              const cp2x = p2.x - (p3.x - p1.x) * t / 6;
+              const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+            ctx.lineTo(pts[pts.length - 1].x, h - padB);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#22c55e';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          if (pts.length > 0) {
+            ctx.moveTo(pts[0].x, pts[0].y);
+            if (pts.length === 2) {
+              ctx.lineTo(pts[1].x, pts[1].y);
+            } else {
+              for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = i > 0 ? pts[i - 1] : pts[i];
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+                const t = 1;
+                const cp1x = p1.x + (p2.x - p0.x) * t / 6;
+                const cp1y = p1.y + (p2.y - p0.y) * t / 6;
+                const cp2x = p2.x - (p3.x - p1.x) * t / 6;
+                const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
+            }
           }
           ctx.stroke();
-          ctx.fillStyle = '#22c55e';
-          for (let i = 0; i < series.length; i++) {
-            const pt = toXY(i, series);
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          
         }
         if (hasExpense) {
-          ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = 3;
+          const pts = new Array(expenseSeries.length).fill(0).map((_, i) => toXY(i, expenseSeries));
+          ctx.fillStyle = 'rgba(239,68,68,0.2)';
           ctx.beginPath();
-          for (let i = 0; i < expenseSeries.length; i++) {
-            const pt = toXY(i, expenseSeries);
-            if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+          if (pts.length === 1) {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            ctx.lineTo(pts[0].x, h - padB);
+          } else if (pts.length === 2) {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            ctx.lineTo(pts[1].x, pts[1].y);
+            ctx.lineTo(pts[1].x, h - padB);
+          } else {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p0 = i > 0 ? pts[i - 1] : pts[i];
+              const p1 = pts[i];
+              const p2 = pts[i + 1];
+              const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+              const t = 1;
+              const cp1x = p1.x + (p2.x - p0.x) * t / 6;
+              const cp1y = p1.y + (p2.y - p0.y) * t / 6;
+              const cp2x = p2.x - (p3.x - p1.x) * t / 6;
+              const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+            ctx.lineTo(pts[pts.length - 1].x, h - padB);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          if (pts.length > 0) {
+            ctx.moveTo(pts[0].x, pts[0].y);
+            if (pts.length === 2) {
+              ctx.lineTo(pts[1].x, pts[1].y);
+            } else {
+              for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = i > 0 ? pts[i - 1] : pts[i];
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+                const t = 1;
+                const cp1x = p1.x + (p2.x - p0.x) * t / 6;
+                const cp1y = p1.y + (p2.y - p0.y) * t / 6;
+                const cp2x = p2.x - (p3.x - p1.x) * t / 6;
+                const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
+            }
           }
           ctx.stroke();
-          ctx.fillStyle = '#ef4444';
-          for (let i = 0; i < expenseSeries.length; i++) {
-            const pt = toXY(i, expenseSeries);
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          
         }
         if (hasNet) {
-          ctx.strokeStyle = '#6366f1';
-          ctx.lineWidth = 3;
+          const pts = new Array(netSeries.length).fill(0).map((_, i) => toXY(i, netSeries));
+          ctx.fillStyle = 'rgba(99,102,241,0.2)';
           ctx.beginPath();
-          for (let i = 0; i < netSeries.length; i++) {
-            const pt = toXY(i, netSeries);
-            if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+          if (pts.length === 1) {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            ctx.lineTo(pts[0].x, h - padB);
+          } else if (pts.length === 2) {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            ctx.lineTo(pts[1].x, pts[1].y);
+            ctx.lineTo(pts[1].x, h - padB);
+          } else {
+            ctx.moveTo(pts[0].x, h - padB);
+            ctx.lineTo(pts[0].x, pts[0].y);
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p0 = i > 0 ? pts[i - 1] : pts[i];
+              const p1 = pts[i];
+              const p2 = pts[i + 1];
+              const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+              const t = 1;
+              const cp1x = p1.x + (p2.x - p0.x) * t / 6;
+              const cp1y = p1.y + (p2.y - p0.y) * t / 6;
+              const cp2x = p2.x - (p3.x - p1.x) * t / 6;
+              const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+            ctx.lineTo(pts[pts.length - 1].x, h - padB);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.strokeStyle = '#6366f1';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          if (pts.length > 0) {
+            ctx.moveTo(pts[0].x, pts[0].y);
+            if (pts.length === 2) {
+              ctx.lineTo(pts[1].x, pts[1].y);
+            } else {
+              for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = i > 0 ? pts[i - 1] : pts[i];
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+                const t = 1;
+                const cp1x = p1.x + (p2.x - p0.x) * t / 6;
+                const cp1y = p1.y + (p2.y - p0.y) * t / 6;
+                const cp2x = p2.x - (p3.x - p1.x) * t / 6;
+                const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
+            }
           }
           ctx.stroke();
-          ctx.fillStyle = '#6366f1';
-          for (let i = 0; i < netSeries.length; i++) {
-            const pt = toXY(i, netSeries);
-            ctx.beginPath();
-            ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-            ctx.fill();
-          }
+          
         }
         ctx.fillStyle = 'rgba(17,24,39,0.5)';
         ctx.font = '12px sans-serif';
@@ -1236,21 +1404,61 @@ Page({
           const y = padT + (1 - ((ratios[idx] - (minR || 0)) / rangeR)) * ih;
           return { x, y };
         };
-        ctx.strokeStyle = '#8b5cf6';
-        ctx.lineWidth = 3;
+        const pts = new Array(ratios.length).fill(0).map((_, i) => toXY(i));
+        ctx.fillStyle = 'rgba(139,92,246,0.2)';
         ctx.beginPath();
-        for (let i = 0; i < ratios.length; i++) {
-          const pt = toXY(i);
-          if (i === 0) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+        if (pts.length === 1) {
+          ctx.moveTo(pts[0].x, h - padB);
+          ctx.lineTo(pts[0].x, pts[0].y);
+          ctx.lineTo(pts[0].x, h - padB);
+        } else if (pts.length === 2) {
+          ctx.moveTo(pts[0].x, h - padB);
+          ctx.lineTo(pts[0].x, pts[0].y);
+          ctx.lineTo(pts[1].x, pts[1].y);
+          ctx.lineTo(pts[1].x, h - padB);
+        } else {
+          ctx.moveTo(pts[0].x, h - padB);
+          ctx.lineTo(pts[0].x, pts[0].y);
+          for (let i = 0; i < pts.length - 1; i++) {
+            const p0 = i > 0 ? pts[i - 1] : pts[i];
+            const p1 = pts[i];
+            const p2 = pts[i + 1];
+            const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+            const t = 1;
+            const cp1x = p1.x + (p2.x - p0.x) * t / 6;
+            const cp1y = p1.y + (p2.y - p0.y) * t / 6;
+            const cp2x = p2.x - (p3.x - p1.x) * t / 6;
+            const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+            ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+          }
+          ctx.lineTo(pts[pts.length - 1].x, h - padB);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#8b5cf6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (pts.length > 0) {
+          ctx.moveTo(pts[0].x, pts[0].y);
+          if (pts.length === 2) {
+            ctx.lineTo(pts[1].x, pts[1].y);
+          } else {
+            for (let i = 0; i < pts.length - 1; i++) {
+              const p0 = i > 0 ? pts[i - 1] : pts[i];
+              const p1 = pts[i];
+              const p2 = pts[i + 1];
+              const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+              const t = 1;
+              const cp1x = p1.x + (p2.x - p0.x) * t / 6;
+              const cp1y = p1.y + (p2.y - p0.y) * t / 6;
+              const cp2x = p2.x - (p3.x - p1.x) * t / 6;
+              const cp2y = p2.y - (p3.y - p1.y) * t / 6;
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+          }
         }
         ctx.stroke();
-        ctx.fillStyle = '#8b5cf6';
-        for (let i = 0; i < ratios.length; i++) {
-          const pt = toXY(i);
-          ctx.beginPath();
-          ctx.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        
         ctx.fillStyle = 'rgba(17,24,39,0.5)';
         ctx.font = '12px sans-serif';
         ctx.textAlign = 'center';
@@ -1389,7 +1597,7 @@ Page({
           return { x, y };
         };
         ctx.strokeStyle = '#ef4444';
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.beginPath();
         for (let i = 0; i < series.length; i++) {
           const pt = toXY(i);
@@ -1965,7 +2173,7 @@ Page({
           }
           series.forEach(s => {
             ctx1.strokeStyle = s.color;
-            ctx1.lineWidth = 3;
+            ctx1.lineWidth = 2;
             ctx1.beginPath();
             for (let i = 0; i < filteredPoints.length; i++) {
               const pt = toXY(s.data, i);
@@ -2077,7 +2285,7 @@ Page({
             ctx2.fillText(`${Math.round(val)}%`, padL - 6, y);
           }
           ctx2.strokeStyle = '#8b5cf6';
-          ctx2.lineWidth = 3;
+          ctx2.lineWidth = 2;
           ctx2.beginPath();
           for (let i = 0; i < filteredPoints.length; i++) {
             const pt = toXY2(i);
@@ -2312,26 +2520,47 @@ Page({
       ctx.lineTo(width - padding, height - padding);
       ctx.stroke();
 
-      // Area fill
       ctx.setFillStyle("rgba(99,102,241,0.25)");
       ctx.beginPath();
-      ctx.moveTo(points[0].x, height - padding);
-      points.forEach((point) => ctx.lineTo(point.x, point.y));
-      ctx.lineTo(points[points.length - 1].x, height - padding);
+      if (points.length === 1) {
+        ctx.moveTo(points[0].x, height - padding);
+        ctx.lineTo(points[0].x, points[0].y);
+        ctx.lineTo(points[0].x, height - padding);
+      } else if (points.length === 2) {
+        ctx.moveTo(points[0].x, height - padding);
+        ctx.lineTo(points[0].x, points[0].y);
+        ctx.lineTo(points[1].x, points[1].y);
+        ctx.lineTo(points[1].x, height - padding);
+      } else {
+        ctx.moveTo(points[0].x, height - padding);
+        ctx.lineTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length - 1; i++) {
+          const xc = (points[i].x + points[i + 1].x) / 2;
+          const yc = (points[i].y + points[i + 1].y) / 2;
+          ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+        }
+        ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+        ctx.lineTo(points[points.length - 1].x, height - padding);
+      }
       ctx.closePath();
       ctx.fill();
 
-      // Line
       ctx.setStrokeStyle("#818cf8");
-      ctx.setLineWidth(3);
+      ctx.setLineWidth(2);
       ctx.beginPath();
-      points.forEach((point, index) => {
-        if (index === 0) {
-          ctx.moveTo(point.x, point.y);
+      if (points.length > 0) {
+        ctx.moveTo(points[0].x, points[0].y);
+        if (points.length === 2) {
+          ctx.lineTo(points[1].x, points[1].y);
         } else {
-          ctx.lineTo(point.x, point.y);
+          for (let i = 1; i < points.length - 1; i++) {
+            const xc = (points[i].x + points[i + 1].x) / 2;
+            const yc = (points[i].y + points[i + 1].y) / 2;
+            ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+          }
+          ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
         }
-      });
+      }
       ctx.stroke();
 
       // Dots

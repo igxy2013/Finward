@@ -554,6 +554,57 @@ def upsert_monthly_snapshot(session: Session, user_id: int, year: int, month: in
             computed_at=now,
         )
         session.add(snap)
+    assets_total = Decimal(0)
+    liabilities_total = Decimal(0)
+    stmt_acc = select(models.Account).where(models.Account.household_id == hh_id)
+    accs = session.scalars(stmt_acc).all()
+    from calendar import monthrange as _mr
+    last_day2 = _mr(year, month)[1]
+    eom_dt = datetime(year, month, last_day2, 23, 59, 59, tzinfo=timezone.utc)
+    for a in accs:
+        base_amt = Decimal(a.amount)
+        tval = a.type.value if hasattr(a.type, "value") else a.type
+        val = base_amt
+        if tval == "liability" and a.monthly_payment and a.monthly_payment > 0:
+            start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else end)
+            months_elapsed = 0 if end < start_base else ((end.year - start_base.year) * 12 + (end.month - start_base.month))
+            payments_possible = int((base_amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
+            limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
+            if getattr(a, "loan_end_date", None):
+                ei = a.loan_end_date.year * 12 + a.loan_end_date.month
+                si = start_base.year * 12 + start_base.month
+                end_cap = max(0, ei - si + 1)
+                limit = min(limit, end_cap)
+            paid_months = min(months_elapsed, limit, payments_possible)
+            val = max(Decimal(0), base_amt - Decimal(a.monthly_payment) * Decimal(paid_months))
+        elif tval == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
+            start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else end)
+            days = 0 if end < start_date else (end - start_date).days
+            years = Decimal(days) / Decimal(365.25)
+            rate = Decimal(a.depreciation_rate)
+            val = max(Decimal(0), base_amt * (Decimal(1) - rate * years))
+        try:
+            latest = (
+                session.query(models.AccountValueUpdate)
+                .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                .filter(models.AccountValueUpdate.ts <= eom_dt)
+                .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
+                .first()
+            )
+            if latest and latest.value is not None:
+                val = Decimal(latest.value)
+        except Exception:
+            pass
+        if tval == "asset":
+            assets_total += val
+        else:
+            liabilities_total += val
+    net = assets_total - liabilities_total
+    dr = float((liabilities_total / assets_total * 100) if assets_total else 0.0)
+    snap.total_assets = float(assets_total)
+    snap.total_liabilities = float(liabilities_total)
+    snap.net_worth = float(net)
+    snap.debt_ratio = float(round(dr, 2))
     session.commit()
     session.refresh(snap)
     return schemas.MonthlySnapshotOut(
@@ -564,6 +615,10 @@ def upsert_monthly_snapshot(session: Session, user_id: int, year: int, month: in
         actual_income=Decimal(snap.actual_income or 0),
         actual_expense=Decimal(snap.actual_expense or 0),
         external_income=Decimal(snap.external_income or 0) if snap.external_income is not None else None,
+        total_assets=Decimal(snap.total_assets or 0) if getattr(snap, "total_assets", None) is not None else None,
+        total_liabilities=Decimal(snap.total_liabilities or 0) if getattr(snap, "total_liabilities", None) is not None else None,
+        net_worth=Decimal(snap.net_worth or 0) if getattr(snap, "net_worth", None) is not None else None,
+        debt_ratio=float(snap.debt_ratio or 0) if getattr(snap, "debt_ratio", None) is not None else None,
         computed_at=snap.computed_at,
     )
 
@@ -585,9 +640,29 @@ def get_monthly_snapshot(session: Session, user_id: int, year: int, month: int) 
         actual_income=Decimal(snap.actual_income or 0),
         actual_expense=Decimal(snap.actual_expense or 0),
         external_income=Decimal(snap.external_income or 0) if snap.external_income is not None else None,
+        total_assets=Decimal(snap.total_assets or 0) if getattr(snap, "total_assets", None) is not None else None,
+        total_liabilities=Decimal(snap.total_liabilities or 0) if getattr(snap, "total_liabilities", None) is not None else None,
+        net_worth=Decimal(snap.net_worth or 0) if getattr(snap, "net_worth", None) is not None else None,
+        debt_ratio=float(snap.debt_ratio or 0) if getattr(snap, "debt_ratio", None) is not None else None,
         computed_at=snap.computed_at,
     )
 
+
+def backfill_monthly_snapshots(session: Session, user_id: int, months: int) -> int:
+    months = max(1, min(months, 120))
+    today = datetime.now(timezone.utc).date()
+    start_year = today.year
+    start_month = today.month
+    count = 0
+    for i in range(months - 1, -1, -1):
+        y = start_year
+        m = start_month - i
+        while m <= 0:
+            m += 12
+            y -= 1
+        upsert_monthly_snapshot(session, user_id, y, m, None)
+        count += 1
+    return count
 
 def overview(session: Session, user_id: int) -> schemas.OverviewOut:
     hh_id = get_or_create_household_id(session, user_id)
@@ -833,26 +908,7 @@ def analytics(session: Session, days: int, user_id: int) -> schemas.AnalyticsOut
 
 def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.MonthlyOut:
     months = max(1, min(months, 36))
-    hh_id = get_or_create_household_id(session, user_id)
-    stmt = select(models.Account).where(models.Account.household_id == hh_id).order_by(models.Account.created_at.asc())
-    accounts = session.scalars(stmt).all()
     points: list[schemas.MonthlyPoint] = []
-    if not accounts:
-        return schemas.MonthlyOut(months=months, points=points)
-
-    # 预加载所有账户价值更新，避免 N+1 查询
-    av_stmt = (
-        session.query(models.AccountValueUpdate)
-        .filter(models.AccountValueUpdate.household_id == hh_id)
-        .order_by(models.AccountValueUpdate.account_id, models.AccountValueUpdate.ts.asc())
-    )
-    updates_map: dict[int, list[models.AccountValueUpdate]] = {}
-    for u in av_stmt.all():
-        if u.account_id not in updates_map:
-            updates_map[u.account_id] = []
-        updates_map[u.account_id].append(u)
-
-    from calendar import monthrange
     today = datetime.now(timezone.utc).date()
     start_year = today.year
     start_month = today.month
@@ -862,74 +918,21 @@ def analytics_monthly(session: Session, months: int, user_id: int) -> schemas.Mo
         while m <= 0:
             m += 12
             y -= 1
-        last_day = monthrange(y, m)[1]
-        end_of_month = date(y, m, last_day)
-        assets_total = Decimal(0)
-        liabilities_total = Decimal(0)
-        for a in accounts:
-            base_amt = Decimal(a.amount)
-            t = a.type.value if hasattr(a.type, "value") else a.type
-            val = base_amt
-            if t == "liability" and a.monthly_payment and a.monthly_payment > 0:
-                start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else end_of_month)
-                months_elapsed = 0 if end_of_month < start_base else ((end_of_month.year - start_base.year) * 12 + (end_of_month.month - start_base.month))
-                payments_possible = int((base_amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
-                limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
-                if getattr(a, "loan_end_date", None):
-                    ei = a.loan_end_date.year * 12 + a.loan_end_date.month
-                    si = start_base.year * 12 + start_base.month
-                    end_cap = max(0, ei - si + 1)
-                    limit = min(limit, end_cap)
-                paid_months = min(months_elapsed, limit, payments_possible)
-                val = max(Decimal(0), base_amt - Decimal(a.monthly_payment) * Decimal(paid_months))
-            elif t == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
-                start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else end_of_month)
-                days = 0 if end_of_month < start_date else (end_of_month - start_date).days
-                years = Decimal(days) / Decimal(365.25)
-                rate = Decimal(a.depreciation_rate)
-                val = max(Decimal(0), base_amt * (Decimal(1) - rate * years))
-            # 覆盖为该月末最新的现值更新（若存在，以 ts <= 月末为准）
-            try:
-                ac_updates = updates_map.get(a.id, [])
-                if ac_updates:
-                    # 构造月末最后一秒用于比较
-                    eom_dt = datetime(y, m, last_day, 23, 59, 59, tzinfo=timezone.utc)
-                    found_val = None
-                    # 倒序查找最近的一个
-                    for u in reversed(ac_updates):
-                        if u.ts <= eom_dt:
-                            if u.value is not None:
-                                found_val = Decimal(u.value)
-                            break
-                    if found_val is not None:
-                        val = found_val
-            except Exception:
-                pass
-            if t == "asset":
-                assets_total += val
-            else:
-                liabilities_total += val
-        net = assets_total - liabilities_total
-        debt_ratio = float((liabilities_total / assets_total * 100) if assets_total else 0.0)
+        snap = get_monthly_snapshot(session, user_id, y, m)
+        if not snap:
+            snap = upsert_monthly_snapshot(session, user_id, y, m, None)
+        ta = Decimal(snap.total_assets or 0) if getattr(snap, "total_assets", None) is not None else Decimal(0)
+        tl = Decimal(snap.total_liabilities or 0) if getattr(snap, "total_liabilities", None) is not None else Decimal(0)
+        nw = Decimal(snap.net_worth or 0) if getattr(snap, "net_worth", None) is not None else ta - tl
+        dr = float(snap.debt_ratio or 0) if getattr(snap, "debt_ratio", None) is not None else float((tl / ta * 100) if ta else 0.0)
         points.append(
             schemas.MonthlyPoint(
                 month=date(y, m, 1),
-                total_assets=assets_total,
-                total_liabilities=liabilities_total,
-                net_worth=net,
-                debt_ratio=round(debt_ratio, 2),
+                total_assets=ta,
+                total_liabilities=tl,
+                net_worth=nw,
+                debt_ratio=round(dr, 2),
             )
-        )
-    if points:
-        from .crud import overview as _ov
-        ov = _ov(session, user_id)
-        last = points[-1]
-        points[-1] = schemas.MonthlyPoint(
-            month=last.month,
-            total_assets=ov.total_assets,
-            total_liabilities=ov.total_liabilities,
-            net_worth=ov.net_worth,
-            debt_ratio=round(float((ov.total_liabilities / ov.total_assets * 100) if ov.total_assets else 0.0), 2),
         )
     return schemas.MonthlyOut(months=months, points=points)
 

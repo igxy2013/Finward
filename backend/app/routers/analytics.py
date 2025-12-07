@@ -52,3 +52,13 @@ def get_analytics_stats(
     user = Depends(get_current_user),
 ):
     return crud.analytics_stats(session, months, user.id)
+
+
+@router.post("/snapshot/backfill")
+def backfill_monthly_snapshots(
+    months: int = Query(36, ge=1, le=120),
+    session: Session = Depends(get_session),
+    user = Depends(get_current_user),
+):
+    count = crud.backfill_monthly_snapshots(session, user.id, months)
+    return {"computed": count}

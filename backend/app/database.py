@@ -205,6 +205,10 @@ def ensure_schema_upgrade():
                           `actual_income` DECIMAL(18,2) NOT NULL DEFAULT 0,
                           `actual_expense` DECIMAL(18,2) NOT NULL DEFAULT 0,
                           `external_income` DECIMAL(18,2) NULL,
+                          `total_assets` DECIMAL(18,2) NULL,
+                          `total_liabilities` DECIMAL(18,2) NULL,
+                          `net_worth` DECIMAL(18,2) NULL,
+                          `debt_ratio` DECIMAL(6,2) NULL,
                           `computed_at` DATETIME NOT NULL,
                           PRIMARY KEY (`id`),
                           UNIQUE KEY `ux_ms_hh_year_month` (`household_id`,`year`,`month`)
@@ -213,6 +217,26 @@ def ensure_schema_upgrade():
                     )
                 )
                 conn.commit()
+
+            # ensure added columns exist when upgrading existing table
+            for col, ddl in [
+                ("total_assets", "ALTER TABLE monthly_snapshots ADD COLUMN total_assets DECIMAL(18,2) NULL"),
+                ("total_liabilities", "ALTER TABLE monthly_snapshots ADD COLUMN total_liabilities DECIMAL(18,2) NULL"),
+                ("net_worth", "ALTER TABLE monthly_snapshots ADD COLUMN net_worth DECIMAL(18,2) NULL"),
+                ("debt_ratio", "ALTER TABLE monthly_snapshots ADD COLUMN debt_ratio DECIMAL(6,2) NULL"),
+            ]:
+                exists = conn.execute(
+                    text(
+                        """
+                        SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+                        WHERE TABLE_SCHEMA = :db AND TABLE_NAME = 'monthly_snapshots' AND COLUMN_NAME = :col
+                        """
+                    ),
+                    {"db": settings.db_name, "col": col},
+                ).scalar() or 0
+                if not exists:
+                    conn.execute(text(ddl))
+                    conn.commit()
 
             result4 = conn.execute(
                 text(

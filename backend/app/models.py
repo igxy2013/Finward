@@ -162,6 +162,10 @@ class MonthlySnapshot(Base):
     actual_income: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     actual_expense: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     external_income: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    total_assets: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    total_liabilities: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    net_worth: Mapped[float | None] = mapped_column(Numeric(18, 2))
+    debt_ratio: Mapped[float | None] = mapped_column(Numeric(6, 2))
     computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
 

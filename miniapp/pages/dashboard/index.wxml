@@ -73,7 +73,7 @@
         <text class="card-subtitle">Assets Distribution</text>
       </view>
       <view class="chart-container">
-        <canvas type="2d" id="pieChart" canvas-id="pieChart" class="pie-chart"></canvas>
+        <canvas type="2d" id="pieChart" canvas-id="pieChart" class="pie-chart" bindtap="handleChartTap"></canvas>
       </view>
       <view class="chart-legend">
         <view class="legend-item" wx:for="{{chartData}}" wx:key="name">

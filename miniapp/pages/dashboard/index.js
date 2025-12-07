@@ -59,7 +59,8 @@ Page({
     },
     assets: [],
     liabilities: [],
-    chartData: []
+    chartData: [],
+    selectedChartIndex: null
   },
   openAssetDetail(e) {
     const id = Number(e.currentTarget.dataset.id);
@@ -384,94 +385,126 @@ Page({
       canvas.width = width * dpr;
       canvas.height = height * dpr;
       ctx.scale(dpr, dpr);
-      const { chartData } = this.data;
+      const { chartData, selectedChartIndex } = this.data;
       ctx.clearRect(0, 0, width, height);
       const centerX = width / 2;
       const centerY = height / 2;
-      const radius = Math.min(width, height) * 0.38;
+      const baseRadius = Math.min(width, height) * 0.46;
+      
       if (!chartData || chartData.length === 0 || chartData.every(item => Number(item.value) <= 0)) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
         ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.arc(centerX, centerY, baseRadius, 0, 2 * Math.PI);
         ctx.fill();
         return;
       }
+
       let currentAngle = -Math.PI / 2;
-      chartData.forEach((item) => {
+      chartData.forEach((item, index) => {
         const percentage = parseFloat(item.percentage) / 100;
         if (!percentage || percentage <= 0) return;
         const angle = percentage * 2 * Math.PI;
+        
+        const isSelected = index === selectedChartIndex;
+        const radius = isSelected ? baseRadius * 1.05 : baseRadius;
+        
         ctx.fillStyle = item.color;
+        if (isSelected) {
+          ctx.save();
+          ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+          ctx.shadowBlur = 10;
+        }
+
         ctx.beginPath();
         ctx.moveTo(centerX, centerY);
         ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + angle);
         ctx.closePath();
         ctx.fill();
+        
+        if (isSelected) {
+          ctx.restore();
+        }
+
         currentAngle += angle;
       });
+
       ctx.fillStyle = '#ffffff';
       ctx.beginPath();
-      ctx.arc(centerX, centerY, radius * 0.45, 0, 2 * Math.PI);
+      ctx.arc(centerX, centerY, baseRadius * 0.7, 0, 2 * Math.PI);
       ctx.fill();
-      const total = (chartData || []).reduce((sum, item) => sum + (Number(item.value) > 0 ? Number(item.value) : 0), 0);
-      ctx.fillStyle = '#374151';
+
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = '14px sans-serif';
-      ctx.fillText(`￥${this.formatNumber(total)}`, centerX, centerY);
-      let angleStart = -Math.PI / 2;
-      const labels = [];
-      chartData.forEach((item) => {
-        const pct = parseFloat(item.percentage) / 100;
-        if (!pct || pct <= 0) return;
-        const ang = pct * 2 * Math.PI;
-        const mid = angleStart + ang / 2;
-        const sx = centerX + Math.cos(mid) * radius;
-        const sy = centerY + Math.sin(mid) * radius;
-        const ex = centerX + Math.cos(mid) * (radius + 8);
-        let ey = centerY + Math.sin(mid) * (radius + 8);
-        const right = Math.cos(mid) >= 0;
-        const hx = right ? ex + 28 : ex - 28;
-        const text = `￥${this.formatNumber(item.value)}`;
-        labels.push({ sx, sy, ex, ey, hx, right, text });
-        angleStart += ang;
-      });
-      const minGap = 14;
-      const clampY = (y) => Math.max(12, Math.min(height - 12, y));
-      const adjustGroup = (group) => {
-        group.sort((a, b) => a.ey - b.ey);
-        for (let i = 1; i < group.length; i++) {
-          if (group[i].ey - group[i - 1].ey < minGap) {
-            group[i].ey = group[i - 1].ey + minGap;
-          }
-        }
-        for (let i = group.length - 2; i >= 0; i--) {
-          group[i].ey = clampY(group[i].ey);
-          if (group[i + 1].ey - group[i].ey < minGap) {
-            group[i].ey = group[i + 1].ey - minGap;
-          }
-        }
-        group.forEach(l => { l.ey = clampY(l.ey); });
-      };
-      const rightGroup = labels.filter(l => l.right);
-      const leftGroup = labels.filter(l => !l.right);
-      adjustGroup(rightGroup);
-      adjustGroup(leftGroup);
-      ctx.strokeStyle = '#94a3b8';
-      ctx.lineWidth = 1;
-      labels.forEach(l => {
-        ctx.beginPath();
-        ctx.moveTo(l.sx, l.sy);
-        ctx.lineTo(l.ex, l.ey);
-        ctx.lineTo(l.hx, l.ey);
-        ctx.stroke();
+      
+      if (selectedChartIndex !== null && chartData[selectedChartIndex]) {
+        const selectedItem = chartData[selectedChartIndex];
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(selectedItem.name, centerX, centerY - 12);
+        ctx.fillStyle = selectedItem.color;
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(selectedItem.value)}`, centerX, centerY + 12);
+      } else {
+        const total = (chartData || []).reduce((sum, item) => sum + (Number(item.value) > 0 ? Number(item.value) : 0), 0);
+        ctx.fillStyle = '#64748b';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('总资产', centerX, centerY - 12);
         ctx.fillStyle = '#374151';
-        ctx.font = '11px sans-serif';
-        ctx.textAlign = l.right ? 'left' : 'right';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
-      });
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(total)}`, centerX, centerY + 12);
+      }
     });
+  },
+  handleChartTap(e) {
+    const touch = e.touches[0] || e.changedTouches[0];
+    const clientX = touch ? touch.clientX : e.detail.x;
+    const clientY = touch ? touch.clientY : e.detail.y;
+
+    wx.createSelectorQuery().in(this).select('#pieChart').boundingClientRect((rect) => {
+      if (!rect) return;
+      
+      const x = clientX - rect.left;
+      const y = clientY - rect.top;
+      
+      const { width, height } = rect;
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const dx = x - centerX;
+      const dy = y - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const radius = Math.min(width, height) * 0.46;
+
+      if (dist < radius * 0.4 || dist > radius * 1.2) {
+        this.setData({ selectedChartIndex: null }, () => this.drawChart());
+        return;
+      }
+
+      let angle = Math.atan2(dy, dx);
+      let relAngle = angle - (-Math.PI / 2);
+      while (relAngle < 0) relAngle += 2 * Math.PI;
+      while (relAngle >= 2 * Math.PI) relAngle -= 2 * Math.PI;
+
+      let currentTotalAngle = 0;
+      let foundIndex = -1;
+      const { chartData } = this.data;
+
+      for (let i = 0; i < chartData.length; i++) {
+        const item = chartData[i];
+        const percentage = parseFloat(item.percentage) / 100;
+        const itemAngle = percentage * 2 * Math.PI;
+        
+        if (relAngle >= currentTotalAngle && relAngle < currentTotalAngle + itemAngle) {
+          foundIndex = i;
+          break;
+        }
+        currentTotalAngle += itemAngle;
+      }
+
+      if (foundIndex !== -1) {
+        const newIndex = this.data.selectedChartIndex === foundIndex ? null : foundIndex;
+        this.setData({ selectedChartIndex: newIndex }, () => this.drawChart());
+      }
+    }).exec();
   },
   async handleLogin() {
     const app = getApp();
