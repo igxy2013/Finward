@@ -1,5 +1,6 @@
 from __future__ import annotations
 from datetime import date, datetime
+import datetime as dt_module
 from enum import Enum
 from decimal import Decimal
 from typing import Literal, Any
@@ -382,6 +383,9 @@ class AccountValueUpdateOut(BaseModel):
     household_id: int
     value: Decimal
     ts: datetime
+    date: Optional[dt_module.date] = None
+    time: int | None = None
+    formatted_date: str | None = None
     note: str | None = None
     created_at: datetime
     updated_at: datetime

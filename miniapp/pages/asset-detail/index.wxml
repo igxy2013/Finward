@@ -45,6 +45,15 @@
       </view>
     </view>
 
+    <view class="card">
+      <view class="card-header">
+        <text class="card-title">现值趋势</text>
+      </view>
+      <view class="chart-block">
+        <canvas type="2d" id="valueTrendCanvas" canvas-id="valueTrendChart" class="chart-canvas" style="width: 100%; height: 160px;"></canvas>
+      </view>
+    </view>
+
     <view class="card info-card">
       <view class="card-header">
         <text class="card-title">基本信息</text>
@@ -121,6 +130,8 @@
         <view class="empty-text">暂无更新记录</view>
       </view>
     </view>
+
+    
 
     <view class="footer-actions">
       <button class="primary-btn" bindtap="openUpdateModal">更新现值</button>

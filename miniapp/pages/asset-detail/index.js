@@ -233,6 +233,7 @@ Page({
               change_sign
             });
           }
+          this.drawValueTrendChart();
         });
       } catch (e) {
         let arr = [];
@@ -261,9 +262,166 @@ Page({
               change_sign
             });
           }
+          this.drawValueTrendChart();
         });
       }
     })();
+  },
+  drawValueTrendChart() {
+    const list = this.data.valueUpdates || [];
+    const detail = this.data.detail || {};
+    const query = wx.createSelectorQuery().in(this);
+    query
+      .select('#valueTrendCanvas').node()
+      .select('#valueTrendCanvas').boundingClientRect()
+      .exec((res) => {
+        const node = res && res[0] ? res[0].node : null;
+        const rect = res && res[1] ? res[1] : null;
+        const fallbackW = 320;
+        const fallbackH = 160;
+        const width = rect && rect.width ? rect.width : fallbackW;
+        const height = rect && rect.height ? rect.height : fallbackH;
+        if (!node) return;
+        const canvas = node;
+        const ctx = canvas.getContext('2d');
+        let dpr = 1;
+        if (typeof wx.getWindowInfo === 'function') {
+          const info = wx.getWindowInfo();
+          dpr = (info && typeof info.pixelRatio === 'number') ? info.pixelRatio : 1;
+        }
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.scale(dpr, dpr);
+        const padding = 20;
+        const iw = width - padding * 2;
+        const ih = height - padding * 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        const parseTs = (x) => {
+          try {
+            const d = (x instanceof Date) ? x : new Date(String(x).replace(' ', 'T'));
+            const t = d.getTime();
+            return Number.isNaN(t) ? null : t;
+          } catch (e) { return null; }
+        };
+        const startTs = (() => {
+          const s = detail.invest_start_date || detail.created_at || null;
+          const t = s ? parseTs(s) : null;
+          return t != null ? t : Date.now();
+        })();
+        const initialVal = this.parseNumber(detail.initial_amount ?? detail.amount);
+        const currentVal = this.parseNumber(detail.current_value ?? detail.initial_amount ?? detail.amount);
+        const updates = list.slice().map(r => ({ ts: parseTs(r.raw_ts), val: Number(r.value_raw || 0) }))
+          .filter(x => x.ts != null && x.ts >= startTs);
+        const events = [{ ts: startTs, val: initialVal }, ...updates, { ts: Date.now(), val: currentVal }]
+          .sort((a, b) => a.ts - b.ts)
+          .reduce((acc, cur) => {
+            if (!acc.length || acc[acc.length - 1].ts !== cur.ts) acc.push(cur); else acc[acc.length - 1] = cur;
+            return acc;
+          }, []);
+        const values = events.map(x => Number(x.val || 0));
+        const maxV = Math.max(...values);
+        const minV = Math.min(...values);
+        const range = (maxV - minV) || 1;
+        const points = events.map((x, i) => {
+          const v = Number(x.val || 0);
+          const xPos = padding + (i / Math.max(events.length - 1, 1)) * iw;
+          const yPos = padding + (1 - (v - minV) / range) * ih;
+          return { x: xPos, y: yPos };
+        });
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, height - padding);
+        ctx.lineTo(width - padding, height - padding);
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding, height - padding);
+        ctx.stroke();
+        const tickCount = 4;
+        ctx.fillStyle = '#334155';
+        ctx.font = '10px sans-serif';
+        for (let i = 0; i <= tickCount; i++) {
+          const y = padding + (i / tickCount) * ih;
+          const v = minV + (1 - i / tickCount) * range;
+          const label = this.formatNumber(v);
+          ctx.fillText(label, padding + 4, y - 2);
+        }
+        const leftLabel = (() => {
+          const s = events[0];
+          const d = s && s.ts ? new Date(s.ts) : null;
+          if (!d || isNaN(d.getTime())) return '';
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${mm}/${dd}`;
+        })();
+        const rightLabel = (() => {
+          const s = events[events.length - 1];
+          const d = s && s.ts ? new Date(s.ts) : null;
+          if (!d || isNaN(d.getTime())) return '';
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${mm}/${dd}`;
+        })();
+        ctx.textAlign = 'left';
+        ctx.fillText(leftLabel, padding, height - padding + 12);
+        ctx.textAlign = 'right';
+        ctx.fillText(rightLabel, width - padding, height - padding + 12);
+        ctx.fillStyle = 'rgba(129,140,248,0.25)';
+        ctx.beginPath();
+        if (points.length === 1) {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
+          ctx.lineTo(points[0].x, height - padding);
+        } else if (points.length === 2) {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
+          ctx.lineTo(points[1].x, points[1].y);
+          ctx.lineTo(points[1].x, height - padding);
+        } else {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
+          for (let i = 1; i < points.length - 1; i++) {
+            const xc = (points[i].x + points[i + 1].x) / 2;
+            const yc = (points[i].y + points[i + 1].y) / 2;
+            ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+          }
+          ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+          ctx.lineTo(points[points.length - 1].x, height - padding);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (points.length > 0) {
+          ctx.moveTo(points[0].x, points[0].y);
+          if (points.length === 2) {
+            ctx.lineTo(points[1].x, points[1].y);
+          } else {
+            for (let i = 1; i < points.length - 1; i++) {
+              const xc = (points[i].x + points[i + 1].x) / 2;
+              const yc = (points[i].y + points[i + 1].y) / 2;
+              ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+            }
+            ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+          }
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#1d4ed8';
+        points.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        if (events.length >= 2) {
+          const startVal = this.formatNumber(events[0].val || 0);
+          const endVal = this.formatNumber(events[events.length - 1].val || 0);
+          ctx.fillStyle = '#64748b';
+          ctx.textAlign = 'center';
+          ctx.font = '10px sans-serif';
+          ctx.fillText(`${startVal} → ${endVal}`, width / 2, padding - 6);
+        }
+      });
   },
   autoDepreciationUpdateIfNeeded() {
     if (this.data.isDepreciating) return;

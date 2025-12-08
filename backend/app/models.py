@@ -180,3 +180,17 @@ class AccountValueUpdate(Base):
     note: Mapped[str | None] = mapped_column(Text())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    @property
+    def date(self):
+        return self.ts.date() if self.ts else None
+
+    @property
+    def time(self):
+        # Return timestamp in milliseconds
+        return int(self.ts.timestamp() * 1000) if self.ts else 0
+
+    @property
+    def formatted_date(self):
+        # Return YYYY-MM-DD string
+        return self.ts.strftime('%Y-%m-%d') if self.ts else ""

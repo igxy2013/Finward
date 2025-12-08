@@ -2595,174 +2595,176 @@ Page({
   },
   drawTrendChart() {
     const trend = this.data.trend;
-    const ctx = wx.createCanvasContext("trendChart", this);
     const query = wx.createSelectorQuery().in(this);
-    query.select("#trendCanvas").boundingClientRect((rect) => {
-      if (!rect) return;
-      const width = rect.width;
-      const height = rect.height;
-      const padding = 20;
-      const innerWidth = width - padding * 2;
-      const innerHeight = height - padding * 2;
-
-      ctx.setFillStyle("rgba(255,255,255,0.04)");
-      ctx.fillRect(0, 0, width, height);
-
-      if (!trend || trend.length === 0) {
-        ctx.setFillStyle("rgba(255,255,255,0.5)");
-        ctx.setFontSize(14);
-        ctx.setTextAlign("center");
-        ctx.setTextBaseline("middle");
-        ctx.fillText("暂无趋势数据", width / 2, height / 2);
-        ctx.draw();
-        return;
-      }
-
-      const values = trend.map((item) => Number(item.net_worth || 0));
-      const maxValue = Math.max(...values);
-      const minValue = Math.min(...values);
-      const range = maxValue - minValue || 1;
-
-      const points = trend.map((item, index) => {
-        const value = Number(item.net_worth || 0);
-        const x = padding + (index / Math.max(trend.length - 1, 1)) * innerWidth;
-        const y = padding + (1 - (value - minValue) / range) * innerHeight;
-        return { x, y };
-      });
-
-      // Axis
-      ctx.setStrokeStyle("rgba(255,255,255,0.15)");
-      ctx.setLineWidth(1);
-      ctx.beginPath();
-      ctx.moveTo(padding, height - padding);
-      ctx.lineTo(width - padding, height - padding);
-      ctx.stroke();
-
-      ctx.setFillStyle("rgba(99,102,241,0.25)");
-      ctx.beginPath();
-      if (points.length === 1) {
-        ctx.moveTo(points[0].x, height - padding);
-        ctx.lineTo(points[0].x, points[0].y);
-        ctx.lineTo(points[0].x, height - padding);
-      } else if (points.length === 2) {
-        ctx.moveTo(points[0].x, height - padding);
-        ctx.lineTo(points[0].x, points[0].y);
-        ctx.lineTo(points[1].x, points[1].y);
-        ctx.lineTo(points[1].x, height - padding);
-      } else {
-        ctx.moveTo(points[0].x, height - padding);
-        ctx.lineTo(points[0].x, points[0].y);
-        for (let i = 1; i < points.length - 1; i++) {
-          const xc = (points[i].x + points[i + 1].x) / 2;
-          const yc = (points[i].y + points[i + 1].y) / 2;
-          ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+    query
+      .select('#trendCanvas').node()
+      .select('#trendCanvas').boundingClientRect()
+      .exec((res) => {
+        const node = res && res[0] ? res[0].node : null;
+        const rect = res && res[1] ? res[1] : null;
+        if (!node || !rect) return;
+        const width = rect.width;
+        const height = rect.height;
+        const canvas = node;
+        const ctx = canvas.getContext('2d');
+        let dpr = 1;
+        if (typeof wx.getWindowInfo === 'function') {
+          const info = wx.getWindowInfo();
+          dpr = (info && typeof info.pixelRatio === 'number') ? info.pixelRatio : 1;
         }
-        ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
-        ctx.lineTo(points[points.length - 1].x, height - padding);
-      }
-      ctx.closePath();
-      ctx.fill();
-
-      ctx.setStrokeStyle("#818cf8");
-      ctx.setLineWidth(2);
-      ctx.beginPath();
-      if (points.length > 0) {
-        ctx.moveTo(points[0].x, points[0].y);
-        if (points.length === 2) {
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.scale(dpr, dpr);
+        const padding = 20;
+        const innerWidth = width - padding * 2;
+        const innerHeight = height - padding * 2;
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(0, 0, width, height);
+        if (!trend || trend.length === 0) {
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.font = '14px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('暂无趋势数据', width / 2, height / 2);
+          return;
+        }
+        const values = trend.map((item) => Number(item.net_worth || 0));
+        const maxValue = Math.max(...values);
+        const minValue = Math.min(...values);
+        const range = maxValue - minValue || 1;
+        const points = trend.map((item, index) => {
+          const value = Number(item.net_worth || 0);
+          const x = padding + (index / Math.max(trend.length - 1, 1)) * innerWidth;
+          const y = padding + (1 - (value - minValue) / range) * innerHeight;
+          return { x, y };
+        });
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, height - padding);
+        ctx.lineTo(width - padding, height - padding);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(99,102,241,0.25)';
+        ctx.beginPath();
+        if (points.length === 1) {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
+          ctx.lineTo(points[0].x, height - padding);
+        } else if (points.length === 2) {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
           ctx.lineTo(points[1].x, points[1].y);
+          ctx.lineTo(points[1].x, height - padding);
         } else {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
           for (let i = 1; i < points.length - 1; i++) {
             const xc = (points[i].x + points[i + 1].x) / 2;
             const yc = (points[i].y + points[i + 1].y) / 2;
             ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
           }
           ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+          ctx.lineTo(points[points.length - 1].x, height - padding);
         }
-      }
-      ctx.stroke();
-
-      // Dots
-      ctx.setFillStyle("#c7d2fe");
-      points.forEach((point) => {
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+        ctx.closePath();
         ctx.fill();
+        ctx.strokeStyle = '#818cf8';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (points.length > 0) {
+          ctx.moveTo(points[0].x, points[0].y);
+          if (points.length === 2) {
+            ctx.lineTo(points[1].x, points[1].y);
+          } else {
+            for (let i = 1; i < points.length - 1; i++) {
+              const xc = (points[i].x + points[i + 1].x) / 2;
+              const yc = (points[i].y + points[i + 1].y) / 2;
+              ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+            }
+            ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
+          }
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#c7d2fe';
+        points.forEach((point) => {
+          ctx.beginPath();
+          ctx.arc(point.x, point.y, 4, 0, 2 * Math.PI);
+          ctx.fill();
+        });
       });
-
-      ctx.draw();
-    }).exec();
   },
   drawCashflowChart() {
     const cashflow = this.data.cashflow;
-    const ctx = wx.createCanvasContext("cashflowChart", this);
     const query = wx.createSelectorQuery().in(this);
-    query.select("#cashflowCanvas").boundingClientRect((rect) => {
-      if (!rect) return;
-      const width = rect.width;
-      const height = rect.height;
-      const padding = 20;
-      const chartHeight = height - padding * 2;
-      const axisY = padding + chartHeight / 2;
-      const barWidth = Math.max(12, (width - padding * 2) / Math.max(cashflow.length, 1) - 10);
-
-      ctx.setFillStyle("rgba(255,255,255,0.04)");
-      ctx.fillRect(0, 0, width, height);
-
-      if (!cashflow || cashflow.length === 0) {
-        ctx.setFillStyle("rgba(255,255,255,0.5)");
-        ctx.setFontSize(14);
-        ctx.setTextAlign("center");
-        ctx.setTextBaseline("middle");
-        ctx.fillText("暂无现金流数据", width / 2, height / 2);
-        ctx.draw();
-        return;
-      }
-
-      const maxValue = Math.max(
-        ...cashflow.map((item) => Math.max(Number(item.inflow || 0), Number(item.outflow || 0)))
-      ) || 1;
-      const scale = (chartHeight / 2) / maxValue;
-
-      // Axis line
-      ctx.setStrokeStyle("rgba(255,255,255,0.2)");
-      ctx.setLineWidth(1);
-      ctx.beginPath();
-      ctx.moveTo(padding, axisY);
-      ctx.lineTo(width - padding, axisY);
-      ctx.stroke();
-
-      cashflow.forEach((item, index) => {
-        const inflow = Number(item.inflow || 0);
-        const outflow = Number(item.outflow || 0);
-        const x = padding + index * (barWidth + 10) + barWidth / 2;
-
-        const inflowHeight = inflow * scale;
-        const outflowHeight = outflow * scale;
-
-        ctx.setFillStyle("#22c55e");
-        ctx.fillRect(
-          x - barWidth / 2,
-          axisY - inflowHeight,
-          barWidth / 2 - 2,
-          inflowHeight
-        );
-
-        ctx.setFillStyle("#ef4444");
-        ctx.fillRect(
-          x + 2,
-          axisY,
-          barWidth / 2 - 2,
-          outflowHeight
-        );
-
-        ctx.setFillStyle("rgba(255,255,255,0.5)");
-        ctx.setFontSize(12);
-        ctx.setTextAlign("center");
-        ctx.fillText(this.getDateLabel(item.date), x, height - 8);
+    query
+      .select('#cashflowCanvas').node()
+      .select('#cashflowCanvas').boundingClientRect()
+      .exec((res) => {
+        const node = res && res[0] ? res[0].node : null;
+        const rect = res && res[1] ? res[1] : null;
+        if (!node || !rect) return;
+        const width = rect.width;
+        const height = rect.height;
+        const canvas = node;
+        const ctx = canvas.getContext('2d');
+        let dpr = 1;
+        if (typeof wx.getWindowInfo === 'function') {
+          const info = wx.getWindowInfo();
+          dpr = (info && typeof info.pixelRatio === 'number') ? info.pixelRatio : 1;
+        }
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.scale(dpr, dpr);
+        const padding = 20;
+        const chartHeight = height - padding * 2;
+        const axisY = padding + chartHeight / 2;
+        const barWidth = Math.max(12, (width - padding * 2) / Math.max(cashflow.length, 1) - 10);
+        ctx.fillStyle = 'rgba(255,255,255,0.04)';
+        ctx.fillRect(0, 0, width, height);
+        if (!cashflow || cashflow.length === 0) {
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.font = '14px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('暂无现金流数据', width / 2, height / 2);
+          return;
+        }
+        const maxValue = Math.max(
+          ...cashflow.map((item) => Math.max(Number(item.inflow || 0), Number(item.outflow || 0)))
+        ) || 1;
+        const scale = (chartHeight / 2) / maxValue;
+        ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, axisY);
+        ctx.lineTo(width - padding, axisY);
+        ctx.stroke();
+        cashflow.forEach((item, index) => {
+          const inflow = Number(item.inflow || 0);
+          const outflow = Number(item.outflow || 0);
+          const x = padding + index * (barWidth + 10) + barWidth / 2;
+          const inflowHeight = inflow * scale;
+          const outflowHeight = outflow * scale;
+          ctx.fillStyle = '#22c55e';
+          ctx.fillRect(
+            x - barWidth / 2,
+            axisY - inflowHeight,
+            barWidth / 2 - 2,
+            inflowHeight
+          );
+          ctx.fillStyle = '#ef4444';
+          ctx.fillRect(
+            x + 2,
+            axisY,
+            barWidth / 2 - 2,
+            outflowHeight
+          );
+          ctx.fillStyle = 'rgba(255,255,255,0.5)';
+          ctx.font = '12px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.fillText(this.getDateLabel(item.date), x, height - 8);
+        });
       });
-
-      ctx.draw();
-    }).exec();
   },
   getDateLabel(dateStr) {
     if (!dateStr) return "";

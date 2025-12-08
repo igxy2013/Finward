@@ -71,6 +71,7 @@ def list_value_updates(account_id: int, session: Session = Depends(get_session),
         .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
         .all()
     )
+    print(f"[DEBUG] list_value_updates for account {account_id}, found {len(rows)} rows")
     return rows
 
 
