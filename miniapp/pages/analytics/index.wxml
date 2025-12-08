@@ -95,10 +95,10 @@
         <text class="card-subtitle">Income Distribution</text>
       </view>
       <view class="chart-wrapper">
-        <canvas type="2d" id="incomePie" canvas-id="incomePie" class="chart-canvas"></canvas>
+        <canvas type="2d" id="incomePie" canvas-id="incomePie" class="chart-canvas" bindtouchstart="onIncomePieTouch" bindtouchmove="onIncomePieTouch"></canvas>
       </view>
       <view class="chart-legend">
-        <block wx:for="{{incomeChartData}}" wx:key="name">
+        <block wx:for="{{incomeChartData}}" wx:key="index">
           <view class="legend-item">
             <view class="legend-dot" style="background-color: {{item.color}}"></view>
             <text class="legend-name">{{item.name}}</text>
@@ -139,10 +139,10 @@
         <text class="card-subtitle">Expense Distribution</text>
       </view>
       <view class="chart-wrapper">
-        <canvas type="2d" id="expensePie" canvas-id="expensePie" class="chart-canvas"></canvas>
+        <canvas type="2d" id="expensePie" canvas-id="expensePie" class="chart-canvas" bindtouchstart="onExpensePieTouch" bindtouchmove="onExpensePieTouch"></canvas>
       </view>
       <view class="chart-legend">
-        <block wx:for="{{expenseChartData}}" wx:key="name">
+        <block wx:for="{{expenseChartData}}" wx:key="index">
           <view class="legend-item">
             <view class="legend-dot" style="background-color: {{item.color}}"></view>
             <text class="legend-name">{{item.name}}</text>

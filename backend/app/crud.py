@@ -560,14 +560,17 @@ def upsert_monthly_snapshot(session: Session, user_id: int, year: int, month: in
     accs = session.scalars(stmt_acc).all()
     from calendar import monthrange as _mr
     last_day2 = _mr(year, month)[1]
-    eom_dt = datetime(year, month, last_day2, 23, 59, 59, tzinfo=timezone.utc)
+    today_date = datetime.now(timezone.utc).date()
+    is_current = (year == today_date.year and month == today_date.month)
+    val_end_date = today_date if is_current else date(year, month, last_day2)
+    eom_dt = datetime(val_end_date.year, val_end_date.month, val_end_date.day, 23, 59, 59, tzinfo=timezone.utc)
     for a in accs:
         base_amt = Decimal(a.amount)
         tval = a.type.value if hasattr(a.type, "value") else a.type
         val = base_amt
         if tval == "liability" and a.monthly_payment and a.monthly_payment > 0:
-            start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else end)
-            months_elapsed = 0 if end < start_base else ((end.year - start_base.year) * 12 + (end.month - start_base.month))
+            start_base = a.loan_start_date if a.loan_start_date else (to_utc(a.created_at).date() if a.created_at else val_end_date)
+            months_elapsed = 0 if val_end_date < start_base else ((val_end_date.year - start_base.year) * 12 + (val_end_date.month - start_base.month))
             payments_possible = int((base_amt / Decimal(a.monthly_payment)).to_integral_value(rounding="ROUND_FLOOR")) if a.monthly_payment else 0
             limit = a.loan_term_months if a.loan_term_months is not None else months_elapsed
             if getattr(a, "loan_end_date", None):
@@ -578,8 +581,8 @@ def upsert_monthly_snapshot(session: Session, user_id: int, year: int, month: in
             paid_months = min(months_elapsed, limit, payments_possible)
             val = max(Decimal(0), base_amt - Decimal(a.monthly_payment) * Decimal(paid_months))
         elif tval == "asset" and a.depreciation_rate and a.depreciation_rate > 0:
-            start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else end)
-            days = 0 if end < start_date else (end - start_date).days
+            start_date = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else val_end_date)
+            days = 0 if val_end_date < start_date else (val_end_date - start_date).days
             years = Decimal(days) / Decimal(365.25)
             rate = Decimal(a.depreciation_rate)
             val = max(Decimal(0), base_amt * (Decimal(1) - rate * years))
@@ -669,6 +672,7 @@ def overview(session: Session, user_id: int) -> schemas.OverviewOut:
     stmt = select(models.Account).where(models.Account.household_id == hh_id)
     accounts = session.scalars(stmt).all()
     now = datetime.now(timezone.utc).date()
+    today_eod = datetime(now.year, now.month, now.day, 23, 59, 59, tzinfo=timezone.utc)
     total_assets = Decimal(0)
     total_liabilities = Decimal(0)
     for a in accounts:
@@ -685,6 +689,7 @@ def overview(session: Session, user_id: int) -> schemas.OverviewOut:
                 latest = (
                     session.query(models.AccountValueUpdate)
                     .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                    .filter(models.AccountValueUpdate.ts <= today_eod)
                     .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
                     .first()
                 )
@@ -710,6 +715,7 @@ def overview(session: Session, user_id: int) -> schemas.OverviewOut:
                 latest = (
                     session.query(models.AccountValueUpdate)
                     .filter(models.AccountValueUpdate.household_id == hh_id, models.AccountValueUpdate.account_id == a.id)
+                    .filter(models.AccountValueUpdate.ts <= today_eod)
                     .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
                     .first()
                 )

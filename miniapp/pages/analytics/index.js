@@ -284,7 +284,7 @@ Page({
         () => {
           this.drawTrendChart();
           this.drawCashflowChart();
-          this.fetchStats(12);
+          this.buildFixedTrend(12);
           this.setData({ monthly: monthlyPoints }, () => { this.drawMonthlyCharts(); });
         }
       );
@@ -567,7 +567,7 @@ Page({
 
       const recorded = (list || []).map(x => ({ type: x.type, category: x.category, note: x.note, amount: Number(x.amount || 0), planned: !!x.planned }));
       const combinedAll = [...recorded, ...rents, ...assetIncomes, ...debts, ...designServiceIncome, ...recurringSynth, ...recurringSynthExpense];
-      const incomeItems = combinedAll.filter(i => i.type === 'income');
+      const incomeItems = combinedAll.filter(i => i.type === 'income' && i.planned);
       const expenseItems = combinedAll.filter(i => i.type === 'expense' && i.planned);
       const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
       const expenseChartData = this.calculateCashflowDistribution(expenseItems, 'expense');
@@ -787,11 +787,12 @@ Page({
   drawIncomePie() {
     const data = this.data.incomeChartData || [];
     const query = wx.createSelectorQuery().in(this);
-    query.select('#incomePie').fields({ node: true, size: true }).exec((res) => {
+    query.select('#incomePie').node().select('#incomePie').boundingClientRect().exec((res) => {
       const canvas = res && res[0] && res[0].node;
-      const width = res && res[0] && res[0].width;
-      const height = res && res[0] && res[0].height;
-      if (!canvas) return;
+      const rect = res && res[1];
+      if (!canvas || !rect) return;
+      const width = rect.width;
+      const height = rect.height;
       const dpr = (typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo().pixelRatio : 1) || 1;
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
@@ -814,6 +815,7 @@ Page({
         return;
       }
       let currentAngle = -Math.PI / 2;
+      const segments = [];
       data.forEach(item => {
         const percentage = parseFloat(item.percentage) / 100;
         if (!percentage || percentage <= 0) return;
@@ -823,6 +825,7 @@ Page({
         const gap = data.length > 1 ? 0.02 : 0;
         const start = currentAngle + (percentage > gap ? gap / 2 : 0);
         const end = currentAngle + angle - (percentage > gap ? gap / 2 : 0);
+        segments.push({ start, end });
         
         ctx.fillStyle = item.color;
         ctx.beginPath();
@@ -898,25 +901,47 @@ Page({
         ctx.textBaseline = 'middle';
         ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
       });
+      const sel = typeof this._incomePieSelectedIdx === 'number' ? this._incomePieSelectedIdx : -1;
       const totalInc = (data || []).reduce((s, it) => s + (Number(it.value) > 0 ? Number(it.value) : 0), 0);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#9CA3AF';
-      ctx.font = '12px sans-serif';
-      ctx.fillText('总收入', centerX, centerY - 10);
-      ctx.fillStyle = '#111827';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.fillText(`￥${this.formatNumber(totalInc)}`, centerX, centerY + 10);
+      if (sel >= 0 && sel < data.length) {
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(String(data[sel].name || ''), centerX, centerY - 10);
+        ctx.fillStyle = data[sel].color || '#111827';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(data[sel].value)}`, centerX, centerY + 10);
+      } else {
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('总收入', centerX, centerY - 10);
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(totalInc)}`, centerX, centerY + 10);
+      }
+      if (sel >= 0 && sel < data.length && segments[sel]) {
+        const seg = segments[sel];
+        ctx.save();
+        ctx.strokeStyle = data[sel].color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 1, seg.start, seg.end);
+        ctx.stroke();
+        ctx.restore();
+      }
+      this._incomePieMeta = { rect, centerX, centerY, innerRadius, radius, segments };
     });
   },
   drawExpensePie() {
     const data = this.data.expenseChartData || [];
     const query = wx.createSelectorQuery().in(this);
-    query.select('#expensePie').fields({ node: true, size: true }).exec((res) => {
+    query.select('#expensePie').node().select('#expensePie').boundingClientRect().exec((res) => {
       const canvas = res && res[0] && res[0].node;
-      const width = res && res[0] && res[0].width;
-      const height = res && res[0] && res[0].height;
-      if (!canvas) return;
+      const rect = res && res[1];
+      if (!canvas || !rect) return;
+      const width = rect.width;
+      const height = rect.height;
       const dpr = (typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo().pixelRatio : 1) || 1;
       canvas.width = Math.floor(width * dpr);
       canvas.height = Math.floor(height * dpr);
@@ -939,6 +964,7 @@ Page({
         return;
       }
       let currentAngle = -Math.PI / 2;
+      const segments = [];
       data.forEach(item => {
         const percentage = parseFloat(item.percentage) / 100;
         if (!percentage || percentage <= 0) return;
@@ -948,6 +974,7 @@ Page({
         const gap = data.length > 1 ? 0.02 : 0;
         const start = currentAngle + (percentage > gap ? gap / 2 : 0);
         const end = currentAngle + angle - (percentage > gap ? gap / 2 : 0);
+        segments.push({ start, end });
         
         ctx.fillStyle = item.color;
         ctx.beginPath();
@@ -1023,16 +1050,101 @@ Page({
         ctx.textBaseline = 'middle';
         ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
       });
+      const sel = typeof this._expensePieSelectedIdx === 'number' ? this._expensePieSelectedIdx : -1;
       const totalExp = (data || []).reduce((s, it) => s + (Number(it.value) > 0 ? Number(it.value) : 0), 0);
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#9CA3AF';
-      ctx.font = '12px sans-serif';
-      ctx.fillText('总支出', centerX, centerY - 10);
-      ctx.fillStyle = '#111827';
-      ctx.font = 'bold 16px sans-serif';
-      ctx.fillText(`￥${this.formatNumber(totalExp)}`, centerX, centerY + 10);
+      if (sel >= 0 && sel < data.length) {
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(String(data[sel].name || ''), centerX, centerY - 10);
+        ctx.fillStyle = data[sel].color || '#111827';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(data[sel].value)}`, centerX, centerY + 10);
+      } else {
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('总支出', centerX, centerY - 10);
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(totalExp)}`, centerX, centerY + 10);
+      }
+      if (sel >= 0 && sel < data.length && segments[sel]) {
+        const seg = segments[sel];
+        ctx.save();
+        ctx.strokeStyle = data[sel].color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 1, seg.start, seg.end);
+        ctx.stroke();
+        ctx.restore();
+      }
+      this._expensePieMeta = { rect, centerX, centerY, innerRadius, radius, segments };
     });
+  },
+  onIncomePieTouch(e) {
+    const meta = this._incomePieMeta;
+    if (!meta) return;
+    const touch = (e && e.touches && e.touches[0]) || e.detail;
+    if (!touch) return;
+    const localX = (typeof touch.x === 'number') ? touch.x : (((touch.clientX || 0) - (meta.rect.left || 0)));
+    const localY = (typeof touch.y === 'number') ? touch.y : (((touch.clientY || 0) - (meta.rect.top || 0)));
+    const dx = localX - meta.centerX;
+    const dy = localY - meta.centerY;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    if (r < meta.innerRadius || r > meta.radius + 4) {
+      this._incomePieSelectedIdx = -1;
+      this.drawIncomePie();
+      return;
+    }
+    let ang = Math.atan2(dy, dx);
+    if (ang < 0) ang += Math.PI * 2;
+    let idx = -1;
+    for (let i = 0; i < meta.segments.length; i++) {
+      let s = meta.segments[i].start;
+      let e2 = meta.segments[i].end;
+      if (s < 0) s += Math.PI * 2;
+      if (e2 < 0) e2 += Math.PI * 2;
+      if (e2 < s) {
+        if (ang >= s || ang <= e2) { idx = i; break; }
+      } else {
+        if (ang >= s && ang <= e2) { idx = i; break; }
+      }
+    }
+    this._incomePieSelectedIdx = idx;
+    this.drawIncomePie();
+  },
+  onExpensePieTouch(e) {
+    const meta = this._expensePieMeta;
+    if (!meta) return;
+    const touch = (e && e.touches && e.touches[0]) || e.detail;
+    if (!touch) return;
+    const localX = (typeof touch.x === 'number') ? touch.x : (((touch.clientX || 0) - (meta.rect.left || 0)));
+    const localY = (typeof touch.y === 'number') ? touch.y : (((touch.clientY || 0) - (meta.rect.top || 0)));
+    const dx = localX - meta.centerX;
+    const dy = localY - meta.centerY;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    if (r < meta.innerRadius || r > meta.radius + 4) {
+      this._expensePieSelectedIdx = -1;
+      this.drawExpensePie();
+      return;
+    }
+    let ang = Math.atan2(dy, dx);
+    if (ang < 0) ang += Math.PI * 2;
+    let idx = -1;
+    for (let i = 0; i < meta.segments.length; i++) {
+      let s = meta.segments[i].start;
+      let e2 = meta.segments[i].end;
+      if (s < 0) s += Math.PI * 2;
+      if (e2 < 0) e2 += Math.PI * 2;
+      if (e2 < s) {
+        if (ang >= s || ang <= e2) { idx = i; break; }
+      } else {
+        if (ang >= s && ang <= e2) { idx = i; break; }
+      }
+    }
+    this._expensePieSelectedIdx = idx;
+    this.drawExpensePie();
   },
   prepareDailySeries(items, startDate, endDate) {
     const dim = endDate.getDate();
@@ -1613,9 +1725,15 @@ Page({
       if (this._incomeTrendSelectedIdx !== -1) {
         this._incomeTrendSelectedIdx = -1;
         this.drawIncomeTrend();
-        // 只有当停止滑动后才恢复默认数据
-        this._incomeTrendTouchTimer = setTimeout(() => {
-          this.fetchCashflowDistribution();
+        // 只有当停止滑动后才恢复默认月份分布（与趋势一致）
+        this._incomeTrendTouchTimer = setTimeout(async () => {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = now.getMonth() + 1;
+          const { incomeItems, expenseItems } = await this.getFixedItemsByMonth(y, m);
+          const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
+          const expenseChartData = this.calculateCashflowDistribution(expenseItems, 'expense');
+          this.setData({ incomeChartData, expenseChartData }, () => { this.drawIncomePie(); this.drawExpensePie(); });
         }, 500);
       }
       return;
@@ -1658,9 +1776,15 @@ Page({
       if (this._expenseTrendSelectedIdx !== -1) {
         this._expenseTrendSelectedIdx = -1;
         this.drawExpenseTrend();
-        // 只有当停止滑动后才恢复默认数据
-        this._expenseTrendTouchTimer = setTimeout(() => {
-          this.fetchCashflowDistribution();
+        // 只有当停止滑动后才恢复默认月份分布（与趋势一致）
+        this._expenseTrendTouchTimer = setTimeout(async () => {
+          const now = new Date();
+          const y = now.getFullYear();
+          const m = now.getMonth() + 1;
+          const { incomeItems, expenseItems } = await this.getFixedItemsByMonth(y, m);
+          const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
+          const expenseChartData = this.calculateCashflowDistribution(expenseItems, 'expense');
+          this.setData({ incomeChartData, expenseChartData }, () => { this.drawIncomePie(); this.drawExpensePie(); });
         }, 500);
       }
       return;
@@ -1693,25 +1817,40 @@ Page({
       const y = parseInt(parts[0] || '0');
       const m = parseInt(parts[1] || '0');
       if (!y || !m) return;
-      const startDate = new Date(y, m - 1, 1);
-      const endDate = new Date(y, m, 0);
-      const start = this.formatDate(startDate);
-      const end = this.formatDate(endDate);
-      const query = { start, end };
-      let list = [];
+      const { incomeItems, expenseItems } = await this.getFixedItemsByMonth(y, m);
+      const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
+      const expenseChartData = this.calculateCashflowDistribution(expenseItems, 'expense');
+      this.setData({ incomeChartData, expenseChartData }, () => { this.drawIncomePie(); this.drawExpensePie(); });
+    } catch (errZ) {
+      this.setData({ incomeChartData: [], expenseChartData: [] });
+    }
+  },
+  async getFixedItemsByMonth(y, m) {
+    const startDate = new Date(y, m - 1, 1);
+    const endDate = new Date(y, m, 0);
+    const start = this.formatDate(startDate);
+    const end = this.formatDate(endDate);
+    const query = { start, end };
+    let list = [];
+    // 优先使用与收支页面一致的统一接口
+    try { list = await api.listWealthItems(start, end); } catch (eUnified) { list = []; }
+    const unifiedOk = Array.isArray(list) && list.length > 0 && String(list[0]?.id || '').length > 0;
+    if (!unifiedOk) {
       try { list = await api.listCashflows(query); } catch (e0) { list = []; }
+    }
 
-      const rangeStart = start ? new Date(String(start).trim().replace(/-/g, "/")) : null;
-      const rangeEnd = end ? new Date(String(end).trim().replace(/-/g, "/")) : null;
-      const inRange = (ds) => {
-        if (!rangeStart || !rangeEnd) return true;
-        const d = new Date(String(ds).trim().replace(/-/g, "/"));
-        if (isNaN(d.getTime())) return false;
-        return d >= rangeStart && d <= rangeEnd;
-      };
+    const rangeStart = start ? new Date(String(start).trim().replace(/-/g, "/")) : null;
+    const rangeEnd = end ? new Date(String(end).trim().replace(/-/g, "/")) : null;
+    const inRange = (ds) => {
+      if (!rangeStart || !rangeEnd) return true;
+      const d = new Date(String(ds).trim().replace(/-/g, "/"));
+      if (isNaN(d.getTime())) return false;
+      return d >= rangeStart && d <= rangeEnd;
+    };
 
-      let rents = [];
-      let assets = [];
+    let rents = [];
+    let assets = [];
+    if (!unifiedOk) {
       try {
         const res = await Promise.all([
           api.listRentReminders(90),
@@ -1728,8 +1867,10 @@ Page({
           planned: true
         }));
       } catch (errA) { rents = []; assets = []; }
+    }
 
-      let assetIncomes = [];
+    let assetIncomes = [];
+    if (!unifiedOk) {
       try {
         (assets || []).forEach((acc) => {
           const mi = Number(acc.monthly_income || 0);
@@ -1745,8 +1886,10 @@ Page({
           }
         });
       } catch (errB) { assetIncomes = []; }
+    }
 
-      let debts = [];
+    let debts = [];
+    if (!unifiedOk) {
       try {
         let liabilities = [];
         try { liabilities = await api.listAccounts("liability"); } catch (eL) { liabilities = []; }
@@ -1801,8 +1944,10 @@ Page({
           }
         });
       } catch (errC) { debts = []; }
+    }
 
-      let designServiceIncome = [];
+    let designServiceIncome = [];
+    if (!unifiedOk) {
       try {
         const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
         const monthStr = `${y}-${String(m).padStart(2, '0')}`;
@@ -1824,8 +1969,10 @@ Page({
           designServiceIncome = [{ id: `design-service:${monthStr}`, type: 'income', category: '设计服务', amount: total, date: end, planned: true }];
         }
       } catch (errD) { designServiceIncome = []; }
+    }
 
-      let recurringSynth = [];
+    let recurringSynth = [];
+    if (!unifiedOk) {
       try {
         const prevStartDate = new Date(startDate.getFullYear(), startDate.getMonth() - 1, 1);
         const prevEndDate = new Date(startDate.getFullYear(), startDate.getMonth(), 0);
@@ -1849,8 +1996,10 @@ Page({
             }
           });
       } catch (eRS) { recurringSynth = []; }
+    }
 
-      let recurringSynthExpense = [];
+    let recurringSynthExpense = [];
+    if (!unifiedOk) {
       try {
         const prevStartDate = new Date(startDate.getFullYear(), startDate.getMonth() - 1, 1);
         const prevEndDate = new Date(startDate.getFullYear(), startDate.getMonth(), 0);
@@ -1874,14 +2023,16 @@ Page({
             }
           });
       } catch (eRSE) { recurringSynthExpense = []; }
+    }
 
-      let localMasters = [];
+    let localMasters = [];
+    if (!unifiedOk) {
       try {
         const monthKey = `${y}${String(m).padStart(2, '0')}`;
         let masters = wx.getStorageSync('fw_recurring_masters');
         let skipStore = wx.getStorageSync('fw_recurring_skip');
         const skippedArr = skipStore && typeof skipStore === 'object' ? (skipStore[monthKey] || []) : [];
-        
+
         if (masters && typeof masters === 'object') {
              const recordedKeys = new Set((list || [])
               .filter(i => !!i.planned && !!i.recurring_monthly)
@@ -1924,12 +2075,12 @@ Page({
                 }
              });
         }
-      } catch (eLocal) {
-          localMasters = [];
-      }
+      } catch (eLocal) { localMasters = []; }
+    }
 
-      let yearSynthIncome = [];
-      let yearSynthExpense = [];
+    let yearSynthIncome = [];
+    let yearSynthExpense = [];
+    if (!unifiedOk) {
       try {
         const yearStart = `${y}-01-01`;
         const yearEnd = `${y}-12-31`;
@@ -1975,16 +2126,44 @@ Page({
           yearSynthExpense.push({ id: `recurring:year:${key}:${y}${String(m).padStart(2, '0')}`, type: 'expense', category: d.category || '其他支出', amount: Number(d.amount || 0), date: end, planned: true });
         });
       } catch (eYear) { yearSynthIncome = []; yearSynthExpense = []; }
+    }
 
-      const recorded = (list || []).map(x => ({ type: x.type, category: x.category, note: x.note, amount: Number(x.amount || 0), planned: !!x.planned }));
-      const combinedAll = [...recorded, ...rents, ...assetIncomes, ...debts, ...designServiceIncome, ...recurringSynth, ...recurringSynthExpense, ...localMasters, ...yearSynthIncome, ...yearSynthExpense];
-      const incomeItems = combinedAll.filter(i => i.type === 'income');
-      const expenseItems = combinedAll.filter(i => i.type === 'expense' && i.planned);
-      const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
-      const expenseChartData = this.calculateCashflowDistribution(expenseItems, 'expense');
-      this.setData({ incomeChartData, expenseChartData }, () => { this.drawIncomePie(); this.drawExpensePie(); });
-    } catch (errZ) {
-      this.setData({ incomeChartData: [], expenseChartData: [] });
+    const recorded = (list || []).map(x => ({ type: x.type, category: x.category, note: x.note, amount: Number(x.amount || 0), planned: !!x.planned }));
+    const combinedAll = unifiedOk ? recorded : [...recorded, ...rents, ...assetIncomes, ...debts, ...designServiceIncome, ...recurringSynth, ...recurringSynthExpense, ...localMasters, ...yearSynthIncome, ...yearSynthExpense];
+    const incomeItems = combinedAll.filter(i => i.type === 'income' && i.planned);
+    const expenseItems = combinedAll.filter(i => i.type === 'expense' && i.planned);
+    return { incomeItems, expenseItems };
+  },
+  async buildFixedTrend(months = 12) {
+    try {
+      const now = new Date();
+      const labels = [];
+      const incomeSeries = [];
+      const expenseSeries = [];
+      let lastIncomeItems = [];
+      let lastExpenseItems = [];
+      for (let i = months - 1; i >= 0; i--) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const y = d.getFullYear();
+        const m = d.getMonth() + 1;
+        labels.push(`${y}-${String(m).padStart(2, '0')}`);
+        const { incomeItems, expenseItems } = await this.getFixedItemsByMonth(y, m);
+        const sum = (arr) => (arr || []).reduce((s, it) => s + Number(it.amount || 0), 0);
+        incomeSeries.push(sum(incomeItems));
+        expenseSeries.push(sum(expenseItems));
+        if (i === 0) { lastIncomeItems = incomeItems; lastExpenseItems = expenseItems; }
+      }
+      const monthLabels = labels.map(l => this.getMonthLabel(l));
+      const incomeChartData = this.calculateCashflowDistribution(lastIncomeItems, 'income');
+      const expenseChartData = this.calculateCashflowDistribution(lastExpenseItems, 'expense');
+      this.setData({ incomeTrendSeries: incomeSeries, expenseTrendSeries: expenseSeries, incomeTrendLabels: monthLabels, expenseTrendLabels: monthLabels, incomeChartData, expenseChartData }, () => {
+        this.drawIncomePie();
+        this.drawExpensePie();
+        this.drawIncomeTrend();
+        this.drawIncomeExpenseRatioTrend();
+      });
+    } catch (e) {
+      this.setData({ incomeTrendSeries: [], expenseTrendSeries: [], incomeTrendLabels: [], expenseTrendLabels: [], incomeChartData: [], expenseChartData: [] });
     }
   },
   formatDate(d) {

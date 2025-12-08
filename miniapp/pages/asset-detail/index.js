@@ -207,10 +207,10 @@ Page({
         const arr = await api.listAccountValueUpdates(id);
         const formatted = (arr || []).map(r => ({
           id: r.id != null ? r.id : null,
-          raw_ts: r.created_at || r.ts || null,
+          raw_ts: r.ts || r.created_at || null,
           value_raw: Number(r.value || 0),
           value_display: this.formatNumber(r.value),
-          date_display: this.formatDateTime(r.created_at || new Date(r.ts)),
+          date_display: this.formatDateTime(r.ts || r.created_at),
           note: r.note || ''
         }));
         this.setData({ valueUpdates: formatted, valueUpdatesRaw: arr || [] }, () => {

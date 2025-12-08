@@ -36,6 +36,11 @@ def update_account(
     updated = crud.update_account(session, account_id, payload)
     if not updated:
         raise HTTPException(status_code=404, detail="Account not found")
+    try:
+        now = datetime.now(timezone.utc)
+        crud.upsert_monthly_snapshot(session, user.id, now.year, now.month, None)
+    except Exception:
+        pass
     return crud.get_account(session, account_id)
 
 
@@ -111,6 +116,22 @@ def create_value_update(account_id: int, payload: dict = Body(...), session: Ses
     session.add(row)
     session.commit()
     session.refresh(row)
+    try:
+        dt = row.ts
+        base = dt if (dt.tzinfo and dt.tzinfo.utcoffset(dt) is not None) else dt.replace(tzinfo=timezone.utc)
+        cur = datetime.now(timezone.utc)
+        y = base.year
+        m = base.month
+        while True:
+            crud.upsert_monthly_snapshot(session, user.id, y, m, None)
+            if y == cur.year and m == cur.month:
+                break
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+    except Exception:
+        pass
     return row
 
 
@@ -137,6 +158,22 @@ def update_value_update(account_id: int, update_id: int, payload: dict = Body(..
     session.add(row)
     session.commit()
     session.refresh(row)
+    try:
+        dt = row.ts
+        base = dt if (dt.tzinfo and dt.tzinfo.utcoffset(dt) is not None) else dt.replace(tzinfo=timezone.utc)
+        cur = datetime.now(timezone.utc)
+        y = base.year
+        m = base.month
+        while True:
+            crud.upsert_monthly_snapshot(session, user.id, y, m, None)
+            if y == cur.year and m == cur.month:
+                break
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+    except Exception:
+        pass
     return row
 
 
@@ -149,6 +186,22 @@ def delete_value_update(account_id: int, update_id: int, session: Session = Depe
     row = session.get(models.AccountValueUpdate, update_id)
     if not row or int(row.household_id or 0) != int(hh_id) or int(row.account_id or 0) != int(account_id):
         raise HTTPException(status_code=404, detail="Update not found")
+    ts_for_snap = row.ts
     session.delete(row)
     session.commit()
-
+    try:
+        dt = ts_for_snap
+        base = dt if (dt.tzinfo and dt.tzinfo.utcoffset(dt) is not None) else dt.replace(tzinfo=timezone.utc)
+        cur = datetime.now(timezone.utc)
+        y = base.year
+        m = base.month
+        while True:
+            crud.upsert_monthly_snapshot(session, user.id, y, m, None)
+            if y == cur.year and m == cur.month:
+                break
+            m += 1
+            if m > 12:
+                m = 1
+                y += 1
+    except Exception:
+        pass

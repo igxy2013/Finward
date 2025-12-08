@@ -48,21 +48,21 @@
       <text class="label">结束日期</text>
       <view class="readonly-value">{{form.loan_end_date || '自动计算'}}</view>
     </view>
-    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
+    <view class="form-item" wx:if="{{form.type === 'asset'}}">
       <text class="label">投资期限(月)</text>
       <input type="number" placeholder="可选" data-key="investment_term_months" value="{{form.investment_term_months}}" bindinput="handleInput" />
     </view>
-    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
+    <view class="form-item" wx:if="{{form.type === 'asset'}}">
       <text class="label">月收益</text>
       <input type="number" placeholder="可选" data-key="monthly_income" value="{{form.monthly_income}}" bindinput="handleInput" />
     </view>
-    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
+    <view class="form-item" wx:if="{{form.type === 'asset'}}">
       <text class="label">开始日期</text>
       <picker mode="date" value="{{form.invest_start_date}}" bindchange="handleDateChangeAsset">
         <view class="picker-value">{{form.invest_start_date || '请选择日期'}}</view>
       </picker>
     </view>
-    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
+    <view class="form-item" wx:if="{{form.type === 'asset'}}">
       <text class="label">结束日期</text>
       <picker mode="date" value="{{form.invest_end_date}}" bindchange="handleDateChangeAsset">
         <view class="picker-value">{{form.invest_end_date || '可选'}}</view>
@@ -96,4 +96,3 @@
     <button bindtap="submit" loading="{{submitting}}" style="background-color: #43B176; color: #ffffff;">保存</button>
   </view>
 </view>
-
