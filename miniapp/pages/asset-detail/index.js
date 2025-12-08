@@ -340,32 +340,66 @@ Page({
         const tickCount = 4;
         ctx.fillStyle = '#334155';
         ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
         for (let i = 0; i <= tickCount; i++) {
           const y = padding + (i / tickCount) * ih;
           const v = minV + (1 - i / tickCount) * range;
           const label = this.formatNumber(v);
-          ctx.fillText(label, padding + 4, y - 2);
+          ctx.fillText(label, padding+5, y);
         }
         const leftLabel = (() => {
           const s = events[0];
           const d = s && s.ts ? new Date(s.ts) : null;
           if (!d || isNaN(d.getTime())) return '';
+          const yy = String(d.getFullYear());
           const mm = String(d.getMonth() + 1).padStart(2, '0');
           const dd = String(d.getDate()).padStart(2, '0');
-          return `${mm}/${dd}`;
+          return `${yy}/${mm}/${dd}`;
         })();
         const rightLabel = (() => {
           const s = events[events.length - 1];
           const d = s && s.ts ? new Date(s.ts) : null;
           if (!d || isNaN(d.getTime())) return '';
+          const yy = String(d.getFullYear());
           const mm = String(d.getMonth() + 1).padStart(2, '0');
           const dd = String(d.getDate()).padStart(2, '0');
-          return `${mm}/${dd}`;
+          return `${yy}/${mm}/${dd}`;
         })();
+        ctx.fillStyle = 'rgba(100,116,139,0.9)';
         ctx.textAlign = 'left';
-        ctx.fillText(leftLabel, padding, height - padding + 12);
+        ctx.textBaseline = 'bottom';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(leftLabel, padding, height - padding+16);
         ctx.textAlign = 'right';
-        ctx.fillText(rightLabel, width - padding, height - padding + 12);
+        ctx.fillText(rightLabel, width - padding, height - padding+16);
+        const updateEvents = events.slice(1, Math.max(events.length - 1, 1));
+        if (updateEvents.length > 0) {
+          const maxLabels = Math.max(2, Math.floor(iw / 70));
+          const step = Math.max(1, Math.ceil(updateEvents.length / maxLabels));
+          ctx.strokeStyle = 'rgba(51,65,85,0.3)';
+          ctx.lineWidth = 1;
+          ctx.fillStyle = 'rgba(100,116,139,0.9)';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.font = '10px sans-serif';
+          for (let i = 0; i < updateEvents.length; i += step) {
+            const idx = 1 + i;
+            const px = points[idx].x;
+            if (px < padding + 25 || px > width - padding - 25) continue;
+            const d = new Date(updateEvents[i].ts);
+            if (!d || isNaN(d.getTime())) continue;
+            const yy = String(d.getFullYear());
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const label = `${yy}/${mm}/${dd}`;
+            ctx.beginPath();
+            ctx.moveTo(px, height - padding);
+            ctx.lineTo(px, height - padding);
+            ctx.stroke();
+            ctx.fillText(label, px, height - padding+16);
+          }
+        }
         ctx.fillStyle = 'rgba(129,140,248,0.25)';
         ctx.beginPath();
         if (points.length === 1) {
@@ -380,12 +414,27 @@ Page({
         } else {
           ctx.moveTo(points[0].x, height - padding);
           ctx.lineTo(points[0].x, points[0].y);
-          for (let i = 1; i < points.length - 1; i++) {
-            const xc = (points[i].x + points[i + 1].x) / 2;
-            const yc = (points[i].y + points[i + 1].y) / 2;
-            ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+          for (let i = 0; i < points.length - 1; i++) {
+            const p0 = i > 0 ? points[i - 1] : points[i];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = i < points.length - 2 ? points[i + 2] : p2;
+            const minY = Math.min(p1.y, p2.y);
+            const maxY = Math.max(p1.y, p2.y);
+            const eps = 0.5;
+            if (Math.abs(p2.y - p1.y) <= eps) {
+              ctx.lineTo(p2.x, p2.y);
+            } else {
+              const s = 0.5;
+              const cp1x = p1.x + (p2.x - p0.x) / 6 * s;
+              let cp1y = p1.y + (p2.y - p0.y) / 6 * s;
+              const cp2x = p2.x - (p3.x - p1.x) / 6 * s;
+              let cp2y = p2.y - (p3.y - p1.y) / 6 * s;
+              cp1y = Math.max(padding, Math.min(height - padding, Math.max(minY, Math.min(maxY, cp1y))));
+              cp2y = Math.max(padding, Math.min(height - padding, Math.max(minY, Math.min(maxY, cp2y))));
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
           }
-          ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
           ctx.lineTo(points[points.length - 1].x, height - padding);
         }
         ctx.closePath();
@@ -398,12 +447,27 @@ Page({
           if (points.length === 2) {
             ctx.lineTo(points[1].x, points[1].y);
           } else {
-            for (let i = 1; i < points.length - 1; i++) {
-              const xc = (points[i].x + points[i + 1].x) / 2;
-              const yc = (points[i].y + points[i + 1].y) / 2;
-              ctx.quadraticCurveTo(points[i].x, points[i].y, xc, yc);
+            for (let i = 0; i < points.length - 1; i++) {
+              const p0 = i > 0 ? points[i - 1] : points[i];
+              const p1 = points[i];
+              const p2 = points[i + 1];
+              const p3 = i < points.length - 2 ? points[i + 2] : p2;
+              const minY = Math.min(p1.y, p2.y);
+              const maxY = Math.max(p1.y, p2.y);
+              const eps = 0.5;
+              if (Math.abs(p2.y - p1.y) <= eps) {
+                ctx.lineTo(p2.x, p2.y);
+              } else {
+                const s = 0.5;
+                const cp1x = p1.x + (p2.x - p0.x) / 6 * s;
+                let cp1y = p1.y + (p2.y - p0.y) / 6 * s;
+                const cp2x = p2.x - (p3.x - p1.x) / 6 * s;
+                let cp2y = p2.y - (p3.y - p1.y) / 6 * s;
+                cp1y = Math.max(padding, Math.min(height - padding, Math.max(minY, Math.min(maxY, cp1y))));
+                cp2y = Math.max(padding, Math.min(height - padding, Math.max(minY, Math.min(maxY, cp2y))));
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
             }
-            ctx.lineTo(points[points.length - 1].x, points[points.length - 1].y);
           }
         }
         ctx.stroke();
