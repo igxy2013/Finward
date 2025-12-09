@@ -1216,6 +1216,11 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         return d.year, d.month
 
     y, m = month_bounds(start)
+    # 预取账户信息用于校验记录起始边界
+    acc_stmt_prefetch = select(models.Account).where(models.Account.household_id == hh_id)
+    accs_prefetch = session.scalars(acc_stmt_prefetch).all()
+    acc_by_id: dict[int, models.Account] = {int(a.id): a for a in accs_prefetch if a.id is not None}
+    
     # 1. 当月真实现金流
     q = (
         session.query(models.Cashflow)
@@ -1233,6 +1238,22 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         tval = r.type.value if hasattr(r.type, "value") else r.type
         if type_filter and type_filter in {"income", "expense"} and tval != type_filter:
             continue
+
+        # 账户起始日期前的记录过滤（资产/负债）
+        try:
+            if r.account_id and int(r.account_id) in acc_by_id:
+                acc = acc_by_id[int(r.account_id)]
+                acc_type = acc.type.value if hasattr(acc.type, "value") else acc.type
+                if acc_type == "asset":
+                    start_base = getattr(acc, "invest_start_date", None) or (to_utc(acc.created_at).date() if getattr(acc, "created_at", None) else None)
+                    if start_base and r.date and r.date < start_base:
+                        continue
+                elif acc_type == "liability":
+                    start_base = getattr(acc, "loan_start_date", None) or (to_utc(acc.created_at).date() if getattr(acc, "created_at", None) else None)
+                    if start_base and r.date and r.date < start_base:
+                        continue
+        except Exception:
+            pass
 
         # 记录已存在的 account_id 以便后续排重
         if r.account_id:
@@ -1468,6 +1489,25 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         tval2 = r.type.value if hasattr(r.type, "value") else r.type
         if type_filter and type_filter in {"income", "expense"} and tval2 != type_filter:
             continue
+        # 若绑定账户，则不生成早于账户开始日期的条目
+        try:
+            if r.account_id and int(r.account_id) in acc_by_id:
+                acc = acc_by_id[int(r.account_id)]
+                acc_type = acc.type.value if hasattr(acc.type, "value") else acc.type
+                if acc_type == "asset":
+                    start_base = getattr(acc, "invest_start_date", None) or (to_utc(acc.created_at).date() if getattr(acc, "created_at", None) else None)
+                    if start_base and cand < start_base:
+                        continue
+                    if getattr(acc, "invest_end_date", None) and cand > acc.invest_end_date:
+                        continue
+                elif acc_type == "liability":
+                    start_base = getattr(acc, "loan_start_date", None) or (to_utc(acc.created_at).date() if getattr(acc, "created_at", None) else None)
+                    if start_base and cand < start_base:
+                        continue
+                    if getattr(acc, "loan_end_date", None) and cand > acc.loan_end_date:
+                        continue
+        except Exception:
+            pass
         # 若当月已有同类循环计划记录，则不重复生成
         key = f"{tval2}:{(r.category or '')}:{(r.note or r.category or '')}"
         if key in recorded_keys:
@@ -1520,3 +1560,273 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
     # 排序：日期倒序
     result.sort(key=lambda x: str(x.date), reverse=True)
     return result
+
+
+def planned_aggregate(session: Session, user_id: int, start: date | None, end: date | None, type_filter: str | None = None, scope: str | None = None) -> schemas.PlannedAggregateOut:
+    hh_id = get_or_create_household_id(session, user_id)
+    # 推断起止范围（当传入为空时，使用数据最早/今天）
+    if not start or not end:
+        cf_min = session.query(models.Cashflow.date).filter(
+            models.Cashflow.household_id == hh_id,
+            models.Cashflow.planned == True
+        ).order_by(models.Cashflow.date.asc()).first()
+        acc_min = session.query(models.Account.created_at).filter(
+            models.Account.household_id == hh_id
+        ).order_by(models.Account.created_at.asc()).first()
+        from datetime import datetime as dt
+        today = dt.now(timezone.utc).date()
+        cf_date = (cf_min[0] if cf_min else None)
+        acc_date = (to_utc(acc_min[0]).date() if acc_min and acc_min[0] else None)
+        candidates = [d for d in [cf_date, acc_date] if d is not None]
+        min_date = (min(candidates) if candidates else today)
+        start = start or min_date or today
+        end = end or today
+
+    # 按月遍历
+    def month_range(y: int, m: int) -> tuple[date, date]:
+        from calendar import monthrange
+        s = date(y, m, 1)
+        last_day = monthrange(y, m)[1]
+        e = date(y, m, last_day)
+        return s, e
+
+    months: list[tuple[int, int]] = []
+    yi, mi = start.year, start.month
+    yj, mj = end.year, end.month
+    cy, cm = yi, mi
+    while True:
+        months.append((cy, cm))
+        if cy == yj and cm == mj:
+            break
+        cm += 1
+        if cm > 12:
+            cm = 1
+            cy += 1
+
+    # 聚合映射
+    from decimal import Decimal
+    income_map: dict[str, Decimal] = {}
+    expense_map: dict[str, Decimal] = {}
+
+    for (y, m) in months:
+        s, e = month_range(y, m)
+        items = wealth_items(session, user_id, s, e, None)
+        for it in items:
+            if not it.planned:
+                continue
+            if type_filter and it.type.value if hasattr(it.type, "value") else it.type != type_filter:
+                continue
+            cat = it.category or ("其他收入" if (it.type.value if hasattr(it.type, "value") else it.type) == "income" else "其他支出")
+            amt = Decimal(it.amount or 0)
+            tval = it.type.value if hasattr(it.type, "value") else it.type
+            if tval == "income":
+                income_map[cat] = income_map.get(cat, Decimal(0)) + amt
+            elif tval == "expense":
+                expense_map[cat] = expense_map.get(cat, Decimal(0)) + amt
+
+    def to_slices(m: dict[str, Decimal]) -> list[schemas.CategorySlice]:
+        total = sum(m.values()) if m else Decimal(0)
+        res: list[schemas.CategorySlice] = []
+        for k, v in m.items():
+            pct = float((v / total * Decimal(100)) if total > 0 else Decimal(0))
+            res.append(schemas.CategorySlice(category=k, amount=v, percentage=pct))
+        # 按金额降序
+        res.sort(key=lambda x: x.amount, reverse=True)
+        return res
+
+    inc_slices = to_slices(income_map)
+    exp_slices = to_slices(expense_map)
+    inc_total = sum(income_map.values()) if income_map else Decimal(0)
+    exp_total = sum(expense_map.values()) if expense_map else Decimal(0)
+    net_total = inc_total - exp_total
+    return schemas.PlannedAggregateOut(
+        start=start,
+        end=end,
+        scope=scope,
+        income=inc_slices,
+        expense=exp_slices,
+        income_total=inc_total,
+        expense_total=exp_total,
+        net_total=net_total,
+    )
+
+
+def planned_items_range(session: Session, user_id: int, start: date | None, end: date | None, type_filter: str | None = None, scope: str | None = None, include_actual: bool = False) -> list[schemas.WealthItemOut]:
+    """返回跨月份范围内的计划项逐条记录（含租金、资产收益、负债月供与循环计划项）。"""
+    hh_id = get_or_create_household_id(session, user_id)
+    if not start or not end:
+        cf_min = session.query(models.Cashflow.date).filter(
+            models.Cashflow.household_id == hh_id
+        ).order_by(models.Cashflow.date.asc()).first()
+        acc_min = session.query(models.Account.created_at).filter(
+            models.Account.household_id == hh_id
+        ).order_by(models.Account.created_at.asc()).first()
+        from datetime import datetime as dt
+        today = dt.now(timezone.utc).date()
+        cf_date = (cf_min[0] if cf_min else None)
+        acc_date = (to_utc(acc_min[0]).date() if acc_min and acc_min[0] else None)
+        candidates = [d for d in [cf_date, acc_date] if d is not None]
+        min_date = (min(candidates) if candidates else today)
+        start = start or min_date or today
+        end = end or today
+
+    def month_range(y: int, m: int) -> tuple[date, date]:
+        from calendar import monthrange
+        s = date(y, m, 1)
+        last_day = monthrange(y, m)[1]
+        e = date(y, m, last_day)
+        return s, e
+
+    months: list[tuple[int, int]] = []
+    yi, mi = start.year, start.month
+    yj, mj = end.year, end.month
+    cy, cm = yi, mi
+    while True:
+        months.append((cy, cm))
+        if cy == yj and cm == mj:
+            break
+        cm += 1
+        if cm > 12:
+            cm = 1
+            cy += 1
+
+    all_items: list[schemas.WealthItemOut] = []
+    for (y, m) in months:
+        s, e = month_range(y, m)
+        items = wealth_items(session, user_id, s, e, None)
+        for it in items:
+            if not include_actual and not it.planned:
+                continue
+            tval = it.type.value if hasattr(it.type, "value") else it.type
+            if type_filter and tval != type_filter:
+                continue
+            # 修正租金项ID以避免跨月去重丢失
+            id2 = it.id
+            if getattr(it, "synthetic_kind", None) == "rent" or (isinstance(id2, str) and str(id2).startswith("tenancy:")):
+                id2 = f"{id2}:{y}{str(m).zfill(2)}"
+            all_items.append(
+                schemas.WealthItemOut(
+                    id=str(id2),
+                    type=tval,
+                    category=it.category,
+                    amount=it.amount,
+                    planned=True,
+                    recurring_monthly=it.recurring_monthly,
+                    date=it.date,
+                    note=it.note,
+                    account_id=it.account_id,
+                    tenancy_id=it.tenancy_id,
+                    account_name=it.account_name,
+                    tenant_name=it.tenant_name,
+                    name=getattr(it, "name", None) or it.category,
+                    synthetic_kind=getattr(it, "synthetic_kind", None),
+                )
+            )
+
+    # 排序：日期倒序
+    all_items.sort(key=lambda x: str(x.date), reverse=True)
+    return all_items
+
+
+def planned_aggregate_items(session: Session, user_id: int, start: date | None, end: date | None, type_filter: str | None = None, scope: str | None = None, include_actual: bool = False) -> list[schemas.WealthItemOut]:
+    """跨月范围内对相同计划条目进行合计（逐项汇总）。"""
+    hh_id = get_or_create_household_id(session, user_id)
+    if not start or not end:
+        q_min = session.query(models.Cashflow.date).filter(models.Cashflow.household_id == hh_id)
+        if not include_actual:
+            q_min = q_min.filter(models.Cashflow.planned == True)
+        cf_min = q_min.order_by(models.Cashflow.date.asc()).first()
+        
+        acc_min = session.query(models.Account.created_at).filter(
+            models.Account.household_id == hh_id
+        ).order_by(models.Account.created_at.asc()).first()
+        from datetime import datetime as dt
+        today = dt.now(timezone.utc).date()
+        cf_date = (cf_min[0] if cf_min else None)
+        acc_date = (to_utc(acc_min[0]).date() if acc_min and acc_min[0] else None)
+        candidates = [d for d in [cf_date, acc_date] if d is not None]
+        min_date = (min(candidates) if candidates else today)
+        start = start or min_date or today
+        end = end or today
+
+    def month_range(y: int, m: int) -> tuple[date, date]:
+        from calendar import monthrange
+        s = date(y, m, 1)
+        last_day = monthrange(y, m)[1]
+        e = date(y, m, last_day)
+        return s, e
+
+    months: list[tuple[int, int]] = []
+    yi, mi = start.year, start.month
+    yj, mj = end.year, end.month
+    cy, cm = yi, mi
+    while True:
+        months.append((cy, cm))
+        if cy == yj and cm == mj:
+            break
+        cm += 1
+        if cm > 12:
+            cm = 1
+            cy += 1
+
+    from decimal import Decimal
+    group: dict[str, dict] = {}
+
+    def key_of(it: schemas.WealthItemOut) -> str:
+        tval = it.type.value if hasattr(it.type, "value") else it.type
+        name = getattr(it, "name", None) or it.note or it.category
+        acc = str(it.account_id or "")
+        ten = str(it.tenancy_id or "")
+        sk = getattr(it, "synthetic_kind", None) or ""
+        cat = it.category or ("其他收入" if tval == "income" else "其他支出")
+        return f"{tval}|{cat}|{name}|{acc}|{ten}|{sk}"
+
+    for (y, m) in months:
+        s, e = month_range(y, m)
+        items = wealth_items(session, user_id, s, e, None)
+        for it in items:
+            if not include_actual and not it.planned:
+                continue
+            tval = it.type.value if hasattr(it.type, "value") else it.type
+            if type_filter and tval != type_filter:
+                continue
+            k = key_of(it)
+            if k not in group:
+                group[k] = {
+                    "type": tval,
+                    "category": it.category,
+                    "name": getattr(it, "name", None) or it.note or it.category,
+                    "account_id": it.account_id,
+                    "tenancy_id": it.tenancy_id,
+                    "account_name": it.account_name,
+                    "tenant_name": it.tenant_name,
+                    "synthetic_kind": getattr(it, "synthetic_kind", None),
+                    "amount": Decimal(0),
+                }
+            group[k]["amount"] += Decimal(it.amount or 0)
+
+    # 生成输出（使用范围结束日期作为 date）
+    out: list[schemas.WealthItemOut] = []
+    for k, v in group.items():
+        out.append(
+            schemas.WealthItemOut(
+                id=f"group:{k}",
+                type=v["type"],
+                category=v["category"] or ("其他收入" if v["type"] == "income" else "其他支出"),
+                amount=v["amount"],
+                planned=True,
+                recurring_monthly=False,
+                date=end,
+                note=None,
+                account_id=v["account_id"],
+                tenancy_id=v["tenancy_id"],
+                account_name=v["account_name"],
+                tenant_name=v["tenant_name"],
+                name=v["name"],
+                synthetic_kind=v["synthetic_kind"],
+            )
+        )
+
+    # 排序：金额倒序
+    out.sort(key=lambda x: Decimal(x.amount or 0), reverse=True)
+    return out

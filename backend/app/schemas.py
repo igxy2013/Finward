@@ -481,3 +481,14 @@ class WealthItemOut(BaseModel):
     tenant_name: str | None = None
     name: str | None = None
     synthetic_kind: str | None = None
+
+
+class PlannedAggregateOut(BaseModel):
+    start: date
+    end: date
+    scope: str | None = None
+    income: list[CategorySlice]
+    expense: list[CategorySlice]
+    income_total: Decimal | None = None
+    expense_total: Decimal | None = None
+    net_total: Decimal | None = None

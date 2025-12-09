@@ -57,10 +57,19 @@ const getCategoryIcon = (category, type) => {
 
 Page({
   data: {
+    rangeTabs: [
+      { label: "本月", value: "month" },
+      { label: "本年", value: "year" },
+      { label: "全部", value: "all" }
+    ],
+    activeRange: "month",
+    rangeLabelPrefix: "本月",
     selectedYear: 0,
     selectedMonth: 0,
     monthSelectorRange: [[], []],
     monthSelectorIndex: [0, 0],
+    yearSelectorRange: [],
+    yearSelectorIndex: 0,
     summary: {
       expectedExpense: "0.00",
       expectedIncome: "0.00",
@@ -78,7 +87,21 @@ Page({
     ],
     activeType: "all",
     cashflows: [],
-    swipeLock: false
+    swipeLock: false,
+    listTitle: "收支记录"
+  },
+  handleRangeTab(e) {
+    const val = String(e.currentTarget.dataset.value || "month");
+    if (val === this.data.activeRange) return;
+    const prefix = val === 'year' ? '本年' : (val === 'all' ? '全部' : '本月');
+    const baseY = this.data.selectedYear || new Date().getFullYear();
+    const years = Array.from({ length: 11 }, (_, i) => String(baseY - 10 + i));
+    const yi = Math.max(0, years.findIndex(v => Number(v) === baseY));
+    const lt = '收支记录';
+    this.setData({ activeRange: val, rangeLabelPrefix: prefix, yearSelectorRange: years, yearSelectorIndex: yi, listTitle: lt }, () => {
+      this.fetchSummary(false);
+      this.fetchList(false);
+    });
   },
   handleSwipeStart(e) {
     const t = (e && (e.changedTouches && e.changedTouches[0])) || (e && (e.touches && e.touches[0])) || {};
@@ -133,12 +156,16 @@ Page({
       const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
       const yi = Math.max(0, years.findIndex(v => Number(v) === y));
       const mi = Math.max(0, months.findIndex(v => Number(v) === m));
+      const lt = '收支记录';
       this.setData({
         selectedYear: y,
         selectedMonth: m,
         monthSelectorRange: [years, months],
         monthSelectorIndex: [yi, mi],
-        activeType: 'all'
+        activeType: 'all',
+        yearSelectorRange: years,
+        yearSelectorIndex: yi,
+        listTitle: lt
       }, () => {
         try { wx.setStorageSync('fw_period', { y, m }); } catch (e) {}
         this.fetchSummary(false);
@@ -166,16 +193,21 @@ Page({
     const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
     const yi = Math.max(0, years.findIndex(v => Number(v) === y));
     const mi = Math.max(0, months.findIndex(v => Number(v) === m));
+    const lt2 = '收支记录';
     this.setData({
       selectedYear: y,
       selectedMonth: m,
       monthSelectorRange: [years, months],
-      monthSelectorIndex: [yi, mi]
+      monthSelectorIndex: [yi, mi],
+      yearSelectorRange: years,
+      yearSelectorIndex: yi,
+      listTitle: lt2
     });
     this.skipFilterOnce = true;
     let cached = null;
     try { cached = wx.getStorageSync('fw_summary_cache'); } catch (e) {}
-    this.setData({ summaryReady: true, activeType: this.data.activeType || 'all' }, () => {
+    const prefix = (this.data.activeRange === 'year') ? '本年' : (this.data.activeRange === 'all' ? '全部' : '本月');
+    this.setData({ summaryReady: true, activeType: this.data.activeType || 'all', rangeLabelPrefix: prefix }, () => {
       this.fetchSummary(false);
       this.fetchList(false);
     });
@@ -196,6 +228,38 @@ Page({
     const yi = Math.max(0, useYears.findIndex(v => Number(v) === y));
     const mi = m - 1;
     this.setData({ selectedYear: y, selectedMonth: m, monthSelectorRange: [useYears, monthsArr], monthSelectorIndex: [yi, mi] }, () => { try { wx.setStorageSync('fw_period', { y, m }); } catch (e) {} this.fetchSummary(false); this.fetchList(false); });
+  },
+  prevYear() {
+    if (this._navLock) return;
+    this._navLock = true;
+    setTimeout(() => { this._navLock = false; }, 300);
+    let y = this.data.selectedYear - 1;
+    const yearsArr = this.data.yearSelectorRange || [];
+    let useYears = yearsArr;
+    if (!yearsArr.some(v => Number(v) === y)) {
+      useYears = Array.from({ length: 11 }, (_, i) => String(y - 10 + i));
+    }
+    const yi = Math.max(0, useYears.findIndex(v => Number(v) === y));
+    this.setData({ selectedYear: y, yearSelectorRange: useYears, yearSelectorIndex: yi }, () => { try { wx.setStorageSync('fw_period', { y, m: this.data.selectedMonth }); } catch (e) {} this.fetchSummary(false); this.fetchList(false); });
+  },
+  nextYear() {
+    if (this._navLock) return;
+    this._navLock = true;
+    setTimeout(() => { this._navLock = false; }, 300);
+    let y = this.data.selectedYear + 1;
+    const yearsArr = this.data.yearSelectorRange || [];
+    let useYears = yearsArr;
+    if (!yearsArr.some(v => Number(v) === y)) {
+      useYears = Array.from({ length: 11 }, (_, i) => String(y - 10 + i));
+    }
+    const yi = Math.max(0, useYears.findIndex(v => Number(v) === y));
+    this.setData({ selectedYear: y, yearSelectorRange: useYears, yearSelectorIndex: yi }, () => { try { wx.setStorageSync('fw_period', { y, m: this.data.selectedMonth }); } catch (e) {} this.fetchSummary(false); this.fetchList(false); });
+  },
+  handleYearSelectorChange(e) {
+    const idx = Number(e.detail.value || 0);
+    const years = this.data.yearSelectorRange || [];
+    const y = Number(years[idx] || this.data.selectedYear);
+    this.setData({ selectedYear: y, yearSelectorIndex: idx }, () => { try { wx.setStorageSync('fw_period', { y, m: this.data.selectedMonth }); } catch (e) {} this.fetchSummary(false); this.fetchList(false); });
   },
   nextMonth() {
     if (this._navLock) return;
@@ -223,14 +287,24 @@ Page({
     this.setData({ selectedYear: y, selectedMonth: m, monthSelectorIndex: idx }, () => { try { wx.setStorageSync('fw_period', { y, m }); } catch (e) {} this.fetchSummary(false); this.fetchList(false); });
   },
   async fetchSummary(skipIncomeUpdate = false) {
-    const sel = 'month';
+    const range = this.data.activeRange || 'month';
     const y = this.data.selectedYear || new Date().getFullYear();
     const m = this.data.selectedMonth || (new Date().getMonth() + 1);
-    const endDate = new Date(y, m, 0);
-    const end = this.formatDate(endDate);
-    const start = this.formatDate(new Date(y, m - 1, 1));
+    let start = undefined;
+    let end = undefined;
+    if (range === 'month') {
+      const endDate = new Date(y, m, 0);
+      end = this.formatDate(endDate);
+      start = this.formatDate(new Date(y, m - 1, 1));
+    } else if (range === 'year') {
+      start = `${y}-01-01`;
+      end = `${y}-12-31`;
+    } else {
+      start = undefined;
+      end = undefined;
+    }
     try {
-      const res = await api.fetchWealthSummary(start, end, sel);
+      const res = await api.fetchWealthSummary(start, end, range);
       let designServiceIncome = 0;
       try {
         const app = getApp();
@@ -256,16 +330,23 @@ Page({
       } catch (err) {}
       try {
         const app = getApp();
-        if (app?.globalData?.token && !app.globalData.guest) {
+        if (range === 'month' && app?.globalData?.token && !app.globalData.guest) {
           await api.saveMonthlySnapshot(y, m, designServiceIncome);
         }
       } catch (eSnap) {}
 
-      const res2 = await api.fetchWealthSummary(start, end, sel);
-      const actExp = Number(res2.actual_expense || 0);
-      const actInc = Number(res2.actual_income || 0);
-      const expExpNum = Number(res2.expected_expense || 0);
-      const expIncNum = Number(res2.expected_income || 0);
+      const res2 = await api.fetchWealthSummary(start, end, range);
+      let actExp = Number(res2.actual_expense || 0);
+      let actInc = Number(res2.actual_income || 0);
+      let expExpNum = Number(res2.expected_expense || 0);
+      let expIncNum = Number(res2.expected_income || 0);
+      if (range !== 'month') {
+        try {
+          const agg = await api.aggregatePlanned(start, end, range);
+          expExpNum = Number(agg?.expense_total || 0);
+          expIncNum = Number(agg?.income_total || 0);
+        } catch (eAgg) {}
+      }
       const netExpected = expIncNum - expExpNum;
       const netPositive = netExpected >= 0;
       const ratioDisplay = expExpNum > 0 ? (expIncNum / expExpNum).toFixed(2) : '—';
@@ -293,31 +374,36 @@ Page({
     }
   },
   async fetchList(skipSummary = false, forceAll = false) {
-    const sel = 'month';
+    const range = this.data.activeRange || 'month';
     const y = this.data.selectedYear || new Date().getFullYear();
     const m = this.data.selectedMonth || (new Date().getMonth() + 1);
     const startDate = new Date(y, m - 1, 1);
     const endDate = new Date(y, m, 0);
     const start = this.formatDate(startDate);
     const end = this.formatDate(endDate);
-    const query = { end };
-    if (start) query.start = start;
+    const query = { };
+    if (range === 'month') {
+      query.end = end;
+      if (start) query.start = start;
+    } else if (range === 'year') {
+      query.start = `${y}-01-01`;
+      query.end = `${y}-12-31`;
+    }
     if (!forceAll && !this.skipFilterOnce && this.data.activeType !== "all") query.type = this.data.activeType;
     try {
       let list = [];
-      // 优先使用后端统一接口
-      try {
-        list = await api.listWealthItems(start, end, (this.data.activeType !== 'all' ? this.data.activeType : undefined));
-      } catch (eUnified) {
-        list = [];
-      }
-      // 失败则回退到旧逻辑（仅真实现金流）
-      if (!Array.isArray(list) || list.length === 0) {
+      if (range === 'month') {
+        // 优先使用后端统一接口（按月）
         try {
-          list = await api.listCashflows(query);
-        } catch (e0) {
+          list = await api.listWealthItems(start, end, (this.data.activeType !== 'all' ? this.data.activeType : undefined));
+        } catch (eUnified) {
           list = [];
         }
+        if (!Array.isArray(list) || list.length === 0) {
+          try { list = await api.listCashflows({ end, start, ...(query.type ? { type: query.type } : {}) }); } catch (e0) { list = []; }
+        }
+      } else {
+        try { list = await api.listCashflows(query); } catch (e0) { list = []; }
       }
       const normalized = (arr) => (arr || []).map((x) => ({ ...x, id: x.id || `${x.type || 'unknown'}:${x.planned ? 'planned' : 'actual'}:${x.category}:${x.date}` }));
       const mergedRaw = [...normalized(list)];
@@ -328,12 +414,12 @@ Page({
         const title = (isAssetIncome || isLoan) && x.account_name ? x.account_name : (x.name ? x.name : (x.note ? x.note : x.category));
         return {
           ...x,
-          amount: this.formatNumber(x.amount),
+          amount: x.amount,
           name: title,
           icon: getCategoryIcon(x.category, x.type)
         };
       });
-      const unifiedOk = Array.isArray(list) && list.length > 0 && String(list[0]?.id || '').length > 0;
+      const unifiedOk = (range === 'month') && Array.isArray(list) && list.length > 0 && String(list[0]?.id || '').length > 0;
       if (unifiedOk) {
         const activeType = this.data.activeType;
         let assets = [];
@@ -343,11 +429,14 @@ Page({
         } catch (eAcc) { assets = []; liabilities = []; }
         const assetEndMap = Object.create(null);
         const liabEndMap = Object.create(null);
-        (assets || []).forEach(a => { assetEndMap[Number(a.id)] = a.invest_end_date || ''; });
-        (liabilities || []).forEach(l => { liabEndMap[Number(l.id)] = l.loan_end_date || ''; });
+        const assetStartMap = Object.create(null);
+        const liabStartMap = Object.create(null);
+        (assets || []).forEach(a => { assetEndMap[Number(a.id)] = a.invest_end_date || ''; assetStartMap[Number(a.id)] = a.invest_start_date || ''; });
+        (liabilities || []).forEach(l => { liabEndMap[Number(l.id)] = l.loan_end_date || ''; liabStartMap[Number(l.id)] = l.loan_start_date || ''; });
         const enriched = formatted.map(it => {
           const idStr = String(it.id || '');
           let endDate = it.end_date || '';
+          let startDate = it.recurring_start_date || '';
           if (!endDate) {
             if ((it._synthetic === 'asset-income') || idStr.startsWith('asset-income:')) {
               endDate = assetEndMap[Number(it.account_id)] || '';
@@ -355,7 +444,14 @@ Page({
               endDate = liabEndMap[Number(it.account_id)] || '';
             }
           }
-          return { ...it, end_date: endDate };
+          if (!startDate) {
+            if ((it._synthetic === 'asset-income') || idStr.startsWith('asset-income:')) {
+              startDate = assetStartMap[Number(it.account_id)] || '';
+            } else if ((it._synthetic === 'loan-payment') || idStr.startsWith('loan:')) {
+              startDate = liabStartMap[Number(it.account_id)] || '';
+            }
+          }
+          return { ...it, end_date: endDate, recurring_start_date: startDate };
         });
         const combinedAll = enriched.sort((a, b) => String(b.date).localeCompare(String(a.date)));
         let combined = (forceAll || this.skipFilterOnce) ? combinedAll : combinedAll.filter((x) => activeType === 'all' || x.type === activeType);
@@ -368,6 +464,45 @@ Page({
       }
       
 
+      if (range !== 'month') {
+        const typeFilter = this.data.activeType !== 'all' ? this.data.activeType : undefined;
+        let startStr, endStr;
+        if (range === 'year') {
+          startStr = `${y}-01-01`;
+          endStr = `${y}-12-31`;
+        }
+        if (range === 'all') {
+          let rawAll = [];
+          try { 
+            // include_actual = true
+            rawAll = await api.aggregatePlannedItems(undefined, undefined, 'all', typeFilter, true); 
+          } catch (eAll) { rawAll = []; }
+          const formattedAll = (rawAll || [])
+            .map((x) => ({
+              ...x,
+              amount: this.formatNumber(x.amount),
+              name: x.name ? x.name : (x.note ? x.note : x.category),
+              icon: getCategoryIcon(x.category, x.type)
+            }))
+            .sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
+          this.setData({ cashflows: formattedAll });
+          this.skipFilterOnce = false;
+          return;
+        }
+        let raw = [];
+        try { raw = await api.aggregatePlannedItems(startStr, endStr, range, typeFilter); } catch (e0) { raw = []; }
+        const formatted = (raw || [])
+          .map((x) => ({
+            ...x,
+            amount: this.formatNumber(x.amount),
+            name: x.name ? x.name : (x.note ? x.note : x.category),
+            icon: getCategoryIcon(x.category, x.type)
+          }))
+          .sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
+        this.setData({ cashflows: formatted });
+        this.skipFilterOnce = false;
+        return;
+      }
       // 自动生成本月缺失的每月重复收入（例如工资）
       let recurringSynth = [];
       try {
@@ -780,7 +915,7 @@ Page({
           }
           const s = new Date(String(startStr).replace(/-/g, "/"));
           const dueDay = s.getDate();
-          if (sel === 'all') {
+          if (range === 'all') {
             const today = new Date();
             let y = today.getFullYear();
             let m = today.getMonth() + 1;
@@ -827,7 +962,7 @@ Page({
       let designServiceIncome = [];
       try {
         const app = getApp();
-        if (sel === 'month' && app?.globalData?.token && !app.globalData.guest) {
+        if (range === 'month' && app?.globalData?.token && !app.globalData.guest) {
           const isCurrentMonth = (y === new Date().getFullYear() && m === (new Date().getMonth() + 1));
           const monthStr = `${y}-${String(m).padStart(2, '0')}`;
           const cacheKey = `fw_design_service_stats_month:${monthStr}`;
@@ -947,6 +1082,9 @@ Page({
   viewCashflow(e) {
     const rawId = String(e.currentTarget.dataset.id || "");
     if (!rawId) return;
+    if (rawId.startsWith('group:')) {
+      return;
+    }
     if (rawId.startsWith('tenancy:')) {
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       if (item) {

@@ -90,6 +90,13 @@
 .nav-btn { width: 48rpx; height: 48rpx; display: flex; align-items: center; justify-content: center; border-radius: 999rpx; border: 1rpx solid #e5e7eb; background: #fff; color: #374151; }
 .nav-btn:active { background: #f3f4f6; }
 
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; margin-bottom: 16rpx; }
+.segmented { display: flex; gap: 8rpx; }
+.seg-item { padding: 6rpx 16rpx; font-size: 22rpx; border-radius: 999rpx; border: 1rpx solid #e5e7eb; color: #374151; background: #fff; }
+.seg-item.active { background: #E8F8EF; color: #43B176; border-color: #43B176; }
+.period { display: flex; align-items: center; gap: 12rpx; }
+.period .period-display { font-size: 28rpx; color: #374151; padding: 6rpx 16rpx; background: #fff; border: 1rpx solid #e5e7eb; border-radius: 999rpx; }
+
 .swipe-mask {
   position: fixed;
   left: 0;

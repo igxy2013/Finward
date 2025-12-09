@@ -1,12 +1,27 @@
 <navbar title="收支管理" showBack="{{false}}"></navbar>
 <view class="page" bindtouchstart="handleSwipeStart" bindtouchmove="handleSwipeMove" bindtouchend="handleSwipeEnd" bindtouchcancel="handleSwipeCancel">
   <view wx:if="{{swipeLock}}" class="swipe-mask" catchtouchmove="handleMaskMove" bindtouchend="handleSwipeEnd" bindtouchcancel="handleSwipeCancel"></view>
-  <view class="period-switcher">
-    <view class="nav-btn" bindtap="prevMonth">‹</view>
-    <picker mode="multiSelector" range="{{monthSelectorRange}}" value="{{monthSelectorIndex}}" bindchange="handlePeriodMultiChange">
-      <view class="period-display">{{selectedYear}}年{{selectedMonth}}月</view>
-    </picker>
-    <view class="nav-btn" bindtap="nextMonth">›</view>
+  <view class="toolbar">
+    <view class="segmented">
+      <view class="seg-item {{activeRange === item.value ? 'active' : ''}}" wx:for="{{rangeTabs}}" wx:key="value" data-value="{{item.value}}" bindtap="handleRangeTab">{{item.label}}</view>
+    </view>
+    <view class="period" wx:if="{{activeRange === 'month'}}">
+      <view class="nav-btn" bindtap="prevMonth">‹</view>
+      <picker mode="multiSelector" range="{{monthSelectorRange}}" value="{{monthSelectorIndex}}" bindchange="handlePeriodMultiChange">
+        <view class="period-display">{{selectedYear}}年{{selectedMonth}}月</view>
+      </picker>
+      <view class="nav-btn" bindtap="nextMonth">›</view>
+    </view>
+    <view class="period" wx:elif="{{activeRange === 'year'}}">
+      <view class="nav-btn" bindtap="prevYear">‹</view>
+      <picker mode="selector" range="{{yearSelectorRange}}" value="{{yearSelectorIndex}}" bindchange="handleYearSelectorChange">
+        <view class="period-display">{{selectedYear}}年</view>
+      </picker>
+      <view class="nav-btn" bindtap="nextYear">›</view>
+    </view>
+    <view class="period" wx:elif="{{activeRange === 'all'}}">
+      <view class="period-display">全部</view>
+    </view>
   </view>
 
   <view class="summary">
@@ -17,7 +32,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/bill-line-red.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">本月固定支出</text>
+        <text class="sum-label">{{rangeLabelPrefix}}固定支出</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>
@@ -31,7 +46,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/line-chart-line.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">本月预计收入</text>
+        <text class="sum-label">{{rangeLabelPrefix}}预计收入</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>
@@ -45,7 +60,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/arrow-up-line.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">本月预计净收入</text>
+        <text class="sum-label">{{rangeLabelPrefix}}预计净收入</text>
       </view>
       <view class="sum-value">
         <text class="currency">￥</text>
@@ -59,7 +74,7 @@
         <view class="summary-icon">
           <image class="summary-icon-img" src="/assets/icons/scales-line.svg" mode="aspectFit"></image>
         </view>
-        <text class="sum-label">本月预计收支比</text>
+        <text class="sum-label">{{rangeLabelPrefix}}预计收支比</text>
       </view>
       <view class="sum-value">
         <text class="amount positive">{{summary.incomeExpenseRatio}}</text>
@@ -73,7 +88,7 @@
 
   <view class="list">
     <view class="list-header">
-      <text class="list-title">收支记录</text>
+      <text class="list-title">{{listTitle}}</text>
       <view class="list-filters">
         <view class="pill {{activeType === item.value ? 'active' : ''}}" wx:for="{{typeTabs}}" wx:key="value" data-value="{{item.value}}" bindtap="handleTypeTab">{{item.label}}</view>
       </view>

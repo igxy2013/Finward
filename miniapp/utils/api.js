@@ -139,6 +139,32 @@ module.exports = {
     if (type && (type === 'income' || type === 'expense')) data.type = type;
     return request(`/wealth/items`, { data });
   }
+  ,aggregatePlanned: (start, end, scope, type) => {
+    const data = {};
+    if (start) data.start = start;
+    if (end) data.end = end;
+    if (scope) data.scope = scope;
+    if (type && (type === 'income' || type === 'expense')) data.type = type;
+    return request(`/wealth/aggregate/planned`, { data });
+  }
+  ,listPlannedItemsRange: (start, end, scope, type, include_actual) => {
+    const data = {};
+    if (start) data.start = start;
+    if (end) data.end = end;
+    if (scope) data.scope = scope;
+    if (type && (type === 'income' || type === 'expense')) data.type = type;
+    if (include_actual) data.include_actual = true;
+    return request(`/wealth/items/range`, { data });
+  }
+  ,aggregatePlannedItems: (start, end, scope, type, include_actual) => {
+    const data = {};
+    if (start) data.start = start;
+    if (end) data.end = end;
+    if (scope) data.scope = scope;
+    if (type && (type === 'income' || type === 'expense')) data.type = type;
+    if (include_actual) data.include_actual = true;
+    return request(`/wealth/aggregate/planned/items`, { data });
+  }
   ,createCashflow: (data) => request(`/cashflows`, { method: "POST", data })
   ,listCashflows: (query) => request(`/cashflows`, { data: query || {} })
   ,getCashflow: (id) => request(`/cashflows/${id}`)
