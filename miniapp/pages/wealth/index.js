@@ -514,7 +514,7 @@ Page({
         }
         let raw = [];
         try { raw = await api.aggregatePlannedItems(startStr, endStr, range, typeFilter, true); } catch (e0) { raw = []; }
-        const formatted = (raw || [])
+        let formatted = (raw || [])
           .map((x) => ({
             ...x,
             amount: this.formatNumber(x.amount),
@@ -522,6 +522,25 @@ Page({
             icon: getCategoryIcon(x.category, x.type)
           }))
           .sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
+        if (range === 'year' && (!typeFilter || typeFilter === 'income')) {
+          try {
+            const statsYear = await api.getFinanceStats('year', String(y));
+            if (statsYear && statsYear.success) {
+              const totalYear = Number(statsYear.data?.total_revenue || 0);
+              if (totalYear > 0) {
+                formatted.push({
+                  id: `design-service-income:year:${y}`,
+                  type: 'income',
+                  category: '设计服务',
+                  amount: this.formatNumber(totalYear),
+                  name: '设计服务',
+                  icon: getCategoryIcon('设计服务', 'income')
+                });
+                formatted = formatted.sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
+              }
+            }
+          } catch (eYear) {}
+        }
         this.setFilteredList(formatted);
         this.skipFilterOnce = false;
         return;

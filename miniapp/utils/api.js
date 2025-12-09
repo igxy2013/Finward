@@ -182,8 +182,15 @@ module.exports = {
   ,updateTenant: (id, data) => request(`/tenants/${id}`, { method: "PATCH", data })
   ,deleteTenant: (id) => request(`/tenants/${id}`, { method: "DELETE" })
   ,listRentReminders: (days = 14) => request(`/tenants/rent/reminders`, { data: { days } })
-  ,getFinanceStats: (timeRange, monthStr) => {
-    const data = monthStr ? { time_range: timeRange, month: monthStr } : { time_range: timeRange };
+  ,getFinanceStats: (timeRange, dateStr) => {
+    const data = { time_range: timeRange };
+    if (dateStr) {
+      if (timeRange === 'year') {
+        data.year = dateStr;
+      } else {
+        data.month = dateStr;
+      }
+    }
     return externalRequest(`/api/public/finance/stats`, { data });
   }
   ,testAuth: () => request(`/auth/me`)
