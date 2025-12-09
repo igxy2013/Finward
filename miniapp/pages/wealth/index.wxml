@@ -90,6 +90,8 @@
     <view class="list-header">
       <text class="list-title">{{listTitle}}</text>
       <view class="list-filters">
+        <view class="pill {{recordFilter === item.value ? 'active' : ''}}" wx:for="{{recordFilterTabs}}" wx:key="value" data-value="{{item.value}}" bindtap="handleRecordFilterTab">{{item.label}}</view>
+        <view style="width:1px;height:24rpx;background:rgba(0,0,0,0.1);margin:0 12rpx;"></view>
         <view class="pill {{activeType === item.value ? 'active' : ''}}" wx:for="{{typeTabs}}" wx:key="value" data-value="{{item.value}}" bindtap="handleTypeTab">{{item.label}}</view>
       </view>
     </view>

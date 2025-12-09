@@ -329,6 +329,37 @@ def backfill_accounts_to_household(session: Session, household_id: int) -> int:
 
 def wealth_summary(session: Session, user_id: int, start: date | None, end: date | None, scope: str | None) -> schemas.WealthSummaryOut:
     hh_id = get_or_create_household_id(session, user_id)
+    
+    # 若未指定起止日期（如 All 范围），则推断有效范围
+    if not start or not end:
+        cf_min = session.query(models.Cashflow.date).filter(models.Cashflow.household_id == hh_id).order_by(models.Cashflow.date.asc()).first()
+        acc_min = session.query(models.Account.created_at).filter(models.Account.household_id == hh_id).order_by(models.Account.created_at.asc()).first()
+        from datetime import datetime as dt
+        today = dt.now(timezone.utc).date()
+        cf_date = (cf_min[0] if cf_min else None)
+        acc_date = (to_utc(acc_min[0]).date() if acc_min and acc_min[0] else None)
+        
+        # 用户要求默认从2022年开始
+        default_start = date(2022, 1, 1)
+        
+        candidates = [d for d in [cf_date, acc_date] if d is not None]
+        min_date = (min(candidates) if candidates else today)
+        
+        # 如果数据早于2022，取数据的开始时间；否则至少从2022开始（保证覆盖2022）
+        # 或者用户意图是：若数据很早，就全部展示；若数据晚于2022，也要确保起始日不晚于2022？
+        # 用户原话：“默认让全部标签统计自2022年以后至今的所有记录数据”
+        # 理解为：Start date <= 2022-01-01. If real data is older (e.g. 2020), "All" usually means EVERYTHING.
+        # But if the user specifically asked "from 2022", maybe they want to truncate older data?
+        # However, "All" implies "Everything".
+        # Let's assume they want to ensure 2022 is INCLUDED even if data starts in 2023 (empty space?).
+        # Or more likely: If data starts in 2023, user thinks 2022 is missing.
+        # Safest bet for "All": min(real_data_start, 2022-01-01).
+        
+        effective_min = min(min_date, default_start)
+        
+        start = start or effective_min
+        end = end or today
+
     if scope and scope.lower() == "month" and start and end and start.year == end.year and start.month == end.month:
         y = start.year
         m = start.month
@@ -1577,9 +1608,16 @@ def planned_aggregate(session: Session, user_id: int, start: date | None, end: d
         today = dt.now(timezone.utc).date()
         cf_date = (cf_min[0] if cf_min else None)
         acc_date = (to_utc(acc_min[0]).date() if acc_min and acc_min[0] else None)
+        
+        # Default start from 2022-01-01 as requested
+        default_start = date(2022, 1, 1)
+        
         candidates = [d for d in [cf_date, acc_date] if d is not None]
         min_date = (min(candidates) if candidates else today)
-        start = start or min_date or today
+        
+        effective_min = min(min_date, default_start)
+        
+        start = start or effective_min
         end = end or today
 
     # 按月遍历
@@ -1665,9 +1703,16 @@ def planned_items_range(session: Session, user_id: int, start: date | None, end:
         today = dt.now(timezone.utc).date()
         cf_date = (cf_min[0] if cf_min else None)
         acc_date = (to_utc(acc_min[0]).date() if acc_min and acc_min[0] else None)
+        
+        # Default start from 2022-01-01
+        default_start = date(2022, 1, 1)
+        
         candidates = [d for d in [cf_date, acc_date] if d is not None]
         min_date = (min(candidates) if candidates else today)
-        start = start or min_date or today
+        
+        effective_min = min(min_date, default_start)
+        
+        start = start or effective_min
         end = end or today
 
     def month_range(y: int, m: int) -> tuple[date, date]:
@@ -1744,9 +1789,16 @@ def planned_aggregate_items(session: Session, user_id: int, start: date | None, 
         today = dt.now(timezone.utc).date()
         cf_date = (cf_min[0] if cf_min else None)
         acc_date = (to_utc(acc_min[0]).date() if acc_min and acc_min[0] else None)
+        
+        # Default start from 2022-01-01
+        default_start = date(2022, 1, 1)
+        
         candidates = [d for d in [cf_date, acc_date] if d is not None]
         min_date = (min(candidates) if candidates else today)
-        start = start or min_date or today
+        
+        effective_min = min(min_date, default_start)
+        
+        start = start or effective_min
         end = end or today
 
     def month_range(y: int, m: int) -> tuple[date, date]:
@@ -1802,8 +1854,12 @@ def planned_aggregate_items(session: Session, user_id: int, start: date | None, 
                     "tenant_name": it.tenant_name,
                     "synthetic_kind": getattr(it, "synthetic_kind", None),
                     "amount": Decimal(0),
+                    "is_planned": True,  # 初始假设为 planned，后续做与运算
                 }
             group[k]["amount"] += Decimal(it.amount or 0)
+            # 只有当组内所有条目都是 planned 时，结果才为 planned
+            # 只要有一条是 actual，整体就不再标记为“预计”（避免历史实际账单被标为预计）
+            group[k]["is_planned"] = group[k]["is_planned"] and it.planned
 
     # 生成输出（使用范围结束日期作为 date）
     out: list[schemas.WealthItemOut] = []
@@ -1814,7 +1870,7 @@ def planned_aggregate_items(session: Session, user_id: int, start: date | None, 
                 type=v["type"],
                 category=v["category"] or ("其他收入" if v["type"] == "income" else "其他支出"),
                 amount=v["amount"],
-                planned=True,
+                planned=v["is_planned"],
                 recurring_monthly=False,
                 date=end,
                 note=None,

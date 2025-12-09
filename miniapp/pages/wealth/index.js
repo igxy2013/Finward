@@ -86,9 +86,32 @@ Page({
       { label: "支出", value: "expense" }
     ],
     activeType: "all",
+    recordFilter: "planned",
+    recordFilterTabs: [
+      { label: "全部", value: "all" },
+      { label: "仅预计", value: "planned" }
+    ],
     cashflows: [],
     swipeLock: false,
     listTitle: "收支记录"
+  },
+  handleRecordFilterTab(e) {
+    const val = String(e.currentTarget.dataset.value || "planned");
+    if (val === this.data.recordFilter) return;
+    this.setData({ recordFilter: val }, () => {
+      this.renderList();
+    });
+  },
+  setFilteredList(list) {
+    this.fullList = list || [];
+    this.renderList();
+  },
+  renderList() {
+    let list = this.fullList || [];
+    if (this.data.recordFilter === 'planned') {
+      list = list.filter(x => x.planned);
+    }
+    this.setData({ cashflows: list });
   },
   handleRangeTab(e) {
     const val = String(e.currentTarget.dataset.value || "month");
@@ -393,9 +416,9 @@ Page({
     try {
       let list = [];
       if (range === 'month') {
-        // 优先使用后端统一接口（按月）
+        // 优先使用后端统一接口（按月），包含实际项
         try {
-          list = await api.listWealthItems(start, end, (this.data.activeType !== 'all' ? this.data.activeType : undefined));
+          list = await api.listPlannedItemsRange(start, end, 'month', (this.data.activeType !== 'all' ? this.data.activeType : undefined), true);
         } catch (eUnified) {
           list = [];
         }
@@ -458,7 +481,7 @@ Page({
         if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
           combined = combinedAll;
         }
-        this.setData({ cashflows: combined });
+        this.setFilteredList(combined);
         this.skipFilterOnce = false;
         return;
       }
@@ -485,12 +508,12 @@ Page({
               icon: getCategoryIcon(x.category, x.type)
             }))
             .sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
-          this.setData({ cashflows: formattedAll });
+          this.setFilteredList(formattedAll);
           this.skipFilterOnce = false;
           return;
         }
         let raw = [];
-        try { raw = await api.aggregatePlannedItems(startStr, endStr, range, typeFilter); } catch (e0) { raw = []; }
+        try { raw = await api.aggregatePlannedItems(startStr, endStr, range, typeFilter, true); } catch (e0) { raw = []; }
         const formatted = (raw || [])
           .map((x) => ({
             ...x,
@@ -499,7 +522,7 @@ Page({
             icon: getCategoryIcon(x.category, x.type)
           }))
           .sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
-        this.setData({ cashflows: formatted });
+        this.setFilteredList(formatted);
         this.skipFilterOnce = false;
         return;
       }
@@ -1040,7 +1063,7 @@ Page({
       if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
         combined = combinedAll;
       }
-      this.setData({ cashflows: combined });
+      this.setFilteredList(combined);
       this.skipFilterOnce = false;
 
       // 汇总数值仅在 fetchSummary 中计算，这里不覆盖以避免受过滤器影响
@@ -1048,7 +1071,7 @@ Page({
       
     } catch (e) {
       // 游客模式下不显示演示数据
-      this.setData({ cashflows: [] });
+      this.setFilteredList([]);
     }
   },
   handleTypeTab(e) {
