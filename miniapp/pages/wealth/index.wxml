@@ -9,20 +9,37 @@
         <view class="range-tab {{activeRange === 'all' ? 'active' : ''}}" data-value="all" bindtap="handleRangeTab">全</view>
       </view>
 
-      <view class="date-picker-row" wx:if="{{activeRange !== 'all'}}">
-        <view class="nav-arrow" bindtap="{{activeRange === 'month' ? 'prevMonth' : 'prevYear'}}">
+      <view class="date-picker-row" wx:if="{{activeRange === 'month'}}">
+        <view class="nav-arrow" bindtap="prevMonth">
           <image src="/assets/icons/arrow-left-s-line.svg" mode="aspectFit" />
         </view>
-        <picker mode="{{activeRange === 'month' ? 'multiSelector' : 'selector'}}" 
-                range="{{activeRange === 'month' ? monthSelectorRange : yearSelectorRange}}" 
-                value="{{activeRange === 'month' ? monthSelectorIndex : yearSelectorIndex}}" 
-                bindchange="{{activeRange === 'month' ? 'handlePeriodMultiChange' : 'handleYearSelectorChange'}}">
+        <picker mode="multiSelector" 
+                range="{{monthSelectorRange}}" 
+                value="{{monthSelectorIndex}}" 
+                bindchange="handlePeriodMultiChange">
           <view class="current-date">
-            <text class="date-text">{{selectedYear}}年{{activeRange === 'month' ? selectedMonth + '月' : ''}}</text>
+            <text class="date-text">{{selectedYear}}年{{selectedMonth}}月</text>
             <image class="dropdown-icon" src="/assets/icons/arrow-down-s-fill.svg" mode="aspectFit" />
           </view>
         </picker>
-        <view class="nav-arrow" bindtap="{{activeRange === 'month' ? 'nextMonth' : 'nextYear'}}">
+        <view class="nav-arrow" bindtap="nextMonth">
+          <image src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
+        </view>
+      </view>
+      <view class="date-picker-row" wx:elif="{{activeRange === 'year'}}">
+        <view class="nav-arrow" bindtap="prevYear">
+          <image src="/assets/icons/arrow-left-s-line.svg" mode="aspectFit" />
+        </view>
+        <picker mode="selector" 
+                range="{{yearSelectorRange}}" 
+                value="{{yearSelectorIndex}}" 
+                bindchange="handleYearSelectorChange">
+          <view class="current-date">
+            <text class="date-text">{{selectedYear}}年</text>
+            <image class="dropdown-icon" src="/assets/icons/arrow-down-s-fill.svg" mode="aspectFit" />
+          </view>
+        </picker>
+        <view class="nav-arrow" bindtap="nextYear">
           <image src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
         </view>
       </view>
