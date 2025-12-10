@@ -161,7 +161,7 @@
   font-size: 32rpx;
   width: 100%;
   box-sizing: border-box;
-  border: 1rpx solid #e5e7eb;
+  border: 2rpx solid #e5e7eb;
   color: #111827;
   height: 88rpx;
 }

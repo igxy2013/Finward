@@ -53,7 +53,10 @@
     <!-- Main Summary Card -->
     <view class="main-card">
       <view class="net-income-section">
-        <text class="label">预计结余</text>
+        <view class="label-row">
+          <text class="label">预计结余</text>
+          <view class="ratio-badge" wx:if="{{summary.incomeExpenseRatio !== '—'}}">收支比 {{summary.incomeExpenseRatio}}</view>
+        </view>
         <view class="amount-large {{summary.netIncomePositive ? 'positive' : 'negative'}}">
           <text class="symbol">￥</text>{{summary.netIncome}}
         </view>

@@ -372,7 +372,7 @@ Page({
       }
       const netExpected = expIncNum - expExpNum;
       const netPositive = netExpected >= 0;
-      const ratioDisplay = expExpNum > 0 ? (expIncNum / expExpNum).toFixed(2) : '—';
+      const ratioDisplay = expExpNum > 0 ? `${Math.round((expIncNum / expExpNum) * 100)}%` : '—';
       const quickSummary = {
         expectedExpense: this.formatNumber(expExpNum),
         expectedIncome: this.formatNumber(expIncNum),

@@ -101,11 +101,29 @@
   margin-bottom: 32rpx;
 }
 
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  margin-bottom: 8rpx;
+}
+
 .net-income-section .label {
   font-size: 26rpx;
   color: #888;
   display: block;
-  margin-bottom: 8rpx;
+  /* margin-bottom: 8rpx; handled by label-row */
+}
+
+.ratio-badge {
+  font-size: 20rpx;
+  color: #8B5CF6;
+  background: rgba(139, 92, 246, 0.1);
+  padding: 2rpx 10rpx;
+  border-radius: 8rpx;
+  font-weight: 500;
+  border: 1rpx solid rgba(139, 92, 246, 0.2);
 }
 
 .amount-large {
