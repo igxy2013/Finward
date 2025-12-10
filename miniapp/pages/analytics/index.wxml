@@ -54,7 +54,26 @@
       </view>
     </view>
 
-    
+    <view class="card health-card">
+      <view class="card-header">
+        <text class="card-title">财务体检</text>
+        <text class="card-subtitle">Financial Health</text>
+      </view>
+      <view class="health-grid">
+        <view class="health-item" wx:for="{{healthMetrics}}" wx:key="name">
+          <view class="health-top">
+            <text class="health-name">{{item.name}}</text>
+            <view class="health-tag {{item.status}}">{{item.statusLabel}}</view>
+          </view>
+          <view class="health-val">{{item.value}}</view>
+          <view class="health-desc">{{item.desc}}</view>
+          <view class="health-progress-bg">
+            <view class="health-progress-bar" style="width: {{item.percent}}%; background-color: {{item.color}};"></view>
+          </view>
+          <view class="health-std">目标: {{item.standard}}</view>
+        </view>
+      </view>
+    </view>
 
     <view class="card monthly-card" bindtap="clearMonthlySelection">
       <view class="card-header">

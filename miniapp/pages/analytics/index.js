@@ -84,7 +84,10 @@ Page({
       bestCategoryAmount: "0.00",
       riskCategory: "-",
       riskCategoryAmount: "0.00"
-    }
+    },
+    healthMetrics: [],
+    rawAssets: [],
+    rawLiabilities: []
   },
   openCategoryDetail(e) {
     const type = String(e.currentTarget.dataset.type || "");
@@ -134,6 +137,7 @@ Page({
       return;
     }
     this.fetchAnalytics(true);
+    this.fetchStats(12);
   },
   onShow() {
     const app = getApp();
@@ -175,6 +179,7 @@ Page({
       return;
     }
     this.fetchAnalytics(true);
+    this.fetchStats(12);
   },
 
   async fetchAnalytics(quiet = false) {
@@ -233,8 +238,9 @@ Page({
       let assetCategories = [];
       let liabilityCategories = [];
       let highlightsRaw = { best_category: null, best_category_amount: 0, risk_category: null, risk_category_amount: 0 };
+      let resAcc = [[], []];
       try {
-        const resAcc = await Promise.all([
+        resAcc = await Promise.all([
           api.listAccounts("asset"),
           api.listAccounts("liability")
         ]);
@@ -279,13 +285,16 @@ Page({
           assetCategories,
           liabilityCategories,
           cashflow: cashflowFromMonthly,
-          highlights: this.formatHighlights(highlightsRaw)
+          highlights: this.formatHighlights(highlightsRaw),
+          rawAssets: Array.isArray(resAcc[0]) ? resAcc[0] : [],
+          rawLiabilities: Array.isArray(resAcc[1]) ? resAcc[1] : []
         },
         () => {
           this.drawTrendChart();
           this.drawCashflowChart();
           this.buildFixedTrend(12);
           this.setData({ monthly: monthlyPoints }, () => { this.drawMonthlyCharts(); });
+          this.calculateHealthMetrics();
         }
       );
     } catch (error) {
@@ -342,10 +351,162 @@ Page({
         this.drawExpensePie();
         this.drawIncomeTrend();
         this.drawIncomeExpenseRatioTrend();
+        this.calculateHealthMetrics();
       });
     } catch (e) {
       this.setData({ incomeChartData: [], expenseChartData: [], incomeTrendSeries: [], expenseTrendSeries: [], incomeTrendLabels: [] });
     }
+  },
+  calculateHealthMetrics() {
+    const { summary, rawAssets, rawLiabilities, incomeTrendSeries, expenseTrendSeries, incomeChartData, expenseChartData } = this.data;
+    const totalAssets = Number(String(summary.totalAssets || '0').replace(/,/g, ''));
+    const totalLiabilities = Number(String(summary.totalLiabilities || '0').replace(/,/g, ''));
+    const netWorth = Number(String(summary.netWorth || '0').replace(/,/g, ''));
+
+    // 1. 资产负债率 (Debt to Asset Ratio)
+    // 目标: 40%-60%
+    const debtRatioVal = totalAssets > 0 ? (totalLiabilities / totalAssets) * 100 : 0;
+    let debtRatioStatus = 'good';
+    if (debtRatioVal > 60) debtRatioStatus = 'danger';
+    else if (debtRatioVal > 40) debtRatioStatus = 'warning';
+    else debtRatioStatus = 'good';
+
+    // 计算平均月收入和月支出 (取最近6个月，如果数据不足则取全部)
+    const recentIncome = (incomeTrendSeries || []).slice(-6);
+    const avgIncome = recentIncome.length ? recentIncome.reduce((a, b) => a + b, 0) / recentIncome.length : 0;
+    
+    const recentExpense = (expenseTrendSeries || []).slice(-6);
+    const avgExpense = recentExpense.length ? recentExpense.reduce((a, b) => a + b, 0) / recentExpense.length : 0;
+
+    // 2. 债务收入比 (Debt to Income Ratio)
+    // 目标: <= 40%
+    // 每月债务还款额: 从 rawLiabilities 累加 monthly_payment
+    const monthlyDebtPayment = (rawLiabilities || []).reduce((sum, item) => sum + Number(item.monthly_payment || 0), 0);
+    const dtiRatioVal = avgIncome > 0 ? (monthlyDebtPayment / avgIncome) * 100 : 0;
+    let dtiStatus = 'good';
+    if (dtiRatioVal > 40) dtiStatus = 'danger';
+    else if (dtiRatioVal > 30) dtiStatus = 'warning';
+
+    // 3. 流动性比率 (Liquidity Ratio)
+    // 目标: 3-6
+    // 流动资产: 现金、银行存款、活期、余额宝、微信零钱
+    const liquidKeywords = ['现金', '银行', '活期', '余额', '零钱', '流动'];
+    const liquidAssets = (rawAssets || []).filter(a => {
+      const cat = String(a.category || '').trim();
+      return liquidKeywords.some(k => cat.includes(k));
+    }).reduce((sum, item) => sum + Number(item.current_value || item.amount || 0), 0);
+    
+    const liquidityRatioVal = avgExpense > 0 ? (liquidAssets / avgExpense) : 0;
+    let liquidityStatus = 'good';
+    if (liquidityRatioVal < 3) liquidityStatus = 'danger';
+    else if (liquidityRatioVal > 6) liquidityStatus = 'good'; // 虽说3-6是标准，但>6通常不算坏事，算good
+    else liquidityStatus = 'good';
+
+    // 4. 储蓄率 (Savings Ratio)
+    // 目标: >= 20%
+    const savingsRatioVal = avgIncome > 0 ? ((avgIncome - avgExpense) / avgIncome) * 100 : 0;
+    let savingsStatus = 'good';
+    if (savingsRatioVal < 10) savingsStatus = 'danger';
+    else if (savingsRatioVal < 20) savingsStatus = 'warning';
+
+    // 5. 投资资产占比 (Investment Asset Ratio)
+    // 目标: >= 50%
+    // 投资资产: 股票、基金、理财、房产、投资
+    const investKeywords = ['股票', '基金', '理财', '房产', '投资', '证券', '信托', '黄金', '期货', '光伏', '充电站'];
+    const investAssets = (rawAssets || []).filter(a => {
+      const cat = String(a.category || '').trim();
+      return investKeywords.some(k => cat.includes(k)) && !liquidKeywords.some(lk => cat.includes(lk));
+    }).reduce((sum, item) => sum + Number(item.current_value || item.amount || 0), 0);
+    
+    const investRatioVal = netWorth > 0 ? (investAssets / netWorth) * 100 : 0;
+    let investStatus = 'good';
+    if (investRatioVal < 30) investStatus = 'danger';
+    else if (investRatioVal < 50) investStatus = 'warning';
+
+    // 6. 财务自由度 (Financial Freedom)
+    // 目标: 100%
+    // 年理财收入 / 年支出
+    // 年理财收入: 从 incomeChartData 找 "理财","投资","股息","利息","租金","设计服务"(用户可能把副业也算被动收入，这里暂时只算典型的)
+    // 修正: 设计服务通常算主动收入。这里只算被动收入。
+    const passiveKeywords = ['理财', '投资', '股息', '利息', '租金', '分红'];
+    const annualPassiveIncome = (incomeChartData || [])
+      .filter(item => passiveKeywords.some(k => item.name.includes(k)))
+      .reduce((sum, item) => sum + Number(item.value || 0), 0);
+    
+    // 年支出: avgExpense * 12 (更平滑) 或者 expenseTrendSeries 总和
+    const annualExpense = avgExpense * 12;
+    const ffRatioVal = annualExpense > 0 ? (annualPassiveIncome / annualExpense) * 100 : 0;
+    let ffStatus = 'good'; // 默认
+    // 年龄阶段建议: 30岁以下 5-15, 30-40 15-30, 40-50 30-50, 50-60 50-100
+    // 假设用户30岁左右，取中间值。或者简单点：
+    if (ffRatioVal < 15) ffStatus = 'danger'; // 较低
+    else if (ffRatioVal < 50) ffStatus = 'warning'; 
+    else ffStatus = 'good'; // > 50% 算不错
+
+    const metrics = [
+      {
+        name: '资产负债率',
+        value: `${debtRatioVal.toFixed(1)}%`,
+        status: debtRatioStatus,
+        statusLabel: debtRatioStatus === 'good' ? '健康' : (debtRatioStatus === 'warning' ? '关注' : '警惕'),
+        desc: '总负债 ÷ 总资产',
+        standard: '40% - 60%',
+        percent: Math.min(debtRatioVal, 100),
+        color: debtRatioStatus === 'good' ? '#10b981' : (debtRatioStatus === 'warning' ? '#f59e0b' : '#ef4444')
+      },
+      {
+        name: '债务收入比',
+        value: `${dtiRatioVal.toFixed(1)}%`,
+        status: dtiStatus,
+        statusLabel: dtiStatus === 'good' ? '健康' : (dtiStatus === 'warning' ? '关注' : '警惕'),
+        desc: '月还款 ÷ 月收入',
+        standard: '≤ 40%',
+        percent: Math.min(dtiRatioVal, 100),
+        color: dtiStatus === 'good' ? '#10b981' : (dtiStatus === 'warning' ? '#f59e0b' : '#ef4444')
+      },
+      {
+        name: '流动性比率',
+        value: `${liquidityRatioVal.toFixed(1)}`,
+        status: liquidityStatus,
+        statusLabel: liquidityStatus === 'good' ? '健康' : '不足',
+        desc: '流动资产 ÷ 月支出',
+        standard: '3 - 6',
+        percent: Math.min((liquidityRatioVal / 6) * 100, 100),
+        color: liquidityStatus === 'good' ? '#10b981' : '#ef4444'
+      },
+      {
+        name: '储蓄率',
+        value: `${savingsRatioVal.toFixed(1)}%`,
+        status: savingsStatus,
+        statusLabel: savingsStatus === 'good' ? '健康' : (savingsStatus === 'warning' ? '关注' : '不足'),
+        desc: '结余 ÷ 月收入',
+        standard: '≥ 20%',
+        percent: Math.max(0, Math.min(savingsRatioVal, 100)),
+        color: savingsStatus === 'good' ? '#10b981' : (savingsStatus === 'warning' ? '#f59e0b' : '#ef4444')
+      },
+      {
+        name: '投资占比',
+        value: `${investRatioVal.toFixed(1)}%`,
+        status: investStatus,
+        statusLabel: investStatus === 'good' ? '健康' : (investStatus === 'warning' ? '关注' : '不足'),
+        desc: '投资 ÷ 净资产',
+        standard: '≥ 50%',
+        percent: Math.min(investRatioVal, 100),
+        color: investStatus === 'good' ? '#10b981' : (investStatus === 'warning' ? '#f59e0b' : '#ef4444')
+      },
+      {
+        name: '财务自由度',
+        value: `${ffRatioVal.toFixed(1)}%`,
+        status: ffStatus,
+        statusLabel: ffStatus === 'good' ? '优秀' : (ffStatus === 'warning' ? '良好' : '起步'),
+        desc: '被动收入 ÷ 年支出',
+        standard: '100% 自由',
+        percent: Math.min(ffRatioVal, 100),
+        color: ffStatus === 'good' ? '#10b981' : (ffStatus === 'warning' ? '#f59e0b' : '#ef4444')
+      }
+    ];
+
+    this.setData({ healthMetrics: metrics });
   },
   async fetchCashflowDistribution() {
     const app = getApp();
@@ -1408,7 +1569,8 @@ Page({
         };
         ctx.clearRect(0, 0, w, h);
         if (!hasData) { drawEmpty('暂无收支比趋势'); return; }
-        const maxR = Math.max(...ratios);
+        const baseMaxR = Math.max(...ratios);
+        const maxR = Math.max(baseMaxR, 100);
         const minR = 0;
         const rangeR = (maxR - minR) || 1;
         ctx.font = '10px sans-serif';
@@ -1435,6 +1597,18 @@ Page({
           ctx.textAlign = 'right';
           ctx.textBaseline = 'middle';
           ctx.fillText(`${Math.round(val)}%`, padL - 8, y);
+        }
+
+        const yRef = padT + (1 - ((100 - minR) / rangeR)) * ih;
+        if (yRef >= padT && yRef <= padT + ih) {
+          ctx.beginPath();
+          ctx.moveTo(padL, yRef);
+          ctx.lineTo(w - padR, yRef);
+          ctx.strokeStyle = 'rgba(99,102,241,0.6)';
+          ctx.lineWidth = 1;
+          ctx.setLineDash([6, 4]);
+          ctx.stroke();
+          ctx.setLineDash([]);
         }
         
         const toXY = (idx) => {
@@ -2535,6 +2709,17 @@ Page({
     const abs = Math.abs(num);
     const sign = num < 0 ? '-' : '';
     return `${sign}${Math.round(abs)}元`;
+  },
+  formatNumber(value) {
+    const num = Number(value);
+    if (Number.isNaN(num)) return "0.00";
+    return num.toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  },
+  formatSignedNumber(value) {
+    const num = Number(value);
+    if (Number.isNaN(num)) return "+0.00";
+    const sign = num >= 0 ? "+" : "-";
+    return `${sign}${Math.abs(num).toLocaleString("zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   },
   async handleLogin() {
     const app = getApp();
