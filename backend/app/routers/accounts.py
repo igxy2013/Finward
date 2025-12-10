@@ -71,6 +71,13 @@ def list_value_updates(account_id: int, session: Session = Depends(get_session),
         .order_by(models.AccountValueUpdate.ts.desc(), models.AccountValueUpdate.created_at.desc())
         .all()
     )
+    for r in rows:
+        if r.ts and (not r.ts.tzinfo or r.ts.tzinfo.utcoffset(r.ts) is None):
+            r.ts = r.ts.replace(tzinfo=timezone.utc)
+        if r.created_at and (not r.created_at.tzinfo or r.created_at.tzinfo.utcoffset(r.created_at) is None):
+            r.created_at = r.created_at.replace(tzinfo=timezone.utc)
+        if r.updated_at and (not r.updated_at.tzinfo or r.updated_at.tzinfo.utcoffset(r.updated_at) is None):
+            r.updated_at = r.updated_at.replace(tzinfo=timezone.utc)
     print(f"[DEBUG] list_value_updates for account {account_id}, found {len(rows)} rows")
     return rows
 
@@ -87,13 +94,20 @@ def _parse_ts(raw) -> datetime:
     try:
         if s.endswith("Z"):
             s = s[:-1] + "+00:00"
-        return datetime.fromisoformat(s)
+        dt = datetime.fromisoformat(s)
+        if not dt.tzinfo or dt.tzinfo.utcoffset(dt) is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
     except Exception:
         try:
-            return datetime.strptime(s, "%Y-%m-%d %H:%M")
+            dt = datetime.strptime(s, "%Y-%m-%d %H:%M")
+            dt = dt.replace(tzinfo=timezone.utc)
+            return dt
         except Exception:
             try:
-                return datetime.strptime(s, "%Y-%m-%d")
+                dt = datetime.strptime(s, "%Y-%m-%d")
+                dt = dt.replace(tzinfo=timezone.utc)
+                return dt
             except Exception:
                 return datetime.now(timezone.utc)
 

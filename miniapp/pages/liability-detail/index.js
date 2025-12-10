@@ -104,7 +104,9 @@ Page({
           value_display: this.formatNumber(r.value),
           date_display: this.formatDateTime(r.ts || r.created_at)
         }));
-        this.setData({ valueUpdates: formatted, valueUpdatesRaw: arr || [] });
+        this.setData({ valueUpdates: formatted, valueUpdatesRaw: arr || [] }, () => {
+          this.drawValueTrendChart();
+        });
       } catch (e) {
         let arr = [];
         try { arr = wx.getStorageSync(`fw_value_updates:${id}`) || []; } catch (err) { arr = []; }
@@ -115,9 +117,231 @@ Page({
           value_display: this.formatNumber(r.value),
           date_display: this.formatDateTime(new Date(r.ts))
         }));
-        this.setData({ valueUpdates: formatted, valueUpdatesRaw: arr || [] });
+        this.setData({ valueUpdates: formatted, valueUpdatesRaw: arr || [] }, () => {
+          this.drawValueTrendChart();
+        });
       }
     })();
+  },
+  drawValueTrendChart() {
+    const list = this.data.valueUpdates || [];
+    const detail = this.data.detail || {};
+    const query = wx.createSelectorQuery().in(this);
+    query
+      .select('#valueTrendCanvas').node()
+      .select('#valueTrendCanvas').boundingClientRect()
+      .exec((res) => {
+        const node = res && res[0] ? res[0].node : null;
+        const rect = res && res[1] ? res[1] : null;
+        const fallbackW = 320;
+        const fallbackH = 160;
+        const width = rect && rect.width ? rect.width : fallbackW;
+        const height = rect && rect.height ? rect.height : fallbackH;
+        if (!node) return;
+        const canvas = node;
+        const ctx = canvas.getContext('2d');
+        let dpr = 1;
+        if (typeof wx.getWindowInfo === 'function') {
+          const info = wx.getWindowInfo();
+          dpr = (info && typeof info.pixelRatio === 'number') ? info.pixelRatio : 1;
+        }
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.scale(dpr, dpr);
+        const padding = 20;
+        const iw = width - padding * 2;
+        const ih = height - padding * 2;
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        const parseTs = (x) => {
+          try {
+            const d = (x instanceof Date) ? x : new Date(String(x).replace(' ', 'T'));
+            const t = d.getTime();
+            return Number.isNaN(t) ? null : t;
+          } catch (e) { return null; }
+        };
+        const startTs = (() => {
+          const s = detail.loan_start_date || detail.created_at || null;
+          const t = s ? parseTs(s) : null;
+          return t != null ? t : Date.now();
+        })();
+        const initialVal = this.parseNumber(detail.initial_amount ?? detail.amount);
+        const currentVal = this.parseNumber(detail.current_value ?? detail.initial_amount ?? detail.amount);
+        const updates = list.slice().map(r => ({ ts: parseTs(r.raw_ts), val: Number(r.value_raw || 0) }))
+          .filter(x => x.ts != null && x.ts >= startTs);
+        const events = [{ ts: startTs, val: initialVal }, ...updates, { ts: Date.now(), val: currentVal }]
+          .sort((a, b) => a.ts - b.ts)
+          .reduce((acc, cur) => {
+            if (!acc.length || acc[acc.length - 1].ts !== cur.ts) acc.push(cur); else acc[acc.length - 1] = cur;
+            return acc;
+          }, []);
+        const values = events.map(x => Number(x.val || 0));
+        const maxV = Math.max(...values);
+        const minV = Math.min(...values);
+        const range = (maxV - minV) || 1;
+        const points = events.map((x, i) => {
+          const v = Number(x.val || 0);
+          const xPos = padding + (i / Math.max(events.length - 1, 1)) * iw;
+          const yPos = padding + (1 - (v - minV) / range) * ih;
+          return { x: xPos, y: yPos };
+        });
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(padding, height - padding);
+        ctx.lineTo(width - padding, height - padding);
+        ctx.moveTo(padding, padding);
+        ctx.lineTo(padding, height - padding);
+        ctx.stroke();
+        const tickCount = 4;
+        ctx.fillStyle = '#334155';
+        ctx.font = '10px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        for (let i = 0; i <= tickCount; i++) {
+          const y = padding + (i / tickCount) * ih;
+          const v = minV + (1 - i / tickCount) * range;
+          const label = this.formatNumber(v);
+          ctx.fillText(label, padding+5, y);
+        }
+        const leftLabel = (() => {
+          const s = events[0];
+          const d = s && s.ts ? new Date(s.ts) : null;
+          if (!d || isNaN(d.getTime())) return '';
+          const yy = String(d.getFullYear());
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${yy}/${mm}/${dd}`;
+        })();
+        const rightLabel = (() => {
+          const s = events[events.length - 1];
+          const d = s && s.ts ? new Date(s.ts) : null;
+          if (!d || isNaN(d.getTime())) return '';
+          const yy = String(d.getFullYear());
+          const mm = String(d.getMonth() + 1).padStart(2, '0');
+          const dd = String(d.getDate()).padStart(2, '0');
+          return `${yy}/${mm}/${dd}`;
+        })();
+        ctx.fillStyle = 'rgba(100,116,139,0.9)';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'bottom';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(leftLabel, padding, height - padding+16);
+        ctx.textAlign = 'right';
+        ctx.fillText(rightLabel, width - padding, height - padding+16);
+        const updateEvents = events.slice(1, Math.max(events.length - 1, 1));
+        if (updateEvents.length > 0) {
+          const maxLabels = Math.max(2, Math.floor(iw / 70));
+          const step = Math.max(1, Math.ceil(updateEvents.length / maxLabels));
+          ctx.strokeStyle = 'rgba(51,65,85,0.3)';
+          ctx.lineWidth = 1;
+          ctx.fillStyle = 'rgba(100,116,139,0.9)';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'bottom';
+          ctx.font = '10px sans-serif';
+          for (let i = 0; i < updateEvents.length; i += step) {
+            const idx = 1 + i;
+            const px = points[idx].x;
+            if (px < padding + 25 || px > width - padding - 25) continue;
+            const d = new Date(updateEvents[i].ts);
+            if (!d || isNaN(d.getTime())) continue;
+            const yy = String(d.getFullYear());
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const label = `${yy}/${mm}/${dd}`;
+            ctx.beginPath();
+            ctx.moveTo(px, height - padding);
+            ctx.lineTo(px, height - padding);
+            ctx.stroke();
+            ctx.fillText(label, px, height - padding+16);
+          }
+        }
+        ctx.fillStyle = 'rgba(248,113,113,0.25)';
+        ctx.beginPath();
+        if (points.length === 1) {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
+          ctx.lineTo(points[0].x, height - padding);
+        } else if (points.length === 2) {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
+          ctx.lineTo(points[1].x, points[1].y);
+          ctx.lineTo(points[1].x, height - padding);
+        } else {
+          ctx.moveTo(points[0].x, height - padding);
+          ctx.lineTo(points[0].x, points[0].y);
+          for (let i = 0; i < points.length - 1; i++) {
+            const p0 = i > 0 ? points[i - 1] : points[i];
+            const p1 = points[i];
+            const p2 = points[i + 1];
+            const p3 = i < points.length - 2 ? points[i + 2] : p2;
+            const minY = Math.min(p1.y, p2.y);
+            const maxY = Math.max(p1.y, p2.y);
+            const eps = 0.5;
+            if (Math.abs(p2.y - p1.y) <= eps) {
+              ctx.lineTo(p2.x, p2.y);
+            } else {
+              const s = 0.5;
+              const cp1x = p1.x + (p2.x - p0.x) / 6 * s;
+              let cp1y = p1.y + (p2.y - p0.y) / 6 * s;
+              const cp2x = p2.x - (p3.x - p1.x) / 6 * s;
+              let cp2y = p2.y - (p3.y - p1.y) / 6 * s;
+              cp1y = Math.max(padding, Math.min(height - padding, Math.max(minY, Math.min(maxY, cp1y))));
+              cp2y = Math.max(padding, Math.min(height - padding, Math.max(minY, Math.min(maxY, cp2y))));
+              ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+            }
+          }
+          ctx.lineTo(points[points.length - 1].x, height - padding);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        if (points.length > 0) {
+          ctx.moveTo(points[0].x, points[0].y);
+          if (points.length === 2) {
+            ctx.lineTo(points[1].x, points[1].y);
+          } else {
+            for (let i = 0; i < points.length - 1; i++) {
+              const p0 = i > 0 ? points[i - 1] : points[i];
+              const p1 = points[i];
+              const p2 = points[i + 1];
+              const p3 = i < points.length - 2 ? points[i + 2] : p2;
+              const minY = Math.min(p1.y, p2.y);
+              const maxY = Math.max(p1.y, p2.y);
+              const eps = 0.5;
+              if (Math.abs(p2.y - p1.y) <= eps) {
+                ctx.lineTo(p2.x, p2.y);
+              } else {
+                const s = 0.5;
+                const cp1x = p1.x + (p2.x - p0.x) / 6 * s;
+                let cp1y = p1.y + (p2.y - p0.y) / 6 * s;
+                const cp2x = p2.x - (p3.x - p1.x) / 6 * s;
+                let cp2y = p2.y - (p3.y - p1.y) / 6 * s;
+                cp1y = Math.max(padding, Math.min(height - padding, Math.max(minY, Math.min(maxY, cp1y))));
+                cp2y = Math.max(padding, Math.min(height - padding, Math.max(minY, Math.min(maxY, cp2y))));
+                ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
+            }
+          }
+        }
+        ctx.stroke();
+        ctx.fillStyle = '#b91c1c';
+        points.forEach(p => {
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+          ctx.fill();
+        });
+        if (events.length >= 2) {
+          const startVal = this.formatNumber(events[0].val || 0);
+          const endVal = this.formatNumber(events[events.length - 1].val || 0);
+          ctx.fillStyle = '#64748b';
+          ctx.textAlign = 'center';
+          ctx.font = '10px sans-serif';
+          ctx.fillText(`${startVal} → ${endVal}`, width / 2, padding - 6);
+        }
+      });
   },
   editValueUpdate(e) {
     const id = Number(e.currentTarget.dataset.id || 0);
@@ -201,8 +425,15 @@ Page({
       const timeStr = String(this.data.updateTimeInput || "");
       let ts = Date.now();
       if (dateStr && timeStr) {
-        const dt = new Date(`${dateStr} ${timeStr}`.replace(' ', 'T'));
-        if (!isNaN(dt.getTime())) ts = dt.getTime();
+        const partsD = dateStr.split('-').map(x => Number(x));
+        const partsT = timeStr.split(':').map(x => Number(x));
+        const y = Number(partsD[0] || 0);
+        const m = Number(partsD[1] || 1) - 1;
+        const d = Number(partsD[2] || 1);
+        const hh = Number(partsT[0] || 0);
+        const mm = Number(partsT[1] || 0);
+        const dtLocal = new Date(y, m, d, hh, mm);
+        if (!isNaN(dtLocal.getTime())) ts = dtLocal.getTime();
       }
       if (updId) {
         try { await api.updateAccountValueUpdate(id, updId, val, ts); } catch (e2) {}

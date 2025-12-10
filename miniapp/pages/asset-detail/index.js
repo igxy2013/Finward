@@ -613,8 +613,15 @@ Page({
       const timeStr = String(this.data.updateTimeInput || "");
       let ts = Date.now();
       if (dateStr && timeStr) {
-        const dt = new Date(`${dateStr} ${timeStr}`.replace(' ', 'T'));
-        if (!isNaN(dt.getTime())) ts = dt.getTime();
+        const partsD = dateStr.split('-').map(x => Number(x));
+        const partsT = timeStr.split(':').map(x => Number(x));
+        const y = Number(partsD[0] || 0);
+        const m = Number(partsD[1] || 1) - 1;
+        const d = Number(partsD[2] || 1);
+        const hh = Number(partsT[0] || 0);
+        const mm = Number(partsT[1] || 0);
+        const dtLocal = new Date(y, m, d, hh, mm);
+        if (!isNaN(dtLocal.getTime())) ts = dtLocal.getTime();
       }
       const note = String(this.data.updateNoteInput || "");
       if (updId) {
