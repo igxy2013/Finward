@@ -89,11 +89,11 @@
 .modal-mask { position: absolute; left: 0; right: 0; top: 0; bottom: 0; background: rgba(0,0,0,0.35); }
 .modal-body { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 80%; background: #ffffff; border-radius: 20rpx; padding: 24rpx; box-shadow: 0 12rpx 28rpx rgba(0,0,0,0.2); }
 .modal-title { font-size: 30rpx; font-weight: 600; color: #111827; }
-.modal-input { margin-top: 16rpx; border: 1rpx solid #e5e7eb; border-radius: 12rpx; padding: 16rpx; font-size: 28rpx; }
+.modal-input { margin-top: 16rpx; border: 1px solid #e5e7eb; border-radius: 12rpx; padding: 16rpx; font-size: 28rpx; }
 .modal-actions { display: flex; gap: 12rpx; margin-top: 20rpx; }
 .btn { flex: 1; height: 72rpx; border-radius: 12rpx; font-size: 28rpx; }
-.btn.cancel { background: #F3F4F6; color: #374151; border: 1rpx solid #e5e7eb; }
+.btn.cancel { background: #F3F4F6; color: #374151; border: 1px solid #e5e7eb; }
 .btn.confirm { background: #10B981; color: #ffffff; border: none; }
 .modal-row { display: flex; align-items: center; justify-content: space-between; gap: 12rpx; margin-top: 16rpx; }
 .modal-label { font-size: 26rpx; color: #6b7280; }
-.picker-display { font-size: 26rpx; color: #111827; padding: 10rpx 14rpx; background: #F3F4F6; border: 1rpx solid #e5e7eb; border-radius: 12rpx; }
+.picker-display { font-size: 26rpx; color: #111827; padding: 10rpx 14rpx; background: #F3F4F6; border: 1px solid #e5e7eb; border-radius: 12rpx; }

@@ -1,83 +1,69 @@
 <navbar title="收支管理" showBack="{{false}}"></navbar>
 <view class="page" bindtouchstart="handleSwipeStart" bindtouchmove="handleSwipeMove" bindtouchend="handleSwipeEnd" bindtouchcancel="handleSwipeCancel">
   <view wx:if="{{swipeLock}}" class="swipe-mask" catchtouchmove="handleMaskMove" bindtouchend="handleSwipeEnd" bindtouchcancel="handleSwipeCancel"></view>
-  <view class="toolbar">
-    <view class="segmented">
-      <view class="seg-item {{activeRange === item.value ? 'active' : ''}}" wx:for="{{rangeTabs}}" wx:key="value" data-value="{{item.value}}" bindtap="handleRangeTab">{{item.label}}</view>
-    </view>
-    <view class="period" wx:if="{{activeRange === 'month'}}">
-      <view class="nav-btn" bindtap="prevMonth">‹</view>
-      <picker mode="multiSelector" range="{{monthSelectorRange}}" value="{{monthSelectorIndex}}" bindchange="handlePeriodMultiChange">
-        <view class="period-display">{{selectedYear}}年{{selectedMonth}}月</view>
-      </picker>
-      <view class="nav-btn" bindtap="nextMonth">›</view>
-    </view>
-    <view class="period" wx:elif="{{activeRange === 'year'}}">
-      <view class="nav-btn" bindtap="prevYear">‹</view>
-      <picker mode="selector" range="{{yearSelectorRange}}" value="{{yearSelectorIndex}}" bindchange="handleYearSelectorChange">
-        <view class="period-display">{{selectedYear}}年</view>
-      </picker>
-      <view class="nav-btn" bindtap="nextYear">›</view>
-    </view>
-    <view class="period" wx:elif="{{activeRange === 'all'}}">
-      <view class="period-display">全部</view>
-    </view>
-  </view>
+  <view class="header-area">
+    <!-- Date Navigation -->
+    <view class="date-nav">
+      <view class="range-tabs">
+        <view class="range-tab {{activeRange === 'month' ? 'active' : ''}}" data-value="month" bindtap="handleRangeTab">月</view>
+        <view class="range-tab {{activeRange === 'year' ? 'active' : ''}}" data-value="year" bindtap="handleRangeTab">年</view>
+        <view class="range-tab {{activeRange === 'all' ? 'active' : ''}}" data-value="all" bindtap="handleRangeTab">全</view>
+      </view>
 
-  <view class="summary">
-    <view class="summary-item accent-expense" bindtap="applyExpenseFilter">
-      <view class="card-bg"></view>
-      <view class="card-glow"></view>
-      <view class="summary-top">
-        <view class="summary-icon">
-          <image class="summary-icon-img" src="/assets/icons/bill-line-red.svg" mode="aspectFit"></image>
+      <view class="date-picker-row" wx:if="{{activeRange !== 'all'}}">
+        <view class="nav-arrow" bindtap="{{activeRange === 'month' ? 'prevMonth' : 'prevYear'}}">
+          <image src="/assets/icons/arrow-left-s-line.svg" mode="aspectFit" />
         </view>
-        <text class="sum-label">{{rangeLabelPrefix}}固定支出</text>
+        <picker mode="{{activeRange === 'month' ? 'multiSelector' : 'selector'}}" 
+                range="{{activeRange === 'month' ? monthSelectorRange : yearSelectorRange}}" 
+                value="{{activeRange === 'month' ? monthSelectorIndex : yearSelectorIndex}}" 
+                bindchange="{{activeRange === 'month' ? 'handlePeriodMultiChange' : 'handleYearSelectorChange'}}">
+          <view class="current-date">
+            <text class="date-text">{{selectedYear}}年{{activeRange === 'month' ? selectedMonth + '月' : ''}}</text>
+            <image class="dropdown-icon" src="/assets/icons/arrow-down-s-fill.svg" mode="aspectFit" />
+          </view>
+        </picker>
+        <view class="nav-arrow" bindtap="{{activeRange === 'month' ? 'nextMonth' : 'nextYear'}}">
+          <image src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
+        </view>
       </view>
-      <view class="sum-value">
-        <text class="currency">￥</text>
-        <text class="amount negative">{{summary.expectedExpense}}</text>
+      <view class="date-picker-row" wx:else>
+        <view class="current-date">
+          <text class="date-text">全部记录</text>
+        </view>
       </view>
     </view>
-    <view class="summary-item accent-income" bindtap="applyIncomeFilter">
-      <view class="card-bg"></view>
-      <view class="card-glow"></view>
-      <view class="summary-top">
-        <view class="summary-icon">
-          <image class="summary-icon-img" src="/assets/icons/line-chart-line.svg" mode="aspectFit"></image>
+
+    <!-- Main Summary Card -->
+    <view class="main-card">
+      <view class="net-income-section">
+        <text class="label">预计结余</text>
+        <view class="amount-large {{summary.netIncomePositive ? 'positive' : 'negative'}}">
+          <text class="symbol">￥</text>{{summary.netIncome}}
         </view>
-        <text class="sum-label">{{rangeLabelPrefix}}预计收入</text>
       </view>
-      <view class="sum-value">
-        <text class="currency">￥</text>
-        <text class="amount positive">{{summary.expectedIncome}}</text>
-      </view>
-    </view>
-    <view class="summary-item accent-expense">
-      <view class="card-bg"></view>
-      <view class="card-glow"></view>
-      <view class="summary-top">
-        <view class="summary-icon">
-          <image class="summary-icon-img" src="/assets/icons/arrow-up-line.svg" mode="aspectFit"></image>
+      
+      <view class="divider"></view>
+      
+      <view class="stats-row">
+        <view class="stat-item income-item {{activeType === 'income' ? 'active' : ''}}" bindtap="applyIncomeFilter">
+          <view class="stat-icon-circle income-bg">
+            <image src="/assets/icons/arrow-up-line.svg" />
+          </view>
+          <view class="stat-text">
+            <text class="stat-label">收入</text>
+            <text class="stat-amount income-color">{{summary.expectedIncome}}</text>
+          </view>
         </view>
-        <text class="sum-label">{{rangeLabelPrefix}}预计净收入</text>
-      </view>
-      <view class="sum-value">
-        <text class="currency">￥</text>
-        <text class="amount {{summary.netIncomePositive ? 'positive' : 'negative'}}">{{summary.netIncome}}</text>
-      </view>
-    </view>
-    <view class="summary-item accent-income">
-      <view class="card-bg"></view>
-      <view class="card-glow"></view>
-      <view class="summary-top">
-        <view class="summary-icon">
-          <image class="summary-icon-img" src="/assets/icons/scales-line.svg" mode="aspectFit"></image>
+        <view class="stat-item expense-item {{activeType === 'expense' ? 'active' : ''}}" bindtap="applyExpenseFilter">
+          <view class="stat-icon-circle expense-bg">
+            <image src="/assets/icons/arrow-down-line-red.svg" />
+          </view>
+          <view class="stat-text">
+            <text class="stat-label">支出</text>
+            <text class="stat-amount expense-color">{{summary.expectedExpense}}</text>
+          </view>
         </view>
-        <text class="sum-label">{{rangeLabelPrefix}}预计收支比</text>
-      </view>
-      <view class="sum-value">
-        <text class="amount positive">{{summary.incomeExpenseRatio}}</text>
       </view>
     </view>
   </view>
@@ -111,7 +97,6 @@
             <text>{{item.date}}</text>
             <text>{{item.planned ? '预计' : '实际'}}</text>
             <text>{{item.recurring_monthly ? '每月重复' : ''}}</text>
-            <text wx:if="{{item.account_name}}">{{item.account_name}}</text>
           </view>
           <view class="item-note" wx:if="{{item.recurring_start_date}}">
             <text class="note-text">开始 {{item.recurring_start_date}}</text>

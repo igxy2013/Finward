@@ -397,6 +397,8 @@ Page({
     }
   },
   async fetchList(skipSummary = false, forceAll = false) {
+    const fetchId = Date.now();
+    this._lastFetchId = fetchId;
     const range = this.data.activeRange || 'month';
     const y = this.data.selectedYear || new Date().getFullYear();
     const m = this.data.selectedMonth || (new Date().getMonth() + 1);
@@ -428,7 +430,9 @@ Page({
       } else {
         try { list = await api.listCashflows(query); } catch (e0) { list = []; }
       }
-      const normalized = (arr) => (arr || []).map((x) => ({ ...x, id: x.id || `${x.type || 'unknown'}:${x.planned ? 'planned' : 'actual'}:${x.category}:${x.date}` }));
+      if (this._lastFetchId !== fetchId) return;
+
+      const normalized = (arr) => (arr || []).map((x, i) => ({ ...x, id: x.id || `${x.type || 'unknown'}:${x.planned ? 'planned' : 'actual'}:${x.category}:${x.date}:${i}` }));
       const mergedRaw = [...normalized(list)];
       let formatted = mergedRaw.map((x) => {
         const idStr = String(x.id || '');
@@ -481,6 +485,7 @@ Page({
         if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
           combined = combinedAll;
         }
+        if (this._lastFetchId !== fetchId) return;
         this.setFilteredList(combined);
         this.skipFilterOnce = false;
         return;
@@ -508,6 +513,7 @@ Page({
               icon: getCategoryIcon(x.category, x.type)
             }))
             .sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
+          if (this._lastFetchId !== fetchId) return;
           this.setFilteredList(formattedAll);
           this.skipFilterOnce = false;
           return;
@@ -541,6 +547,7 @@ Page({
             }
           } catch (eYear) {}
         }
+        if (this._lastFetchId !== fetchId) return;
         this.setFilteredList(formatted);
         this.skipFilterOnce = false;
         return;
@@ -1082,6 +1089,7 @@ Page({
       if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
         combined = combinedAll;
       }
+      if (this._lastFetchId !== fetchId) return;
       this.setFilteredList(combined);
       this.skipFilterOnce = false;
 
@@ -1099,17 +1107,17 @@ Page({
     this.setData({ activeType: val }, () => this.fetchList(true));
   },
   applyExpenseFilter() {
-    if (this.data.activeType !== 'expense') {
-      this.setData({ activeType: 'expense' }, () => this.fetchList(true));
+    if (this.data.activeType === 'expense') {
+      this.setData({ activeType: 'all' }, () => this.fetchList(true));
     } else {
-      this.fetchList(true);
+      this.setData({ activeType: 'expense' }, () => this.fetchList(true));
     }
   },
   applyIncomeFilter() {
-    if (this.data.activeType !== 'income') {
-      this.setData({ activeType: 'income' }, () => this.fetchList(true));
+    if (this.data.activeType === 'income') {
+      this.setData({ activeType: 'all' }, () => this.fetchList(true));
     } else {
-      this.fetchList(true);
+      this.setData({ activeType: 'income' }, () => this.fetchList(true));
     }
   },
   openCashflowActions(e) {
