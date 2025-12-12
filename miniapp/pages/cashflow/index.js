@@ -25,6 +25,7 @@ Page({
     incomeCategoryOptions: [
       { label: "租金收入" },
       { label: "工资" },
+      { label: "兼职" },
       { label: "奖金" },
       { label: "理财收益" },
       { label: "分红" },
@@ -55,7 +56,18 @@ Page({
     const val = String(e.currentTarget.dataset.value || "budget");
     if (val === this.data.activePage) return;
     const planned = (val === 'budget');
-    this.setData({ activePage: val, "form.planned": planned });
+    if (!planned) {
+      this.setData({
+        activePage: val,
+        "form.planned": false,
+        recurringIndex: 0,
+        "form.recurring_monthly": false,
+        "form.recurring_start_date": '',
+        "form.recurring_end_date": ''
+      });
+    } else {
+      this.setData({ activePage: val, "form.planned": true });
+    }
   },
   handleHiddenInput(e) {
     const key = String(e.currentTarget.dataset.key || "");
@@ -150,6 +162,14 @@ Page({
       try { if (refFrom === 'detail') wx.setNavigationBarTitle({ title: '编辑收支' }); } catch (e) {}
       const activePage = planned ? 'budget' : 'final';
       this.setData({ activePage });
+      if (!planned) {
+        this.setData({
+          recurringIndex: 0,
+          "form.recurring_monthly": false,
+          "form.recurring_start_date": '',
+          "form.recurring_end_date": ''
+        });
+      }
     }
   },
   async prefill(id) {
@@ -185,6 +205,14 @@ Page({
       });
       const activePage = item.planned ? 'budget' : 'final';
       this.setData({ activePage });
+      if (!item.planned) {
+        this.setData({
+          recurringIndex: 0,
+          "form.recurring_monthly": false,
+          "form.recurring_start_date": '',
+          "form.recurring_end_date": ''
+        });
+      }
     } catch (e) {}
   },
   handleInput(e) {

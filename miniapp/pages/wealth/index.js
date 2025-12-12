@@ -9,6 +9,7 @@ const CATEGORY_ICON_MAP = {
   "分红": "hand-coin-line.svg",
   "投资回款": "money-dollar-circle-line.svg",
   "租金收入": "home-4-line.svg",
+  "兼职": "briefcase-line.svg",
   
   // 支出类别图标
   "餐饮": "restaurant-line-red.svg",
@@ -571,8 +572,10 @@ Page({
                   type: 'income',
                   category: '设计服务',
                   amount: this.formatNumber(totalYear),
+                  planned: false,
                   name: '设计服务',
-                  icon: getCategoryIcon('设计服务', 'income')
+                  icon: getCategoryIcon('设计服务', 'income'),
+                  _synthetic: 'design-service'
                 });
                 formatted = formatted.sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
               }

@@ -1694,6 +1694,38 @@ def planned_aggregate(session: Session, user_id: int, start: date | None, end: d
     )
 
 
+def parse_cycle(note: str | None) -> str | None:
+    s = str(note or "")
+    if "[周期:每月]" in s:
+        return "monthly"
+    if "[周期:每季度]" in s:
+        return "quarterly"
+    if "[周期:每半年]" in s:
+        return "halfyear"
+    if "[周期:每年]" in s:
+        return "year"
+    return None
+
+
+def is_cycle_hit(yy: int, mm: int, start_dt: date | None, cycle: str | None) -> bool:
+    if not start_dt or not cycle:
+        return False
+    si = start_dt.year * 12 + start_dt.month
+    mi = yy * 12 + mm
+    diff = mi - si
+    if diff < 0:
+        return False
+    if cycle == "monthly":
+        return True
+    if cycle == "quarterly":
+        return (diff % 3) == 0
+    if cycle == "halfyear":
+        return (diff % 6) == 0
+    if cycle == "year":
+        return (diff % 12) == 0
+    return False
+
+
 def planned_items_range(session: Session, user_id: int, start: date | None, end: date | None, type_filter: str | None = None, scope: str | None = None, include_actual: bool = False) -> list[schemas.WealthItemOut]:
     """返回跨月份范围内的计划项逐条记录（含租金、资产收益、负债月供与循环计划项）。"""
     hh_id = get_or_create_household_id(session, user_id)
@@ -1760,7 +1792,7 @@ def planned_items_range(session: Session, user_id: int, start: date | None, end:
                     type=tval,
                     category=it.category,
                     amount=it.amount,
-                    planned=True,
+                    planned=bool(getattr(it, "planned", True)),
                     recurring_monthly=it.recurring_monthly,
                     date=it.date,
                     note=it.note,
@@ -1891,32 +1923,3 @@ def planned_aggregate_items(session: Session, user_id: int, start: date | None, 
     # 排序：金额倒序
     out.sort(key=lambda x: Decimal(x.amount or 0), reverse=True)
     return out
-    def parse_cycle(note: str | None) -> str | None:
-        s = str(note or "")
-        if "[周期:每月]" in s:
-            return "monthly"
-        if "[周期:每季度]" in s:
-            return "quarterly"
-        if "[周期:每半年]" in s:
-            return "halfyear"
-        if "[周期:每年]" in s:
-            return "year"
-        return None
-
-    def is_cycle_hit(yy: int, mm: int, start_dt: date | None, cycle: str | None) -> bool:
-        if not start_dt or not cycle:
-            return False
-        si = start_dt.year * 12 + start_dt.month
-        mi = yy * 12 + mm
-        diff = mi - si
-        if diff < 0:
-            return False
-        if cycle == "monthly":
-            return True
-        if cycle == "quarterly":
-            return (diff % 3) == 0
-        if cycle == "halfyear":
-            return (diff % 6) == 0
-        if cycle == "year":
-            return (diff % 12) == 0
-        return False
