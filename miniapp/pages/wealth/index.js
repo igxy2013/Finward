@@ -19,6 +19,7 @@ const CATEGORY_ICON_MAP = {
   "通讯": "phone-line-red.svg",
   "教育培训": "book-line-red.svg",
   "医疗健康": "nurse-line-red.svg",
+  "保险": "bill-line-red.svg",
   "娱乐休闲": "customer-service-2-line-red.svg",
   "服饰美妆": "user-line-red.svg",
   "日用品": "shopping-bag-line-red.svg",
@@ -57,6 +58,11 @@ const getCategoryIcon = (category, type) => {
 
 Page({
   data: {
+    pageTabs: [
+      { label: "预算", value: "budget" },
+      { label: "决算", value: "final" }
+    ],
+    activePage: "budget",
     rangeTabs: [
       { label: "本月", value: "month" },
       { label: "本年", value: "year" },
@@ -77,6 +83,8 @@ Page({
       actualIncome: "0.00",
       netIncome: "0.00",
       netIncomePositive: true,
+      netActualIncome: "0.00",
+      netActualPositive: true,
       incomeExpenseRatio: "0.00"
     },
     summaryReady: true,
@@ -86,20 +94,38 @@ Page({
       { label: "支出", value: "expense" }
     ],
     activeType: "all",
-    recordFilter: "planned",
-    recordFilterTabs: [
-      { label: "全部", value: "all" },
-      { label: "仅预计", value: "planned" }
-    ],
     cashflows: [],
     swipeLock: false,
-    listTitle: "收支记录"
+    listTitle: "预算记录"
   },
-  handleRecordFilterTab(e) {
-    const val = String(e.currentTarget.dataset.value || "planned");
-    if (val === this.data.recordFilter) return;
-    this.setData({ recordFilter: val }, () => {
-      this.renderList();
+  _parseCycle(note) {
+    const s = String(note || '');
+    if (/\[周期:每月\]/.test(s)) return 'monthly';
+    if (/\[周期:每季度\]/.test(s)) return 'quarterly';
+    if (/\[周期:每半年\]/.test(s)) return 'halfyear';
+    if (/\[周期:每年\]/.test(s)) return 'year';
+    return null;
+  },
+  _isCycleHit(y, m, startDate, cycle) {
+    if (!startDate || !(startDate instanceof Date) || isNaN(startDate.getTime())) return false;
+    if (!cycle) return false;
+    const startY = startDate.getFullYear();
+    const startM = startDate.getMonth() + 1;
+    const diff = (y - startY) * 12 + (m - startM);
+    if (diff < 0) return false;
+    if (cycle === 'monthly') return true;
+    if (cycle === 'quarterly') return diff % 3 === 0;
+    if (cycle === 'halfyear') return diff % 6 === 0;
+    if (cycle === 'year') return diff % 12 === 0;
+    return false;
+  },
+  handlePageSwitch(e) {
+    const val = String(e.currentTarget.dataset.value || "budget");
+    if (val === this.data.activePage) return;
+    const lt = val === 'final' ? '决算记录' : '预算记录';
+    this.setData({ activePage: val, listTitle: lt }, () => {
+      this.fetchSummary(false);
+      this.fetchList(false);
     });
   },
   setFilteredList(list) {
@@ -107,11 +133,13 @@ Page({
     this.renderList();
   },
   renderList() {
-    let list = this.fullList || [];
-    if (this.data.recordFilter === 'planned') {
-      list = list.filter(x => x.planned);
-    }
-    this.setData({ cashflows: list });
+    const list = this.fullList || [];
+    const wantPlanned = this.data.activePage !== 'final';
+    const filtered = list.filter((item) => {
+      if (item.planned === undefined || item.planned === null) return true;
+      return wantPlanned ? !!item.planned : !item.planned;
+    });
+    this.setData({ cashflows: filtered });
   },
   handleRangeTab(e) {
     const val = String(e.currentTarget.dataset.value || "month");
@@ -120,7 +148,7 @@ Page({
     const baseY = this.data.selectedYear || new Date().getFullYear();
     const years = Array.from({ length: 11 }, (_, i) => String(baseY - 10 + i));
     const yi = Math.max(0, years.findIndex(v => Number(v) === baseY));
-    const lt = '收支记录';
+    const lt = this.data.activePage === 'final' ? '决算记录' : '预算记录';
     this.setData({ activeRange: val, rangeLabelPrefix: prefix, yearSelectorRange: years, yearSelectorIndex: yi, listTitle: lt }, () => {
       this.fetchSummary(false);
       this.fetchList(false);
@@ -179,21 +207,21 @@ Page({
       const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
       const yi = Math.max(0, years.findIndex(v => Number(v) === y));
       const mi = Math.max(0, months.findIndex(v => Number(v) === m));
-      const lt = '收支记录';
-      this.setData({
-        selectedYear: y,
-        selectedMonth: m,
-        monthSelectorRange: [years, months],
-        monthSelectorIndex: [yi, mi],
-        activeType: 'all',
-        yearSelectorRange: years,
-        yearSelectorIndex: yi,
-        listTitle: lt
-      }, () => {
-        try { wx.setStorageSync('fw_period', { y, m }); } catch (e) {}
-        this.fetchSummary(false);
-        this.fetchList(false);
-      });
+    const lt = this.data.activePage === 'final' ? '决算记录' : '预算记录';
+    this.setData({
+      selectedYear: y,
+      selectedMonth: m,
+      monthSelectorRange: [years, months],
+      monthSelectorIndex: [yi, mi],
+      activeType: 'all',
+      yearSelectorRange: years,
+      yearSelectorIndex: yi,
+      listTitle: lt
+    }, () => {
+      try { wx.setStorageSync('fw_period', { y, m }); } catch (e) {}
+      this.fetchSummary(false);
+      this.fetchList(false);
+    });
     } catch (e) {}
   },
   async onShow() {
@@ -216,7 +244,7 @@ Page({
     const months = Array.from({ length: 12 }, (_, i) => String(i + 1));
     const yi = Math.max(0, years.findIndex(v => Number(v) === y));
     const mi = Math.max(0, months.findIndex(v => Number(v) === m));
-    const lt2 = '收支记录';
+    const lt2 = this.data.activePage === 'final' ? '决算记录' : '预算记录';
     this.setData({
       selectedYear: y,
       selectedMonth: m,
@@ -372,6 +400,8 @@ Page({
       }
       const netExpected = expIncNum - expExpNum;
       const netPositive = netExpected >= 0;
+      const netActual = actInc - actExp;
+      const netActualPositive = netActual >= 0;
       const ratioDisplay = expExpNum > 0 ? `${Math.round((expIncNum / expExpNum) * 100)}%` : '—';
       const quickSummary = {
         expectedExpense: this.formatNumber(expExpNum),
@@ -380,6 +410,8 @@ Page({
         actualIncome: this.formatNumber(actInc),
         netIncome: this.formatNumber(netExpected),
         netIncomePositive: netPositive,
+        netActualIncome: this.formatNumber(netActual),
+        netActualPositive: netActualPositive,
         incomeExpenseRatio: ratioDisplay
       };
       this.setData({ summary: quickSummary, summaryReady: true });
@@ -554,6 +586,7 @@ Page({
       }
       // 自动生成本月缺失的每月重复收入（例如工资）
       let recurringSynth = [];
+      const keyOf = (i) => `${i.type}:${i.category}:${i.note ? i.note : (i.name ? i.name : i.category)}`;
       try {
         const prevStartDate = new Date(startDate.getFullYear(), startDate.getMonth() - 1, 1);
         const prevEndDate = new Date(startDate.getFullYear(), startDate.getMonth(), 0);
@@ -562,15 +595,13 @@ Page({
         const prevQuery = { start: prevStart, end: prevEnd, type: 'income', planned: true };
         let prevList = [];
         try { prevList = await api.listCashflows(prevQuery); } catch (ePrev) { prevList = []; }
-        const currKeys = new Set((formatted || [])
-          .filter(i => i.type === 'income' && !!i.planned && !!i.recurring_monthly)
-          .map(i => `${i.type}:${i.category}:${i.name}`));
+        const currKeysAny = new Set((formatted || []).map(i => keyOf(i)));
         const existingSynthIncomeKeys = new Set((recurringSynth || []).map(x => `${x.type}:${x.category}:${x.name}`));
         (prevList || [])
           .filter(i => i && i.type === 'income' && !!i.planned && !!i.recurring_monthly)
           .forEach(t => {
-            const key = `${t.type}:${t.category}:${t.note ? t.note : t.category}`;
-            if (!currKeys.has(key)) {
+            const key = keyOf(t);
+            if (!currKeysAny.has(key) && !existingSynthIncomeKeys.has(key)) {
               const prevDay = (() => { const d = new Date(String(t.date).replace(/-/g, '/')); return d.getDate(); })();
               const y = endDate.getFullYear();
               const m = endDate.getMonth() + 1;
@@ -598,7 +629,7 @@ Page({
           const monthKey = `${y}${String(m).padStart(2, '0')}`;
           let allCf = [];
           try { allCf = await api.listCashflows({}); } catch (eAll) { allCf = []; }
-          const recMasters = (allCf || []).filter(i => i && !!i.planned && !!i.recurring_monthly);
+          const recMasters = (allCf || []).filter(i => i && !!i.planned && (!!i.recurring_monthly || !!this._parseCycle(i.note)));
           const monthIndex = y * 12 + m;
           const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
           const buildKey = (i) => `${i.type}:${i.category}:${i.note ? i.note : (i.name ? i.name : i.category)}`;
@@ -613,8 +644,11 @@ Page({
               if (monthIndex > ei) return;
             }
             const key = buildKey(ms);
-            if (currKeys.has(key)) return;
+            if (currKeysAny.has(key)) return;
             if (existingSynthIncomeKeys.has(key)) return;
+            const cyc = ms.recurring_monthly ? 'monthly' : this._parseCycle(ms.note);
+            if (!cyc) return;
+            if (!this._isCycleHit(y, m, s, cyc)) return;
             const baseDay = s.getDate();
             const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, baseDay)); })();
             const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
@@ -625,7 +659,7 @@ Page({
               amount: this.formatNumber(toNum(ms.amount)),
               date: dt,
               planned: true,
-              recurring_monthly: true,
+              recurring_monthly: ms.recurring_monthly || false,
               _synthetic: 'recurring-income',
               recurring_start_date: ms.recurring_start_date || ms.date,
               recurring_end_date: ms.recurring_end_date || '',
@@ -655,14 +689,12 @@ Page({
         const prevQuery = { start: prevStart, end: prevEnd, type: 'expense', planned: true };
         let prevList = [];
         try { prevList = await api.listCashflows(prevQuery); } catch (ePrev) { prevList = []; }
-        const currKeys = new Set((formatted || [])
-          .filter(i => i.type === 'expense' && !!i.planned && !!i.recurring_monthly)
-          .map(i => `${i.type}:${i.category}:${i.name}`));
+        const currKeysAny = new Set((formatted || []).map(i => keyOf(i)));
         (prevList || [])
           .filter(i => i && i.type === 'expense' && !!i.planned && !!i.recurring_monthly)
           .forEach(t => {
-            const key = `${t.type}:${t.category}:${t.note ? t.note : t.category}`;
-            if (!currKeys.has(key)) {
+            const key = keyOf(t);
+            if (!currKeysAny.has(key)) {
               const prevDay = (() => { const d = new Date(String(t.date).replace(/-/g, '/')); return d.getDate(); })();
               const y = endDate.getFullYear();
               const m = endDate.getMonth() + 1;
@@ -690,7 +722,7 @@ Page({
           const monthKey = `${y}${String(m).padStart(2, '0')}`;
           let allCf = [];
           try { allCf = await api.listCashflows({}); } catch (eAll) { allCf = []; }
-          const recMasters = (allCf || []).filter(i => i && !!i.planned && !!i.recurring_monthly);
+          const recMasters = (allCf || []).filter(i => i && !!i.planned && (!!i.recurring_monthly || !!this._parseCycle(i.note)));
           const monthIndex = y * 12 + m;
           const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
           const buildKey = (i) => `${i.type}:${i.category}:${i.note ? i.note : (i.name ? i.name : i.category)}`;
@@ -705,9 +737,12 @@ Page({
               if (monthIndex > ei) return;
             }
             const key = buildKey(ms);
-            const exists = (recurringSynthExpense || []).some(x => `${x.type}:${x.category}:${x.name}` === key) ||
-              (formatted || []).some(i => i.type === 'expense' && !!i.planned && !!i.recurring_monthly && `${i.type}:${i.category}:${i.name}` === key);
-            if (exists) return;
+            const existsSynth = (recurringSynthExpense || []).some(x => `${x.type}:${x.category}:${x.name}` === key);
+            if (existsSynth) return;
+            if (currKeysAny.has(key)) return;
+            const cyc = ms.recurring_monthly ? 'monthly' : this._parseCycle(ms.note);
+            if (!cyc) return;
+            if (!this._isCycleHit(y, m, s, cyc)) return;
             const baseDay = s.getDate();
             const dnum = (() => { const dim = new Date(y, m, 0).getDate(); return Math.min(dim, Math.max(1, baseDay)); })();
             const dt = `${y}-${String(m).padStart(2, '0')}-${String(dnum).padStart(2, '0')}`;
@@ -718,7 +753,7 @@ Page({
               amount: this.formatNumber(toNum(ms.amount)),
               date: dt,
               planned: true,
-              recurring_monthly: true,
+              recurring_monthly: ms.recurring_monthly || false,
               _synthetic: 'recurring-expense',
               recurring_start_date: ms.recurring_start_date || ms.date,
               recurring_end_date: ms.recurring_end_date || '',
@@ -1272,6 +1307,7 @@ Page({
     wx.navigateTo({ url: "/pages/manage/index" });
   },
   goToCashflowManage() {
-    wx.navigateTo({ url: "/pages/cashflow/index" });
+    const planned = this.data.activePage === 'budget' ? 1 : 0;
+    wx.navigateTo({ url: `/pages/cashflow/index?planned=${planned}` });
   }
 });

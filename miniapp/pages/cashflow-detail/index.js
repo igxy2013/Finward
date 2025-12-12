@@ -164,7 +164,14 @@ Page({
       const item = await api.getCashflow(id);
       const typeLabel = item.type === "income" ? "收入" : "支出";
       const statusLabel = item.planned ? "预计" : "实际";
-      const recurringLabel = item.recurring_monthly ? "每月重复" : "";
+      const recurringLabel = (() => {
+        if (item.recurring_monthly) return "每月重复";
+        const s = String(item.note || "");
+        if (/\[周期:每季度\]/.test(s)) return "每季度重复";
+        if (/\[周期:每半年\]/.test(s)) return "每半年重复";
+        if (/\[周期:每年\]/.test(s)) return "每年重复";
+        return "";
+      })();
       const amountText = this.formatNumber(item.amount);
       const title = item.name || item.category || "记录";
       const icon = this.getIcon(item);

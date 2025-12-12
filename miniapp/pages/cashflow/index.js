@@ -2,6 +2,7 @@ const api = require("../../utils/api");
 
 Page({
   data: {
+    activePage: "budget",
     form: {
       type: "expense",
       category: "",
@@ -19,12 +20,6 @@ Page({
       account_name: ""
     },
     submitting: false,
-    typeOptions: [
-      { label: "支出", value: "expense" },
-      { label: "收入", value: "income" }
-    ],
-    typeIndex: 0,
-    typeLabel: "支出",
     categoryIndex: -1,
     categoryDisplay: "请选择类别",
     incomeCategoryOptions: [
@@ -45,13 +40,22 @@ Page({
       { label: "通讯" },
       { label: "教育培训" },
       { label: "医疗健康" },
+      { label: "保险" },
       { label: "娱乐休闲" },
       { label: "服饰美妆" },
       { label: "日用品" },
       { label: "借款还款" },
       { label: "其他支出" }
     ],
-    categoryOptions: []
+    categoryOptions: [],
+    recurringOptions: ["不重复", "每月", "每季度", "每半年", "每年"],
+    recurringIndex: 0
+  },
+  handlePageSwitch(e) {
+    const val = String(e.currentTarget.dataset.value || "budget");
+    if (val === this.data.activePage) return;
+    const planned = (val === 'budget');
+    this.setData({ activePage: val, "form.planned": planned });
   },
   handleHiddenInput(e) {
     const key = String(e.currentTarget.dataset.key || "");
@@ -67,8 +71,7 @@ Page({
       "form.date": today,
       "form.recurring_start_date": "",
       "form.recurring_end_date": "",
-      typeIndex: 0,
-      typeLabel: "支出",
+      activePage: "budget",
       categoryOptions: this.data.expenseCategoryOptions,
       categoryIndex: -1,
       categoryDisplay: "请选择类别"
@@ -88,7 +91,6 @@ Page({
       const tenancy_id = options.tenancy_id ? Number(options.tenancy_id) : null;
       const account_name = options.account_name ? decodeURIComponent(String(options.account_name)) : "";
       const tenant_name = options.tenant_name ? decodeURIComponent(String(options.tenant_name)) : "";
-      const typeIndex = type === 'income' ? 1 : 0;
       const categoryOptions = type === 'income' ? this.data.incomeCategoryOptions : this.data.expenseCategoryOptions;
       const catIndex = Math.max(0, categoryOptions.findIndex(opt => opt.label === category));
       this.setData({
@@ -102,8 +104,6 @@ Page({
           note
         },
         hidden: { account_id, tenancy_id, account_name, tenant_name },
-        typeIndex,
-        typeLabel: type === 'income' ? '收入' : '支出',
         categoryOptions,
         categoryIndex: catIndex,
         categoryDisplay: category
@@ -126,7 +126,6 @@ Page({
       const recurring_end_date = String(options.recurring_end_date || '');
       const refFrom = String(options.ref || '');
       const sid = String(options.sid || '');
-      const typeIndex = type === 'income' ? 1 : 0;
       const categoryOptions = type === 'income' ? this.data.incomeCategoryOptions : this.data.expenseCategoryOptions;
       const catIndex = category ? Math.max(0, categoryOptions.findIndex(opt => opt.label === category)) : -1;
       this.setData({
@@ -142,8 +141,6 @@ Page({
           note
         },
         hidden: { account_id: null, tenancy_id: null, account_name, tenant_name },
-        typeIndex,
-        typeLabel: type === 'income' ? '收入' : '支出',
         categoryOptions,
         categoryIndex: catIndex,
         categoryDisplay: category || '请选择类别',
@@ -151,14 +148,23 @@ Page({
         syntheticId: sid
       });
       try { if (refFrom === 'detail') wx.setNavigationBarTitle({ title: '编辑收支' }); } catch (e) {}
+      const activePage = planned ? 'budget' : 'final';
+      this.setData({ activePage });
     }
   },
   async prefill(id) {
     try {
       const item = await api.getCashflow(id);
-      const typeIndex = item.type === "income" ? 1 : 0;
       const categoryOptions = item.type === "income" ? this.data.incomeCategoryOptions : this.data.expenseCategoryOptions;
       const categoryIndex = Math.max(0, categoryOptions.findIndex((opt) => opt.label === item.category));
+      const cycleIdx = (() => {
+        const note = String(item.note || "");
+        if (/\[周期:每月\]/.test(note)) return 1;
+        if (/\[周期:每季度\]/.test(note)) return 2;
+        if (/\[周期:每半年\]/.test(note)) return 3;
+        if (/\[周期:每年\]/.test(note)) return 4;
+        return item.recurring_monthly ? 1 : 0;
+      })();
       this.setData({
         form: {
           type: item.type,
@@ -172,26 +178,25 @@ Page({
           note: item.note || ""
         },
         hidden: { account_id: item.account_id || null, tenancy_id: item.tenancy_id || null, account_name: item.account_name || "", tenant_name: item.tenant_name || "" },
-        typeIndex,
-        typeLabel: item.type === "income" ? "收入" : "支出",
         categoryOptions,
         categoryIndex,
-        categoryDisplay: categoryOptions[categoryIndex]?.label || "请选择类别"
+        categoryDisplay: categoryOptions[categoryIndex]?.label || "请选择类别",
+        recurringIndex: cycleIdx
       });
+      const activePage = item.planned ? 'budget' : 'final';
+      this.setData({ activePage });
     } catch (e) {}
   },
   handleInput(e) {
     const key = e.currentTarget.dataset.key;
     this.setData({ [`form.${key}`]: e.detail.value });
   },
-  handleTypeChange(e) {
-    const typeIndex = Number(e.detail.value);
-    const value = this.data.typeOptions[typeIndex].value;
+  handleTypeToggle(e) {
+    const value = String(e.currentTarget.dataset.value || "expense");
+    if (value !== 'income' && value !== 'expense') return;
     const categoryOptions = value === "income" ? this.data.incomeCategoryOptions : this.data.expenseCategoryOptions;
     this.setData({
       "form.type": value,
-      typeIndex,
-      typeLabel: value === "income" ? "收入" : "支出",
       categoryOptions,
       categoryIndex: -1,
       "form.category": "",
@@ -210,13 +215,12 @@ Page({
   handleDateChange(e) {
     this.setData({ "form.date": e.detail.value });
   },
-  handlePlannedChange(e) {
-    this.setData({ "form.planned": !!e.detail.value });
-  },
-  handleRecurringChange(e) {
-    const on = !!e.detail.value;
+  handleRecurringCycleChange(e) {
+    const idx = Number(e.detail.value || 0);
+    const monthly = idx === 1;
+    const hasRepeat = idx > 0;
     const start = this.data.form.recurring_start_date || this.data.form.date || this.formatDate(new Date());
-    this.setData({ "form.recurring_monthly": on, "form.recurring_start_date": on ? start : '', "form.recurring_end_date": on ? (this.data.form.recurring_end_date || '') : '' });
+    this.setData({ recurringIndex: idx, "form.recurring_monthly": monthly, "form.recurring_start_date": hasRepeat ? start : '', "form.recurring_end_date": hasRepeat ? (this.data.form.recurring_end_date || '') : '' });
   },
   handleRecurringStartChange(e) {
     this.setData({ "form.recurring_start_date": e.detail.value });
@@ -237,7 +241,20 @@ Page({
     }
     this.setData({ submitting: true });
     try {
-      const payload = { ...this.data.form, amount: Number(this.data.form.amount), account_id: this.data.hidden.account_id, tenancy_id: this.data.hidden.tenancy_id, account_name: this.data.hidden.account_name, tenant_name: this.data.hidden.tenant_name };
+      const planned = this.data.activePage === 'budget';
+      const recurring_monthly = this.data.recurringIndex === 1;
+      const cycleTag = (() => {
+        const idx = this.data.recurringIndex;
+        if (idx === 1) return '[周期:每月]';
+        if (idx === 2) return '[周期:每季度]';
+        if (idx === 3) return '[周期:每半年]';
+        if (idx === 4) return '[周期:每年]';
+        return '';
+      })();
+      let note = String(this.data.form.note || '');
+      note = note.replace(/\[周期:[^\]]+\]/g, '').trim();
+      if (cycleTag) note = note ? `${note} ${cycleTag}` : cycleTag;
+      const payload = { ...this.data.form, note, planned, recurring_monthly, amount: Number(this.data.form.amount), account_id: this.data.hidden.account_id, tenancy_id: this.data.hidden.tenancy_id, account_name: this.data.hidden.account_name, tenant_name: this.data.hidden.tenant_name };
       if (this.data.editId) {
         await api.updateCashflow(this.data.editId, payload);
         wx.showToast({ title: "更新成功", icon: "success" });

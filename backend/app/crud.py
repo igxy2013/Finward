@@ -1492,7 +1492,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
     recorded_keys = set(
         f"{i.type}:{(i.category or '')}:{(i.name or i.category or '')}"
         for i in recorded
-        if i.recurring_monthly and i.planned
+        if i.planned and (i.recurring_monthly or (parse_cycle(getattr(i, "note", None)) is not None))
     )
 
     recurring_master_items: list[schemas.WealthItemOut] = []
@@ -1500,10 +1500,12 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         session.query(models.Cashflow)
         .filter(models.Cashflow.household_id == hh_id)
         .filter(models.Cashflow.planned == True)
-        .filter(getattr(models.Cashflow, "recurring_monthly") == True)
         .all()
     )
     for r in master_rows:
+        cyc = "monthly" if bool(getattr(r, "recurring_monthly", False)) else parse_cycle(getattr(r, "note", None))
+        if not cyc:
+            continue
         # 限定在起止范围内
         rsd = getattr(r, "recurring_start_date", None) or r.date
         red = getattr(r, "recurring_end_date", None)
@@ -1516,6 +1518,9 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
         dnum = clamp_day(y, m, base_day)
         cand = date(y, m, dnum)
         if not (start <= cand <= end):
+            continue
+        # 周期命中判断（非每月时）
+        if cyc != "monthly" and not is_cycle_hit(y, m, rsd if rsd else r.date, cyc):
             continue
         tval2 = r.type.value if hasattr(r.type, "value") else r.type
         if type_filter and type_filter in {"income", "expense"} and tval2 != type_filter:
@@ -1550,7 +1555,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
                 category=r.category or ("其他收入" if tval2 == "income" else "其他支出"),
                 amount=Decimal(r.amount or 0),
                 planned=True,
-                recurring_monthly=True,
+                recurring_monthly=bool(getattr(r, "recurring_monthly", False)),
                 date=cand,
                 account_id=r.account_id,
                 account_name=r.account_name,
@@ -1886,3 +1891,32 @@ def planned_aggregate_items(session: Session, user_id: int, start: date | None, 
     # 排序：金额倒序
     out.sort(key=lambda x: Decimal(x.amount or 0), reverse=True)
     return out
+    def parse_cycle(note: str | None) -> str | None:
+        s = str(note or "")
+        if "[周期:每月]" in s:
+            return "monthly"
+        if "[周期:每季度]" in s:
+            return "quarterly"
+        if "[周期:每半年]" in s:
+            return "halfyear"
+        if "[周期:每年]" in s:
+            return "year"
+        return None
+
+    def is_cycle_hit(yy: int, mm: int, start_dt: date | None, cycle: str | None) -> bool:
+        if not start_dt or not cycle:
+            return False
+        si = start_dt.year * 12 + start_dt.month
+        mi = yy * 12 + mm
+        diff = mi - si
+        if diff < 0:
+            return False
+        if cycle == "monthly":
+            return True
+        if cycle == "quarterly":
+            return (diff % 3) == 0
+        if cycle == "halfyear":
+            return (diff % 6) == 0
+        if cycle == "year":
+            return (diff % 12) == 0
+        return False

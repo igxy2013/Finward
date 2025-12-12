@@ -10,6 +10,13 @@
   margin-bottom: 32rpx;
 }
 
+.page-switcher {
+  display: flex;
+  gap: 12rpx;
+  justify-content: center;
+  margin-bottom: 16rpx;
+}
+
 .date-nav {
   display: flex;
   flex-direction: column;

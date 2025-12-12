@@ -1,11 +1,16 @@
 <navbar title="添加收支"></navbar>
 <view class="page">
+  <view class="page-switcher">
+    <view class="pill {{activePage === 'budget' ? 'active' : ''}}" data-value="budget" bindtap="handlePageSwitch">预算</view>
+    <view class="pill {{activePage === 'final' ? 'active' : ''}}" data-value="final" bindtap="handlePageSwitch">决算</view>
+  </view>
   <view class="card form-card">
     <view class="form-item">
       <text class="label">类型*</text>
-      <picker mode="selector" range="{{typeOptions}}" range-key="label" value="{{typeIndex}}" bindchange="handleTypeChange">
-        <view class="picker-value">{{typeLabel}}</view>
-      </picker>
+      <view class="toggle-tabs">
+        <view class="pill {{form.type === 'expense' ? 'active' : ''}}" data-value="expense" bindtap="handleTypeToggle">支出</view>
+        <view class="pill {{form.type === 'income' ? 'active' : ''}}" data-value="income" bindtap="handleTypeToggle">收入</view>
+      </view>
     </view>
     <view class="form-item">
       <text class="label">类别*</text>
@@ -23,21 +28,19 @@
         <view class="picker-value">{{form.date}}</view>
       </picker>
     </view>
-    <view class="form-item row">
-      <text class="label">预计项</text>
-      <switch checked="{{form.planned}}" bindchange="handlePlannedChange"></switch>
+    <view class="form-item">
+      <text class="label">重复</text>
+      <picker mode="selector" range="{{recurringOptions}}" value="{{recurringIndex}}" bindchange="handleRecurringCycleChange">
+        <view class="picker-value">{{recurringOptions[recurringIndex]}}</view>
+      </picker>
     </view>
-    <view class="form-item row">
-      <text class="label">每月重复</text>
-      <switch checked="{{form.recurring_monthly}}" bindchange="handleRecurringChange"></switch>
-    </view>
-    <view class="form-item" wx:if="{{form.recurring_monthly}}">
+    <view class="form-item" wx:if="{{recurringIndex > 0}}">
       <text class="label">开始日期*</text>
       <picker mode="date" value="{{form.recurring_start_date}}" bindchange="handleRecurringStartChange">
         <view class="picker-value">{{form.recurring_start_date || '请选择开始日期'}}</view>
       </picker>
     </view>
-    <view class="form-item" wx:if="{{form.recurring_monthly}}">
+    <view class="form-item" wx:if="{{recurringIndex > 0}}">
       <text class="label">结束日期</text>
       <picker mode="date" value="{{form.recurring_end_date}}" bindchange="handleRecurringEndChange">
         <view class="picker-value">{{form.recurring_end_date || '请选择结束日期'}}</view>
