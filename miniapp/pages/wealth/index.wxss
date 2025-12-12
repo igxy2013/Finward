@@ -6,15 +6,71 @@
 
 /* Header Area */
 .header-area {
-  padding-top: 12rpx;
+  padding-top: 24rpx;
+  margin-bottom: 32rpx;
+}
+
+.page-switcher-container {
+  display: flex;
+  justify-content: center;
   margin-bottom: 32rpx;
 }
 
 .page-switcher {
   display: flex;
-  gap: 12rpx;
+  align-items: center;
+  position: relative;
+  height: 88rpx;
+  width: 100%;
+  box-sizing: border-box;
+  background: #ffffff;
+  border-radius: 24rpx;
+  border: 2rpx solid #e5e7eb;
+  box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.04);
+}
+
+.seg-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  margin-bottom: 16rpx;
+  gap: 10rpx;
+  font-size: 30rpx;
+  color: #64748b;
+  transition: color 0.2s ease;
+  z-index: 2;
+  font-weight: 500;
+}
+.seg-item.active {
+  color: #0f172a;
+  font-weight: 600;
+}
+.seg-icon {
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0.7;
+}
+.seg-item.active .seg-icon {
+  opacity: 1;
+}
+.seg-label {}
+
+.seg-underline {
+  position: absolute;
+  bottom: 8rpx;
+  left: 8rpx;
+  width: calc(50% - 16rpx);
+  height: 6rpx;
+  background: #43B176;
+  border-radius: 6rpx;
+  z-index: 1;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.seg-underline.left {
+  transform: translateX(0);
+}
+.seg-underline.right {
+  transform: translateX(100%);
 }
 
 .date-nav {
@@ -29,7 +85,7 @@
   display: flex;
   background: #EBEBEB;
   padding: 4rpx;
-  border-radius: 16rpx;
+  border-radius: 20rpx; /* 稍微加大一点，与上方呼应 */
   margin-bottom: 16rpx;
 }
 
@@ -66,7 +122,7 @@
 .nav-arrow:active {
   background: rgba(0,0,0,0.05);
 }
-.nav-arrow image {
+.nav-arrow-img {
   width: 48rpx;
   height: 48rpx;
 }
@@ -96,7 +152,7 @@
 /* Main Summary Card */
 .main-card {
   background: #ffffff;
-  border-radius: 32rpx;
+  border-radius: 24rpx; /* 统一圆角为 24rpx */
   padding: 40rpx 32rpx;
   box-shadow: 0 8rpx 30rpx rgba(0,0,0,0.06);
   position: relative;
@@ -200,7 +256,7 @@
   align-items: center;
   justify-content: center;
 }
-.stat-icon-circle image {
+.stat-icon-img {
   width: 40rpx;
   height: 40rpx;
 }

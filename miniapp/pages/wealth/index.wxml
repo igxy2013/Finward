@@ -1,9 +1,18 @@
 <navbar title="收支管理" showBack="{{false}}"></navbar>
 <view class="page">
   <view class="header-area">
-    <view class="page-switcher">
-      <view class="pill {{activePage === 'budget' ? 'active' : ''}}" data-value="budget" bindtap="handlePageSwitch">预算</view>
-      <view class="pill {{activePage === 'final' ? 'active' : ''}}" data-value="final" bindtap="handlePageSwitch">决算</view>
+    <view class="page-switcher-container">
+      <view class="page-switcher">
+        <view class="seg-item {{activePage === 'budget' ? 'active' : ''}}" data-value="budget" bindtap="handlePageSwitch">
+          <image class="seg-icon" src="/assets/icons/calendar-line.svg" mode="aspectFit" />
+          <text class="seg-label">预算</text>
+        </view>
+        <view class="seg-item {{activePage === 'final' ? 'active' : ''}}" data-value="final" bindtap="handlePageSwitch">
+          <image class="seg-icon" src="/assets/icons/calendar-check-line.svg" mode="aspectFit" />
+          <text class="seg-label">决算</text>
+        </view>
+        <view class="seg-underline {{activePage === 'budget' ? 'left' : 'right'}}"></view>
+      </view>
     </view>
     <!-- Date Navigation -->
     <view class="date-nav">
@@ -15,7 +24,7 @@
 
       <view class="date-picker-row" wx:if="{{activeRange === 'month'}}">
         <view class="nav-arrow" bindtap="prevMonth">
-          <image src="/assets/icons/arrow-left-s-line.svg" mode="aspectFit" />
+          <image class="nav-arrow-img" src="/assets/icons/arrow-left-s-line.svg" mode="aspectFit" />
         </view>
         <picker mode="multiSelector" 
                 range="{{monthSelectorRange}}" 
@@ -27,12 +36,12 @@
           </view>
         </picker>
         <view class="nav-arrow" bindtap="nextMonth">
-          <image src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
+          <image class="nav-arrow-img" src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
         </view>
       </view>
       <view class="date-picker-row" wx:elif="{{activeRange === 'year'}}">
         <view class="nav-arrow" bindtap="prevYear">
-          <image src="/assets/icons/arrow-left-s-line.svg" mode="aspectFit" />
+          <image class="nav-arrow-img" src="/assets/icons/arrow-left-s-line.svg" mode="aspectFit" />
         </view>
         <picker mode="selector" 
                 range="{{yearSelectorRange}}" 
@@ -44,7 +53,7 @@
           </view>
         </picker>
         <view class="nav-arrow" bindtap="nextYear">
-          <image src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
+          <image class="nav-arrow-img" src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
         </view>
       </view>
       <view class="date-picker-row" wx:else>
@@ -70,18 +79,18 @@
       
       <view class="stats-row">
         <view class="stat-item income-item {{activeType === 'income' ? 'active' : ''}}" bindtap="applyIncomeFilter">
-          <view class="stat-icon-circle income-bg">
-            <image src="/assets/icons/arrow-up-line.svg" />
-          </view>
-          <view class="stat-text">
-            <text class="stat-label">收入</text>
-            <text class="stat-amount income-color">{{activePage === 'final' ? summary.actualIncome : summary.expectedIncome}}</text>
-          </view>
+        <view class="stat-icon-circle income-bg">
+          <image class="stat-icon-img" src="/assets/icons/arrow-up-line.svg" />
         </view>
-        <view class="stat-item expense-item {{activeType === 'expense' ? 'active' : ''}}" bindtap="applyExpenseFilter">
-          <view class="stat-icon-circle expense-bg">
-            <image src="/assets/icons/arrow-down-line-red.svg" />
-          </view>
+        <view class="stat-text">
+          <text class="stat-label">收入</text>
+          <text class="stat-amount income-color">{{activePage === 'final' ? summary.actualIncome : summary.expectedIncome}}</text>
+        </view>
+      </view>
+      <view class="stat-item expense-item {{activeType === 'expense' ? 'active' : ''}}" bindtap="applyExpenseFilter">
+        <view class="stat-icon-circle expense-bg">
+          <image class="stat-icon-img" src="/assets/icons/arrow-down-line-red.svg" />
+        </view>
           <view class="stat-text">
             <text class="stat-label">支出</text>
             <text class="stat-amount expense-color">{{activePage === 'final' ? summary.actualExpense : summary.expectedExpense}}</text>

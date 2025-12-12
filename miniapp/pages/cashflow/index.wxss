@@ -1,17 +1,184 @@
-.page { padding: 32rpx; }
-.form-card { border: 1rpx solid #eef2f7; border-radius: 24rpx; }
-.form-card .form-item { display: flex; flex-direction: column; gap: 12rpx; margin-bottom: 24rpx; }
-.form-item.row { flex-direction: row; align-items: center; justify-content: space-between; padding-bottom: 16rpx; }
-.label { color: #475467; font-size: 26rpx; }
-input, textarea, .picker-value { border: 2rpx solid #d0d5dd; border-radius: 12rpx; padding: 20rpx; background: #fff; color: #101828; transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-input:focus, textarea:focus { border-color: #43B176; box-shadow: 0 0 0 6rpx rgba(67,177,118,0.15); }
-.picker-value { display: flex; align-items: center; justify-content: space-between; position: relative; padding-right: 56rpx; }
-.picker-value::after { content: '▾'; position: absolute; right: 20rpx; top: 50%; transform: translateY(-50%); color: #9aa0a6; font-size: 28rpx; }
-textarea { min-height: 160rpx; }
+.page {
+  padding: 32rpx;
+  background-color: #ffffff;
+  min-height: 100vh;
+}
 
-.range-tabs { display: flex; background: #EBEBEB; padding: 4rpx; border-radius: 16rpx; margin-bottom: 16rpx; justify-content: center; }
-.range-tab { padding: 8rpx 24rpx; font-size: 24rpx; color: #666; border-radius: 12rpx; transition: all 0.2s; }
-.range-tab.active { background: #fff; color: #333; font-weight: 600; box-shadow: 0 2rpx 8rpx rgba(0,0,0,0.05); }
-.toggle-tabs { display: flex; gap: 12rpx; }
-.pill { padding: 8rpx 24rpx; font-size: 24rpx; border-radius: 999rpx; background: #F5F5F5; color: #666; border: none; font-weight: 500; }
-.pill.active { background: #E8F8EF; color: #43B176; }
+.form-card {
+  /* 去掉卡片边框，让页面更干净，或者保留极简边框 */
+  background: transparent; 
+}
+
+/* 顶部切换 Tabs - 类似 iOS Segmented Control */
+.range-tabs {
+  display: flex;
+  background: #e2e8f0; 
+  padding: 6rpx;
+  border-radius: 24rpx;
+  margin-bottom: 48rpx;
+  position: relative;
+  height: 88rpx;
+  box-sizing: border-box;
+  box-shadow: inset 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+  width: 100%;
+}
+
+.range-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  color: #64748b;
+  border-radius: 20rpx;
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 2;
+  font-weight: 500;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.range-tab.active {
+  color: #0f172a;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+.tab-slider {
+  position: absolute;
+  top: 6rpx;
+  left: 6rpx;
+  bottom: 6rpx;
+  width: calc(50% - 6rpx);
+  background: #ffffff;
+  border-radius: 20rpx;
+  box-shadow: 0 4rpx 8rpx rgba(0, 0, 0, 0.1), 0 1rpx 2rpx rgba(0, 0, 0, 0.05);
+  z-index: 1;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.tab-slider.left {
+  transform: translateX(0);
+}
+
+.tab-slider.right {
+  transform: translateX(100%);
+}
+
+/* 表单项 */
+.form-card .form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  margin-bottom: 32rpx;
+}
+
+.label {
+  color: #334155;
+  font-size: 28rpx;
+  font-weight: 600;
+  margin-left: 4rpx; /* 微调对齐 */
+}
+
+/* 输入框和选择器 */
+input, textarea, .picker-value {
+  border: 2rpx solid #e2e8f0;
+  border-radius: 20rpx;
+  padding: 0 28rpx;
+  height: 96rpx;
+  line-height: 96rpx;
+  font-size: 30rpx;
+  background: #f8fafc;
+  color: #1e293b;
+  transition: all 0.2s ease;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+input:focus, textarea:focus {
+  background: #ffffff;
+  border-color: #43B176;
+  box-shadow: 0 0 0 4rpx rgba(67, 177, 118, 0.1);
+}
+
+.picker-value {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  height: 96rpx;
+  padding: 0 28rpx;
+}
+
+/* 选择器箭头 */
+.picker-value::after {
+  content: '';
+  width: 16rpx;
+  height: 16rpx;
+  border-right: 4rpx solid #94a3b8;
+  border-bottom: 4rpx solid #94a3b8;
+  transform: rotate(45deg);
+  margin-right: 8rpx;
+  margin-top: -8rpx;
+}
+
+textarea {
+  min-height: 200rpx;
+  height: 200rpx;
+  padding: 24rpx 28rpx;
+  line-height: 1.5;
+}
+
+/* 类型切换 Tabs (收入/支出) */
+.toggle-tabs {
+  display: flex;
+  gap: 24rpx;
+  margin-top: 8rpx;
+}
+
+.pill {
+  flex: 1;
+  text-align: center;
+  padding: 24rpx 0;
+  font-size: 30rpx;
+  border-radius: 20rpx;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 2rpx solid transparent;
+  transition: all 0.2s;
+  font-weight: 500;
+}
+
+/* 支出激活 - 红色系 */
+.pill[data-value="expense"].active {
+  background: #fef2f2;
+  color: #ef4444;
+  border-color: #fca5a5;
+  font-weight: 600;
+}
+
+/* 收入激活 - 绿色系 */
+.pill[data-value="income"].active {
+  background: #ecfdf5;
+  color: #10b981;
+  border-color: #6ee7b7;
+  font-weight: 600;
+}
+
+/* 保存按钮 */
+.submit-btn {
+  margin-top: 64rpx;
+  border-radius: 24rpx !important;
+  font-size: 32rpx !important;
+  font-weight: 600 !important;
+  padding: 32rpx 0 !important;
+  box-shadow: 0 8rpx 20rpx rgba(67, 177, 118, 0.25);
+  transition: transform 0.1s;
+  background-color: #43B176 !important;
+  color: #ffffff !important;
+}
+
+.submit-btn:active {
+  transform: scale(0.98);
+  background-color: #3aa069 !important;
+}

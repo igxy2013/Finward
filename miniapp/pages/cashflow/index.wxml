@@ -1,6 +1,7 @@
 <navbar title="添加收支"></navbar>
 <view class="page">
   <view class="range-tabs">
+    <view class="tab-slider {{activePage === 'budget' ? 'left' : 'right'}}"></view>
     <view class="range-tab {{activePage === 'budget' ? 'active' : ''}}" data-value="budget" bindtap="handlePageSwitch">预算</view>
     <view class="range-tab {{activePage === 'final' ? 'active' : ''}}" data-value="final" bindtap="handlePageSwitch">决算</view>
   </view>
@@ -58,6 +59,6 @@
       <text class="label">备注</text>
       <textarea placeholder="可选" data-key="note" value="{{form.note}}" bindinput="handleInput" />
     </view>
-    <button bindtap="submit" loading="{{submitting}}" style="background-color: #43B176; color: #ffffff;">保存</button>
+    <button class="submit-btn" bindtap="submit" loading="{{submitting}}">保存</button>
   </view>
 </view>
