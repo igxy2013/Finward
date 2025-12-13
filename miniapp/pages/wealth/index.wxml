@@ -100,10 +100,6 @@
     </view>
   </view>
 
-  <view class="fab" bindtap="goToCashflowManage">
-    <text class="fab-icon">+</text>
-  </view>
-
   <view class="list">
     <view class="list-header">
       <text class="list-title">{{listTitle}}</text>

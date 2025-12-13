@@ -24,6 +24,10 @@ Page({
     showFinanceModal: false
   },
   onShow() {
+    const tabBar = this.getTabBar && this.getTabBar();
+    if (tabBar && typeof tabBar.setData === "function") {
+      tabBar.setData({ selected: 3 });
+    }
     const app = getApp();
     this.setData({
       userInfo: app?.globalData?.userInfo || null,

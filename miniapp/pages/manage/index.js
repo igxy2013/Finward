@@ -87,7 +87,7 @@ Page({
     ]
     ,tenantFrequencyIndex: 0
     ,tenantFrequencyLabel: "每月"
-    ,pageTitle: "记录资产/负债"
+    ,pageTitle: "添加账户"
   },
   clipTwoDecimals(val) {
     const s = String(val || "");
@@ -108,7 +108,7 @@ Page({
     const id = options?.id ? Number(options.id) : null;
     const tenancyId = options?.tenancy_id ? Number(options.tenancy_id) : null;
     if (edit && id) {
-      this.setData({ editId: id, incomingTenancyId: tenancyId || null, pageTitle: "编辑资产/负债" });
+      this.setData({ editId: id, incomingTenancyId: tenancyId || null, pageTitle: "编辑账户" });
       this.prefillFromServer(id);
     }
   },

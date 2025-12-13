@@ -1,0 +1,28 @@
+<view class="tabbar-container">
+  <view class="tabbar-shape"></view>
+  <view class="tabbar-cutout"></view>
+  <view class="tabbar">
+    <view class="tab-item" data-index="0" data-path="{{list[0].pagePath}}" bindtap="switchTab">
+      <image class="tab-icon" src="{{selected === 0 ? list[0].selectedIconPath : list[0].iconPath}}" mode="aspectFit" />
+      <text class="tab-label {{selected === 0 ? 'active' : ''}}">{{list[0].text}}</text>
+    </view>
+    <view class="tab-item" data-index="1" data-path="{{list[1].pagePath}}" bindtap="switchTab">
+      <image class="tab-icon" src="{{selected === 1 ? list[1].selectedIconPath : list[1].iconPath}}" mode="aspectFit" />
+      <text class="tab-label {{selected === 1 ? 'active' : ''}}">{{list[1].text}}</text>
+    </view>
+    <view class="tab-item-spacer"></view>
+    <view class="tab-item" data-index="2" data-path="{{list[2].pagePath}}" bindtap="switchTab">
+      <image class="tab-icon" src="{{selected === 2 ? list[2].selectedIconPath : list[2].iconPath}}" mode="aspectFit" />
+      <text class="tab-label {{selected === 2 ? 'active' : ''}}">{{list[2].text}}</text>
+    </view>
+    <view class="tab-item" data-index="3" data-path="{{list[3].pagePath}}" bindtap="switchTab">
+      <image class="tab-icon" src="{{selected === 3 ? list[3].selectedIconPath : list[3].iconPath}}" mode="aspectFit" />
+      <text class="tab-label {{selected === 3 ? 'active' : ''}}">{{list[3].text}}</text>
+    </view>
+  </view>
+  <view class="tab-plus" bindtap="onPlusTap">
+    <view class="tab-plus-inner" hover-class="tab-plus-inner--pressed" hover-start-time="0" hover-stay-time="180">
+      <text class="tab-plus-icon">+</text>
+    </view>
+  </view>
+</view>

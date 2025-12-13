@@ -226,6 +226,10 @@ Page({
     } catch (e) {}
   },
   async onShow() {
+    const tabBar = this.getTabBar && this.getTabBar();
+    if (tabBar && typeof tabBar.setData === "function") {
+      tabBar.setData({ selected: 1 });
+    }
     const app = getApp();
     try {
       const token = app?.globalData?.token || wx.getStorageSync('fw_token');

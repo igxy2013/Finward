@@ -1,6 +1,6 @@
 .page {
   min-height: 100vh;
-  padding-bottom: 120rpx;
+  padding-bottom: 240rpx;
 }
 
 .loading-container {
@@ -528,34 +528,25 @@
   color: #9ca3af;
 }
 
-/* 浮动操作按钮 */
-.fab {
-  position: fixed;
-  right: 32rpx;
-  bottom: 48rpx;
-  width: 112rpx;
-  height: 112rpx;
+
+.action-card {
+  padding: 24rpx;
+  border-radius: 24rpx;
+  background: #ffffff;
+  border: 1rpx solid #e5e7eb;
+  margin-bottom: 32rpx;
+  box-shadow: 0 4rpx 12rpx rgba(0,0,0,0.06);
+}
+
+.primary-btn {
+  width: 100%;
+  height: 88rpx;
+  border-radius: 999rpx;
   background: #43B176;
-  border-radius: 40rpx; /* More squircle */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 12rpx 32rpx rgba(67, 177, 118, 0.4);
-  z-index: 100;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-
-.fab:active {
-  transform: scale(0.95);
-  box-shadow: 0 6rpx 16rpx rgba(67, 177, 118, 0.3);
-}
-
-.fab-icon {
-  font-size: 64rpx;
   color: #ffffff;
-  font-weight: 300;
-  line-height: 1;
-  margin-top: -6rpx;
+  font-size: 30rpx;
+  border: none;
+  box-shadow: 0 8rpx 20rpx rgba(67, 177, 118, 0.28);
 }
 
 /* 动画 */

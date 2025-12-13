@@ -25,6 +25,7 @@
     "navbar": "/components/navbar/navbar"
   },
   "tabBar": {
+    "custom": true,
     "color": "#6B7280",
     "selectedColor": "#43B176",
     "backgroundColor": "#EFF0EF",

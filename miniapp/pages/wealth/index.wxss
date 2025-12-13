@@ -330,34 +330,6 @@
 .item-note { margin-top: 6rpx; }
 .item-note .note-text { color: #666; font-size: 24rpx; }
 
-/* FAB */
-.fab {
-  position: fixed;
-  right: 32rpx;
-  bottom: 48rpx;
-  width: 112rpx;
-  height: 112rpx;
-  background: #43B176;
-  border-radius: 40rpx; /* More squircle */
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 12rpx 32rpx rgba(67, 177, 118, 0.4);
-  z-index: 100;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-}
-.fab:active {
-  transform: scale(0.95);
-  box-shadow: 0 6rpx 16rpx rgba(67, 177, 118, 0.3);
-}
-.fab-icon {
-  font-size: 64rpx;
-  color: #ffffff;
-  font-weight: 300;
-  line-height: 1;
-  margin-top: -6rpx;
-}
-
 /* Animation */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10rpx); }

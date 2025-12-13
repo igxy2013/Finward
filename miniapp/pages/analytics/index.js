@@ -140,6 +140,10 @@ Page({
     this.fetchStats(12);
   },
   onShow() {
+    const tabBar = this.getTabBar && this.getTabBar();
+    if (tabBar && typeof tabBar.setData === "function") {
+      tabBar.setData({ selected: 2 });
+    }
     const app = getApp();
     const token = app?.globalData?.token || wx.getStorageSync('fw_token');
     if (!token) {

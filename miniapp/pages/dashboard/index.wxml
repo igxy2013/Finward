@@ -139,9 +139,8 @@
       <view class="empty-hint">点击下方按钮开始记录</view>
     </view>
 
-    <!-- 浮动操作按钮 -->
-    <view class="fab" bindtap="goToManage">
-      <text class="fab-icon">+</text>
+    <view class="card action-card fade-in-up" wx:if="{{liabilities.length > 0}}">
+      <button class="primary-btn" bindtap="goToManage">添加账户</button>
     </view>
   </view>
 </view>

@@ -135,6 +135,10 @@ Page({
     });
   },
   onShow() {
+    const tabBar = this.getTabBar && this.getTabBar();
+    if (tabBar && typeof tabBar.setData === "function") {
+      tabBar.setData({ selected: 0 });
+    }
     const app = getApp();
     const token = app?.globalData?.token || wx.getStorageSync('fw_token');
     if (!token) app.globalData.guest = true; else if (!app.globalData.token) app.globalData.token = token;
@@ -542,7 +546,10 @@ Page({
   },
   goToManage() {
     wx.navigateTo({
-      url: "/pages/manage/index"
+      url: "/pages/manage/index",
+      fail() {
+        wx.showToast({ title: "页面打开失败", icon: "none" });
+      }
     });
   }
 });
