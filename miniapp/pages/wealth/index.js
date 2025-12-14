@@ -97,7 +97,9 @@ Page({
     activeType: "all",
     cashflows: [],
     swipeLock: false,
-    listTitle: "预算记录"
+    listTitle: "预算记录",
+    incomeChartData: [],
+    expenseChartData: []
   },
   _parseCycle(note) {
     const s = String(note || '');
@@ -518,6 +520,7 @@ Page({
           return { ...it, end_date: endDate, recurring_start_date: startDate };
         });
         const combinedAll = enriched.sort((a, b) => String(b.date).localeCompare(String(a.date)));
+        this.updateDistributionFromCombined(combinedAll, start, end);
         let combined = (forceAll || this.skipFilterOnce) ? combinedAll : combinedAll.filter((x) => activeType === 'all' || x.type === activeType);
         if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
           combined = combinedAll;
@@ -550,6 +553,7 @@ Page({
               icon: getCategoryIcon(x.category, x.type)
             }))
             .sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
+          this.updateDistributionFromCombined(formattedAll, undefined, undefined);
           if (this._lastFetchId !== fetchId) return;
           this.setFilteredList(formattedAll);
           this.skipFilterOnce = false;
@@ -586,6 +590,7 @@ Page({
             }
           } catch (eYear) {}
         }
+        this.updateDistributionFromCombined(formatted, startStr, endStr);
         if (this._lastFetchId !== fetchId) return;
         this.setFilteredList(formatted);
         this.skipFilterOnce = false;
@@ -1127,6 +1132,7 @@ Page({
           ...item,
           icon: item.icon || getCategoryIcon(item.category, item.type)
         }));
+      this.updateDistributionFromCombined(combinedAll, start, end);
       let combined = (forceAll || this.skipFilterOnce) ? combinedAll : combinedAll.filter((x) => activeType === 'all' || x.type === activeType);
       if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
         combined = combinedAll;
@@ -1142,6 +1148,425 @@ Page({
       // 游客模式下不显示演示数据
       this.setFilteredList([]);
     }
+  },
+  updateDistributionFromCombined(allItems, start, end) {
+    try {
+      const wantPlanned = this.data.activePage !== 'final';
+      const filteredByPlan = (allItems || []).filter((item) => {
+        if (item.planned === undefined || item.planned === null) return true;
+        return wantPlanned ? !!item.planned : !item.planned;
+      });
+      const incomeItems = filteredByPlan.filter(i => i.type === 'income');
+      const expenseItems = filteredByPlan.filter(i => i.type === 'expense');
+      const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
+      const expenseChartData = this.calculateCashflowDistribution(expenseItems, 'expense');
+      this.setData({ incomeChartData, expenseChartData }, () => {
+        this.drawIncomePie();
+        this.drawExpensePie();
+      });
+    } catch (e) {
+      this.setData({ incomeChartData: [], expenseChartData: [] });
+    }
+  },
+  calculateCashflowDistribution(items = [], kind = 'income') {
+    const buckets = {};
+    const canon = (name, note) => {
+      const n0 = String(name || '').trim();
+      const nn = n0 || (kind === 'income' ? '其他收入' : '其他支出');
+      if (kind === 'income') {
+        const hay = `${nn} ${String(note || '')}`.toLowerCase();
+        if (hay.includes('工资') || hay.includes('薪资') || hay.includes('薪水') || hay.includes('salary')) return '工资';
+        if (hay.includes('租金')) return '租金收入';
+        if (hay.includes('设计服务') || hay.includes('设计')) return '设计服务';
+      }
+      return nn;
+    };
+    const toNum = (s) => {
+      const n = Number(String(s).replace(/,/g, ''));
+      return Number.isNaN(n) ? 0 : n;
+    };
+    (items || []).forEach(i => {
+      const cat = canon(i.category, i.note);
+      const amt = toNum(i.amount || 0);
+      if (amt <= 0) return;
+      buckets[cat] = (buckets[cat] || 0) + amt;
+    });
+    const entries = Object.keys(buckets).map(name => ({ name, value: buckets[name] }));
+    entries.sort((a, b) => b.value - a.value);
+    if (!entries.length) return [];
+    const MAX_SEGMENTS = 6;
+    const pinnedIncome = new Set(['工资','工资收入','薪资','租金收入','设计服务']);
+    const pinned = kind === 'income' ? pinnedIncome : new Set();
+    const byName = new Map(entries.map(e => [e.name, e]));
+    const pinnedList = Array.from(pinned).filter(n => byName.has(n)).map(n => byName.get(n));
+    const remaining = entries.filter(e => !pinned.has(e.name));
+    let processed = [];
+    if (pinnedList.length >= MAX_SEGMENTS - 1) {
+      const major = pinnedList.slice(0, MAX_SEGMENTS - 1);
+      const others = [...remaining, ...pinnedList.slice(MAX_SEGMENTS - 1)];
+      const othersValue = others.reduce((sum, item) => sum + item.value, 0);
+      processed = [...major, { name: kind === 'income' ? '其他收入' : '其他支出', value: othersValue }];
+    } else {
+      const slots = MAX_SEGMENTS - 1 - pinnedList.length;
+      const major = [...pinnedList, ...remaining.slice(0, Math.max(slots, 0))];
+      if (major.length < entries.length) {
+        const othersValue = entries.filter(e => !major.some(m => m.name === e.name)).reduce((sum, item) => sum + item.value, 0);
+        processed = [...major, { name: kind === 'income' ? '其他收入' : '其他支出', value: othersValue }];
+      } else {
+        processed = major;
+      }
+    }
+    const total = processed.reduce((sum, item) => sum + item.value, 0) || 1;
+    const paletteIncome = ["#43B176", "#3b82f6", "#06b6d4", "#a855f7", "#f59e0b", "#22c55e"];
+    const paletteExpense = ["#ef4444", "#3b82f6", "#22c55e", "#a855f7", "#f59e0b", "#06b6d4"];
+    const palette = kind === 'income' ? paletteIncome : paletteExpense;
+    return processed.map((item, idx) => ({ name: item.name, value: item.value, percentage: ((item.value / total) * 100).toFixed(1), color: palette[idx % palette.length] }));
+  },
+  drawIncomePie() {
+    const data = this.data.incomeChartData || [];
+    const query = wx.createSelectorQuery().in(this);
+    query.select('#incomePie').fields({ node: true, size: true }).exec((res) => {
+      const canvas = res && res[0] && res[0].node;
+      const rect = res && res[0];
+      if (!canvas || !rect) return;
+      const width = rect.width;
+      const height = rect.height;
+      const dpr = (typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo().pixelRatio : 1) || 1;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, width, height);
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const radius = Math.min(width, height) * 0.38;
+      const innerRadius = radius * 0.65;
+      if (!data.length || data.every(x => Number(x.value) <= 0)) {
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI);
+        ctx.fill();
+        return;
+      }
+      let currentAngle = -Math.PI / 2;
+      const segments = [];
+      data.forEach(item => {
+        const percentage = parseFloat(item.percentage) / 100;
+        if (!percentage || percentage <= 0) return;
+        const angle = percentage * 2 * Math.PI;
+        const gap = data.length > 1 ? 0.02 : 0;
+        const start = currentAngle + (percentage > gap ? gap / 2 : 0);
+        const end = currentAngle + angle - (percentage > gap ? gap / 2 : 0);
+        segments.push({ start, end });
+        ctx.fillStyle = item.color;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, start, end);
+        ctx.arc(centerX, centerY, innerRadius, end, start, true);
+        ctx.closePath();
+        ctx.save();
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = 'rgba(0,0,0,0.1)';
+        ctx.shadowOffsetY = 2;
+        ctx.fill();
+        ctx.restore();
+        currentAngle += angle;
+      });
+      let angleStart = -Math.PI / 2;
+      const labelsInc = [];
+      data.forEach(item => {
+        const pct = parseFloat(item.percentage) / 100;
+        if (!pct || pct <= 0) return;
+        const ang = pct * 2 * Math.PI;
+        const mid = angleStart + ang / 2;
+        const sx = centerX + Math.cos(mid) * radius;
+        const sy = centerY + Math.sin(mid) * radius;
+        const ex = centerX + Math.cos(mid) * (radius + 12);
+        let ey = centerY + Math.sin(mid) * (radius + 12);
+        const right = Math.cos(mid) >= 0;
+        const hx = right ? ex + 20 : ex - 20;
+        const text = `￥${this.formatNumber(item.value)}`;
+        labelsInc.push({ sx, sy, ex, ey, hx, right, text, color: item.color });
+        angleStart += ang;
+      });
+      const minGapInc = 16;
+      const clampYInc = (y) => Math.max(14, Math.min(height - 14, y));
+      const adjustGroupInc = (group) => {
+        group.sort((a, b) => a.ey - b.ey);
+        for (let i = 1; i < group.length; i++) {
+          if (group[i].ey - group[i - 1].ey < minGapInc) {
+            group[i].ey = group[i - 1].ey + minGapInc;
+          }
+        }
+        for (let i = group.length - 2; i >= 0; i--) {
+          group[i].ey = clampYInc(group[i].ey);
+          if (group[i + 1].ey - group[i].ey < minGapInc) {
+            group[i].ey = group[i + 1].ey - minGapInc;
+          }
+        }
+        group.forEach(l => { l.ey = clampYInc(l.ey); });
+      };
+      const rightInc = labelsInc.filter(l => l.right);
+      const leftInc = labelsInc.filter(l => !l.right);
+      adjustGroupInc(rightInc);
+      adjustGroupInc(leftInc);
+      ctx.lineWidth = 1;
+      labelsInc.forEach(l => {
+        ctx.strokeStyle = l.color;
+        ctx.beginPath();
+        ctx.moveTo(l.sx, l.sy);
+        ctx.lineTo(l.ex, l.ey);
+        ctx.lineTo(l.hx, l.ey);
+        ctx.stroke();
+        ctx.fillStyle = l.color;
+        ctx.beginPath();
+        ctx.arc(l.sx, l.sy, 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#4B5563';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = l.right ? 'left' : 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
+      });
+      const sel = typeof this._incomePieSelectedIdx === 'number' ? this._incomePieSelectedIdx : -1;
+      const totalInc = (data || []).reduce((s, it) => s + (Number(it.value) > 0 ? Number(it.value) : 0), 0);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (sel >= 0 && sel < data.length) {
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(String(data[sel].name || ''), centerX, centerY - 10);
+        ctx.fillStyle = data[sel].color || '#111827';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(data[sel].value)}`, centerX, centerY + 10);
+      } else {
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('总收入', centerX, centerY - 10);
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(totalInc)}`, centerX, centerY + 10);
+      }
+      if (sel >= 0 && sel < data.length && segments[sel]) {
+        const seg = segments[sel];
+        ctx.save();
+        ctx.strokeStyle = data[sel].color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 1, seg.start, seg.end);
+        ctx.stroke();
+        ctx.restore();
+      }
+      this._incomePieMeta = { rect, centerX, centerY, innerRadius, radius, segments };
+    });
+  },
+  drawExpensePie() {
+    const data = this.data.expenseChartData || [];
+    const query = wx.createSelectorQuery().in(this);
+    query.select('#expensePie').fields({ node: true, size: true }).exec((res) => {
+      const canvas = res && res[0] && res[0].node;
+      const rect = res && res[0];
+      if (!canvas || !rect) return;
+      const width = rect.width;
+      const height = rect.height;
+      const dpr = (typeof wx.getWindowInfo === 'function' ? wx.getWindowInfo().pixelRatio : 1) || 1;
+      canvas.width = Math.floor(width * dpr);
+      canvas.height = Math.floor(height * dpr);
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+      ctx.clearRect(0, 0, width, height);
+      const centerX = width / 2;
+      const centerY = height / 2;
+      const radius = Math.min(width, height) * 0.38;
+      const innerRadius = radius * 0.65;
+      if (!data.length || data.every(x => Number(x.value) <= 0)) {
+        ctx.fillStyle = 'rgba(255,255,255,0.1)';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#ffffff';
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, innerRadius, 0, 2 * Math.PI);
+        ctx.fill();
+        return;
+      }
+      let currentAngle = -Math.PI / 2;
+      const segments = [];
+      data.forEach(item => {
+        const percentage = parseFloat(item.percentage) / 100;
+        if (!percentage || percentage <= 0) return;
+        const angle = percentage * 2 * Math.PI;
+        const gap = data.length > 1 ? 0.02 : 0;
+        const start = currentAngle + (percentage > gap ? gap / 2 : 0);
+        const end = currentAngle + angle - (percentage > gap ? gap / 2 : 0);
+        segments.push({ start, end });
+        ctx.fillStyle = item.color;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, start, end);
+        ctx.arc(centerX, centerY, innerRadius, end, start, true);
+        ctx.closePath();
+        ctx.save();
+        ctx.shadowBlur = 4;
+        ctx.shadowColor = 'rgba(0,0,0,0.1)';
+        ctx.shadowOffsetY = 2;
+        ctx.fill();
+        ctx.restore();
+        currentAngle += angle;
+      });
+      let angleStart = -Math.PI / 2;
+      const labelsExp = [];
+      data.forEach(item => {
+        const pct = parseFloat(item.percentage) / 100;
+        if (!pct || pct <= 0) return;
+        const ang = pct * 2 * Math.PI;
+        const mid = angleStart + ang / 2;
+        const sx = centerX + Math.cos(mid) * radius;
+        const sy = centerY + Math.sin(mid) * radius;
+        const ex = centerX + Math.cos(mid) * (radius + 12);
+        let ey = centerY + Math.sin(mid) * (radius + 12);
+        const right = Math.cos(mid) >= 0;
+        const hx = right ? ex + 20 : ex - 20;
+        const text = `￥${this.formatNumber(item.value)}`;
+        labelsExp.push({ sx, sy, ex, ey, hx, right, text, color: item.color });
+        angleStart += ang;
+      });
+      const minGapExp = 16;
+      const clampYExp = (y) => Math.max(14, Math.min(height - 14, y));
+      const adjustGroupExp = (group) => {
+        group.sort((a, b) => a.ey - b.ey);
+        for (let i = 1; i < group.length; i++) {
+          if (group[i].ey - group[i - 1].ey < minGapExp) {
+            group[i].ey = group[i - 1].ey + minGapExp;
+          }
+        }
+        for (let i = group.length - 2; i >= 0; i--) {
+          group[i].ey = clampYExp(group[i].ey);
+          if (group[i + 1].ey - group[i].ey < minGapExp) {
+            group[i].ey = group[i + 1].ey - minGapExp;
+          }
+        }
+        group.forEach(l => { l.ey = clampYExp(l.ey); });
+      };
+      const rightExp = labelsExp.filter(l => l.right);
+      const leftExp = labelsExp.filter(l => !l.right);
+      adjustGroupExp(rightExp);
+      adjustGroupExp(leftExp);
+      ctx.lineWidth = 1;
+      labelsExp.forEach(l => {
+        ctx.strokeStyle = l.color;
+        ctx.beginPath();
+        ctx.moveTo(l.sx, l.sy);
+        ctx.lineTo(l.ex, l.ey);
+        ctx.lineTo(l.hx, l.ey);
+        ctx.stroke();
+        ctx.fillStyle = l.color;
+        ctx.beginPath();
+        ctx.arc(l.sx, l.sy, 2, 0, 2 * Math.PI);
+        ctx.fill();
+        ctx.fillStyle = '#4B5563';
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = l.right ? 'left' : 'right';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(l.text, l.hx + (l.right ? 4 : -4), l.ey);
+      });
+      const sel = typeof this._expensePieSelectedIdx === 'number' ? this._expensePieSelectedIdx : -1;
+      const totalExp = (data || []).reduce((s, it) => s + (Number(it.value) > 0 ? Number(it.value) : 0), 0);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      if (sel >= 0 && sel < data.length) {
+        ctx.fillStyle = '#374151';
+        ctx.font = '12px sans-serif';
+        ctx.fillText(String(data[sel].name || ''), centerX, centerY - 10);
+        ctx.fillStyle = data[sel].color || '#111827';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(data[sel].value)}`, centerX, centerY + 10);
+      } else {
+        ctx.fillStyle = '#9CA3AF';
+        ctx.font = '12px sans-serif';
+        ctx.fillText('总支出', centerX, centerY - 10);
+        ctx.fillStyle = '#111827';
+        ctx.font = 'bold 16px sans-serif';
+        ctx.fillText(`￥${this.formatNumber(totalExp)}`, centerX, centerY + 10);
+      }
+      if (sel >= 0 && sel < data.length && segments[sel]) {
+        const seg = segments[sel];
+        ctx.save();
+        ctx.strokeStyle = data[sel].color;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius + 1, seg.start, seg.end);
+        ctx.stroke();
+        ctx.restore();
+      }
+      this._expensePieMeta = { rect, centerX, centerY, innerRadius, radius, segments };
+    });
+  },
+  onIncomePieTouch(e) {
+    const meta = this._incomePieMeta;
+    if (!meta) return;
+    const touch = (e && e.touches && e.touches[0]) || e.detail;
+    if (!touch) return;
+    const localX = (typeof touch.x === 'number') ? touch.x : (((touch.clientX || 0) - (meta.rect.left || 0)));
+    const localY = (typeof touch.y === 'number') ? touch.y : (((touch.clientY || 0) - (meta.rect.top || 0)));
+    const dx = localX - meta.centerX;
+    const dy = localY - meta.centerY;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    if (r < meta.innerRadius || r > meta.radius + 4) {
+      this._incomePieSelectedIdx = -1;
+      this.drawIncomePie();
+      return;
+    }
+    let ang = Math.atan2(dy, dx);
+    if (ang < 0) ang += Math.PI * 2;
+    let idx = -1;
+    for (let i = 0; i < meta.segments.length; i++) {
+      let s = meta.segments[i].start;
+      let e2 = meta.segments[i].end;
+      if (s < 0) s += Math.PI * 2;
+      if (e2 < 0) e2 += Math.PI * 2;
+      if (e2 < s) {
+        if (ang >= s || ang <= e2) { idx = i; break; }
+      } else {
+        if (ang >= s && ang <= e2) { idx = i; break; }
+      }
+    }
+    this._incomePieSelectedIdx = idx;
+    this.drawIncomePie();
+  },
+  onExpensePieTouch(e) {
+    const meta = this._expensePieMeta;
+    if (!meta) return;
+    const touch = (e && e.touches && e.touches[0]) || e.detail;
+    if (!touch) return;
+    const localX = (typeof touch.x === 'number') ? touch.x : (((touch.clientX || 0) - (meta.rect.left || 0)));
+    const localY = (typeof touch.y === 'number') ? touch.y : (((touch.clientY || 0) - (meta.rect.top || 0)));
+    const dx = localX - meta.centerX;
+    const dy = localY - meta.centerY;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    if (r < meta.innerRadius || r > meta.radius + 4) {
+      this._expensePieSelectedIdx = -1;
+      this.drawExpensePie();
+      return;
+    }
+    let ang = Math.atan2(dy, dx);
+    if (ang < 0) ang += Math.PI * 2;
+    let idx = -1;
+    for (let i = 0; i < meta.segments.length; i++) {
+      let s = meta.segments[i].start;
+      let e2 = meta.segments[i].end;
+      if (s < 0) s += Math.PI * 2;
+      if (e2 < 0) e2 += Math.PI * 2;
+      if (e2 < s) {
+        if (ang >= s || ang <= e2) { idx = i; break; }
+      } else {
+        if (ang >= s && ang <= e2) { idx = i; break; }
+      }
+    }
+    this._expensePieSelectedIdx = idx;
+    this.drawExpensePie();
   },
   handleTypeTab(e) {
     const val = String(e.currentTarget.dataset.value || "all");
