@@ -102,38 +102,44 @@
 
   <!-- 收入/支出分布图，随上方 月/年/全 范围联动 -->
   <view class="card distribution-card">
-    <view class="card-header">
-      <text class="card-title">{{rangeLabelPrefix}}收入分布</text>
-      <text class="card-subtitle">Income Distribution</text>
-    </view>
-    <view class="chart-wrapper">
-      <canvas type="2d" id="incomePie" canvas-id="incomePie" class="chart-canvas" bindtouchstart="onIncomePieTouch" bindtouchmove="onIncomePieTouch"></canvas>
-    </view>
-    <view class="chart-legend">
-      <block wx:for="{{incomeChartData}}" wx:key="index">
-        <view class="legend-item">
-          <view class="legend-dot" style="background-color: {{item.color}}"></view>
-          <text class="legend-name">{{item.name}}</text>
-          <text class="legend-percent">{{item.percentage}}%</text>
-        </view>
-      </block>
+    <!-- 收入分布：当未选择“支出”时显示（全部或收入） -->
+    <view wx:if="{{activeType !== 'expense'}}">
+      <view class="card-header">
+        <text class="card-title">{{rangeLabelPrefix}}收入分布</text>
+        <text class="card-subtitle">Income Distribution</text>
+      </view>
+      <view class="chart-wrapper">
+        <canvas type="2d" id="incomePie" canvas-id="incomePie" class="chart-canvas" bindtouchstart="onIncomePieTouch" bindtouchmove="onIncomePieTouch"></canvas>
+      </view>
+      <view class="chart-legend">
+        <block wx:for="{{incomeChartData}}" wx:key="index">
+          <view class="legend-item">
+            <view class="legend-dot" style="background-color: {{item.color}}"></view>
+            <text class="legend-name">{{item.name}}</text>
+            <text class="legend-percent">{{item.percentage}}%</text>
+          </view>
+        </block>
+      </view>
     </view>
 
-    <view class="card-header card-header--spaced">
-      <text class="card-title">{{rangeLabelPrefix}}支出分布</text>
-      <text class="card-subtitle">Expense Distribution</text>
-    </view>
-    <view class="chart-wrapper">
-      <canvas type="2d" id="expensePie" canvas-id="expensePie" class="chart-canvas" bindtouchstart="onExpensePieTouch" bindtouchmove="onExpensePieTouch"></canvas>
-    </view>
-    <view class="chart-legend">
-      <block wx:for="{{expenseChartData}}" wx:key="index">
-        <view class="legend-item">
-          <view class="legend-dot" style="background-color: {{item.color}}"></view>
-          <text class="legend-name">{{item.name}}</text>
-          <text class="legend-percent">{{item.percentage}}%</text>
-        </view>
-      </block>
+    <!-- 支出分布：当未选择“收入”时显示（全部或支出） -->
+    <view wx:if="{{activeType !== 'income'}}">
+      <view class="card-header card-header--spaced">
+        <text class="card-title">{{rangeLabelPrefix}}支出分布</text>
+        <text class="card-subtitle">Expense Distribution</text>
+      </view>
+      <view class="chart-wrapper">
+        <canvas type="2d" id="expensePie" canvas-id="expensePie" class="chart-canvas" bindtouchstart="onExpensePieTouch" bindtouchmove="onExpensePieTouch"></canvas>
+      </view>
+      <view class="chart-legend">
+        <block wx:for="{{expenseChartData}}" wx:key="index">
+          <view class="legend-item">
+            <view class="legend-dot" style="background-color: {{item.color}}"></view>
+            <text class="legend-name">{{item.name}}</text>
+            <text class="legend-percent">{{item.percentage}}%</text>
+          </view>
+        </block>
+      </view>
     </view>
   </view>
 
