@@ -37,12 +37,12 @@ Component({
       if (!rawPath) return;
       const path = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
       if (!path) return;
-      if (index === this.data.selected) {
-        wx.switchTab({ url: path });
-        return;
+      const go = () => wx.switchTab({ url: path, fail: () => wx.reLaunch({ url: path }) });
+      if (index !== this.data.selected) {
+        this.setData({ selected: index }, go);
+      } else {
+        go();
       }
-      this.setData({ selected: index });
-      wx.switchTab({ url: path });
     },
     onPlusTap() {
       wx.navigateTo({ url: "/pages/cashflow/index" });
