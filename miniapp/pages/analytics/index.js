@@ -789,7 +789,7 @@ Page({
           api.fetchWealthSummary(rng.start, rng.end, 'month'),
           api.listAccounts('asset'),
           api.listAccounts('liability')
-        ]).then(([list, sumRes, assets, liabilities]) => {
+        ]).then(async ([list, sumRes, assets, liabilities]) => {
           // 1. 计划收入 (Cashflow)
           const plannedIncome = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'income' && !!x.planned ? Number(x.amount || 0) : 0); }, 0);
           const actualIncome = (list || []).reduce(function(sum, x){ return sum + (x && x.type === 'income' && !x.planned ? Number(x.amount || 0) : 0); }, 0);
@@ -802,11 +802,47 @@ Page({
              const d = new Date(String(ds).replace(/-/g, "/"));
              return d >= rangeStart && d <= rangeEnd;
           };
-          (rentReminders || []).forEach(r => {
-             if (inRange(r.next_due_date)) {
-                 rentIncome += Number(r.monthly_rent || 0);
-             }
-          });
+          try {
+            const clampDay = (yy, mm, dd) => {
+              const daysInMonth = new Date(yy, mm, 0).getDate();
+              return Math.max(1, Math.min(daysInMonth, Number(dd) || 1));
+            };
+            const freqInterval = (f) => {
+              const s = String(f || 'monthly');
+              if (s === 'quarterly') return 3;
+              if (s === 'semiannual') return 6;
+              if (s === 'annual') return 12;
+              return 1;
+            };
+            const monthIndex = rng.y * 12 + rng.m;
+            for (const acc of (assets || [])) {
+              if (String(acc.category || '') !== '房产') continue;
+              let tenants = [];
+              try { tenants = await api.listTenants(acc.id); } catch (e) { tenants = []; }
+              for (const t of (tenants || [])) {
+                const sStr = t.start_date || null;
+                const eStr = t.end_date || null;
+                if (!sStr) continue;
+                const s = new Date(String(sStr).replace(/-/g, '/'));
+                if (isNaN(s.getTime())) continue;
+                const e = eStr ? new Date(String(eStr).replace(/-/g, '/')) : null;
+                const sIndex = s.getFullYear() * 12 + (s.getMonth() + 1);
+                const interval = freqInterval(t.frequency);
+                const diff = monthIndex - sIndex;
+                if (diff < 0) continue;
+                if (diff % interval !== 0) continue;
+                const d = clampDay(rng.y, rng.m, Number(t.due_day || 1));
+                const cand = new Date(rng.y, rng.m - 1, d);
+                if (cand < rangeStart || cand > rangeEnd) continue;
+                if (cand < s) continue;
+                if (e) {
+                  const eIndex = e.getFullYear() * 12 + (e.getMonth() + 1);
+                  if (monthIndex > eIndex) continue;
+                }
+                rentIncome += Number(t.monthly_rent || 0);
+              }
+            }
+          } catch (eRent) {}
 
           // 3. 资产月收益 (Asset Income)，排除已出租资产
           let assetMonthlyIncomeSum = 0;
@@ -816,6 +852,8 @@ Page({
               if (!acc) return;
               // 排除已出租的资产（避免与租金收入重复）
               if (rentedAssetIds.has(Number(acc.id))) return;
+              // 排除房产类资产（房产收益仅通过租金计算，不使用月收益字段）
+              if (String(acc.category || '') === '房产') return;
 
               const mi = Number(acc.monthly_income || 0);
               if (!(mi > 0)) return;

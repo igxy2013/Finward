@@ -20,7 +20,9 @@ Page({
       this.setData({ loading: false, error: "参数错误" });
       return;
     }
-    this.setData({ id, loading: true, error: "" });
+    const autoOpen = String(options?.edit || '') === '1';
+    const autoTid = Number(options?.tenancy_id || 0) || null;
+    this.setData({ id, loading: true, error: "", _autoOpenEditor: autoOpen, _autoTenancyId: autoTid });
     this.init(id);
   },
   onShow() {
@@ -35,24 +37,61 @@ Page({
     } catch (e) {}
     await this.loadTenants(id);
     await this.fetchRentRecords();
+    if (this.data._autoOpenEditor) {
+      this.autoOpenRentEditor();
+    }
   },
   async loadTenants(id) {
     try {
       const tenants = await api.listTenants(id);
-      const formatted = (tenants || []).map(t => ({
-        ...t,
-        monthly_rent_display: this.formatNumber(t.monthly_rent),
-        next_due_date_display: t.next_due_date ? this.formatDate(t.next_due_date) : "",
-        frequency_label: this.mapFrequency(t.frequency || 'monthly'),
-        due_day_display: t.due_day ? `每期${String(t.due_day)}日` : "",
-        start_date_display: t.start_date ? this.formatDate(t.start_date) : "",
-        end_date_display: t.end_date ? this.formatDate(t.end_date) : "",
-        reminder_display: t.reminder_enabled ? "已开启" : "已关闭"
-      }));
+      const formatted = (tenants || []).map(t => {
+        const initialNext = t.next_due_date ? this.formatDate(t.next_due_date) : "";
+        let nextDisplay = initialNext;
+        if (nextDisplay && t.end_date) {
+          const nd = new Date(`${nextDisplay}T00:00:00`);
+          const ed = new Date(String(t.end_date).replace(' ', 'T'));
+          if (nd > ed) nextDisplay = "";
+        }
+        if (t.end_date) {
+          const today = new Date(`${this.today()}T00:00:00`);
+          const ed = new Date(String(t.end_date).replace(' ', 'T'));
+          if (ed < today) nextDisplay = "";
+        }
+        return {
+          ...t,
+          monthly_rent_display: this.formatNumber(t.monthly_rent),
+          next_due_date_display: nextDisplay,
+          frequency_label: this.mapFrequency(t.frequency || 'monthly'),
+          due_day_display: t.due_day ? `每期${String(t.due_day)}日` : "",
+          start_date_display: t.start_date ? this.formatDate(t.start_date) : "",
+          end_date_display: t.end_date ? this.formatDate(t.end_date) : "",
+          reminder_display: t.reminder_enabled ? "已开启" : "已关闭"
+        };
+      });
       this.setData({ tenants: formatted, loading: false });
     } catch (e) {
       this.setData({ loading: false });
     }
+  },
+  autoOpenRentEditor() {
+    const tenants = this.data.tenants || [];
+    const tid = Number(this.data._autoTenancyId || 0);
+    if (tenants.length === 0) {
+      this.setData({ showRentEditor: true, editorTenant: null });
+      return;
+    }
+    if (tid) {
+      const match = tenants.find(t => Number(t.id || 0) === tid);
+      if (match) {
+        this.setData({ showRentEditor: true, editorTenant: match });
+        return;
+      }
+    }
+    if (tenants.length === 1) {
+      this.setData({ showRentEditor: true, editorTenant: tenants[0] });
+      return;
+    }
+    this.setData({ showRentEditor: true, editorTenant: tenants[0] });
   },
   openRentEditor() {
     const { tenants = [] } = this.data;
@@ -197,7 +236,18 @@ Page({
         .filter(Boolean)
         .sort((a, b) => new Date(b) - new Date(a))[0];
       if (last) {
-        const next = addMonths(last, freqMonths(t.frequency || 'monthly'));
+        const next0 = addMonths(last, freqMonths(t.frequency || 'monthly'));
+        let next = next0;
+        if (next && t.end_date) {
+          const nd = new Date(`${next}T00:00:00`);
+          const ed = new Date(String(t.end_date).replace(' ', 'T'));
+          if (nd > ed) next = "";
+        }
+        if (t.end_date) {
+          const today = new Date(`${this.today()}T00:00:00`);
+          const ed = new Date(String(t.end_date).replace(' ', 'T'));
+          if (ed < today) next = "";
+        }
         return { ...t, next_due_date_display: next };
       }
       return t;
@@ -244,6 +294,37 @@ Page({
     } catch (err) {
       wx.showToast({ title: "删除失败", icon: "none" });
     }
+  },
+  editTenant(e) {
+    const id = Number(e.currentTarget.dataset.id);
+    if (!id) return;
+    const tenant = this.data.tenants.find(t => Number(t.id) === id);
+    if (tenant) {
+      this.setData({ showRentEditor: true, editorTenant: tenant });
+    }
+  },
+  async deleteTenant(e) {
+    const id = Number(e.currentTarget.dataset.id);
+    if (!id) return;
+    const that = this;
+    wx.showModal({
+      title: '确认删除',
+      content: '确定要删除这条出租记录吗？',
+      success: async function (res) {
+        if (res.confirm) {
+          try {
+            await api.deleteTenant(id);
+            wx.showToast({ title: "已删除", icon: "success" });
+            const accountId = Number(that.data.id || 0);
+            if (accountId) {
+              await that.loadTenants(accountId);
+            }
+          } catch (err) {
+            wx.showToast({ title: "删除失败", icon: "none" });
+          }
+        }
+      }
+    });
   },
   mapFrequency(f) {
     const m = { monthly: "按月", quarterly: "按季", semiannual: "半年", annual: "按年" };

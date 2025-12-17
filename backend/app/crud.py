@@ -481,7 +481,10 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
                     if term > 0 and months_elapsed >= term:
                         break
                     exp_exp += Decimal(a.monthly_payment)
-            if a.monthly_income and Decimal(a.monthly_income) > 0 and (a.investment_term_months is None or a.investment_term_months > 0):
+            # 排除房产类资产的月收益，房产收益仅通过租金计算
+            if (a.category or "") == "房产":
+                pass
+            elif a.monthly_income and Decimal(a.monthly_income) > 0 and (a.investment_term_months is None or a.investment_term_months > 0):
                 start_base2 = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else range_start)
                 sidx2 = start_base2.year * 12 + start_base2.month
                 term2 = int(a.investment_term_months or 0)
@@ -521,7 +524,10 @@ def wealth_summary(session: Session, user_id: int, start: date | None, end: date
                     end_cap = max(0, ei - si + 1)
                     limit = min(limit, end_cap)
                 exp_exp += Decimal(a.monthly_payment) * Decimal(min(months_elapsed, limit))
-            if a.monthly_income and a.monthly_income > 0:
+            # 排除房产类资产的月收益，房产收益仅通过租金计算
+            if (a.category or "") == "房产":
+                pass
+            elif a.monthly_income and a.monthly_income > 0:
                 start_base2 = a.invest_start_date if a.invest_start_date else (to_utc(a.created_at).date() if a.created_at else end_date)
                 months_elapsed2 = max(1, (end_date.year - start_base2.year) * 12 + (end_date.month - start_base2.month) + 1)
                 limit2 = a.investment_term_months if a.investment_term_months is not None else months_elapsed2
@@ -1031,7 +1037,7 @@ def analytics_stats(session: Session, months: int, user_id: int) -> schemas.Stat
     liabilities = [a for a in accounts if (a.type.value if hasattr(a.type, "value") else a.type) == "liability"]
 
     # 计算租金提醒（当前月）
-    ten_stmt = session.query(models.Tenancy).filter(models.Tenancy.household_id == hh_id, models.Tenancy.reminder_enabled == True)
+    ten_stmt = session.query(models.Tenancy).filter(models.Tenancy.household_id == hh_id)
     tenancies = ten_stmt.all()
 
     def clamp_day(yy: int, mm: int, dd: int) -> int:
@@ -1069,7 +1075,9 @@ def analytics_stats(session: Session, months: int, user_id: int) -> schemas.Stat
     for t in tenancies:
         if t.end_date and t.end_date < cur_start:
             continue
-        nd = t.next_due_date or compute_next_due(t.start_date, t.due_day, t.frequency or "monthly")
+        nd = compute_next_due(t.start_date, t.due_day, t.frequency or "monthly", ref_date=cur_start)
+        if t.end_date and nd > t.end_date:
+            continue
         if in_range(nd):
             rent_incomes.append(("租金收入", Decimal(t.monthly_rent or 0)))
             if t.account_id:
@@ -1078,6 +1086,9 @@ def analytics_stats(session: Session, months: int, user_id: int) -> schemas.Stat
     # 资产月收益（排除已出租资产）
     asset_incomes: list[tuple[str, Decimal]] = []
     for a in assets:
+        # 排除房产类资产的月收益，房产收益仅通过租金计算
+        if (a.category or "") == "房产":
+            continue
         if a.monthly_income and Decimal(a.monthly_income) > 0:
             if a.id and int(a.id) in rented_asset_ids:
                 continue
@@ -1316,10 +1327,7 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
     ten_stmt = (
         session.query(models.Tenancy, models.Account.name.label("account_name"))
         .outerjoin(models.Account, models.Tenancy.account_id == models.Account.id)
-        .filter(
-            models.Tenancy.household_id == hh_id,
-            models.Tenancy.reminder_enabled == True,
-        )
+        .filter(models.Tenancy.household_id == hh_id)
     )
     tenancies_data = ten_stmt.all()
 
@@ -1354,7 +1362,9 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
     for t, acc_name in tenancies_data:
         if t.end_date and t.end_date < start:
             continue
-        nd = t.next_due_date or compute_next_due(t.start_date, t.due_day, t.frequency or "monthly", ref_date=start)
+        nd = compute_next_due(t.start_date, t.due_day, t.frequency or "monthly", ref_date=start)
+        if t.end_date and nd > t.end_date:
+            continue
         if in_range(nd):
             if t.account_id:
                 rented_asset_ids.add(int(t.account_id))
@@ -1388,6 +1398,9 @@ def wealth_items(session: Session, user_id: int, start: date, end: date, type_fi
             continue
         mi = Decimal(a.monthly_income or 0)
         if mi <= 0:
+            continue
+        # 排除房产类资产的月收益，房产收益仅通过租金计算
+        if (a.category or "") == "房产":
             continue
         if a.id and int(a.id) in rented_asset_ids:
             continue

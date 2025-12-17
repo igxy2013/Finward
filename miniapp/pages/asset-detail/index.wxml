@@ -78,25 +78,29 @@
       </view>
     </view>
 
-    <view class="card invest-card" wx:if="{{(detail.monthly_income || detail.investment_term_months || detail.invest_start_date) && tenants.length === 0}}">
+    <view class="card invest-card" wx:if="{{ (detail.category !== '房产' && (detail.monthly_income || detail.investment_term_months || detail.invest_start_date)) || (detail.category === '房产' && tenants.length > 0) }}">
       <view class="card-header">
         <text class="card-title">投资计划</text>
       </view>
       <view class="info-list">
-        <view class="info-item" wx:if="{{detail.monthly_income}}"><text class="info-label">月收益</text><text class="info-value">￥{{detail.monthly_income_display}}</text></view>
-        <view class="info-item" wx:if="{{detail.investment_term_months}}"><text class="info-label">期限</text><text class="info-value">{{detail.investment_term_months}} 个月</text></view>
+        <view class="info-item" wx:if="{{detail.category !== '房产' && detail.monthly_income}}"><text class="info-label">月收益</text><text class="info-value">￥{{detail.monthly_income_display}}</text></view>
+        <view class="info-item" wx:if="{{detail.category !== '房产' && detail.investment_term_months}}"><text class="info-label">期限</text><text class="info-value">{{detail.investment_term_months}} 个月</text></view>
         <view class="info-item" wx:if="{{detail.invest_start_date_display}}"><text class="info-label">开始日期</text><text class="info-value">{{detail.invest_start_date_display}}</text></view>
         <view class="info-item" wx:if="{{detail.invest_end_date_display}}"><text class="info-label">结束日期</text><text class="info-value">{{detail.invest_end_date_display}}</text></view>
         <view class="info-item" wx:if="{{detail.depreciation_rate_display}}"><text class="info-label">折旧率(年%)</text><text class="info-value">{{detail.depreciation_rate_display}}%</text></view>
+        <view class="info-item" wx:if="{{detail.category === '房产'}}"><text class="info-label">是否出租</text><text class="info-value">{{tenants.length > 0 ? '是' : '否'}}</text></view>
+      </view>
+      <view class="rent-menu" wx:if="{{detail.category === '房产'}}" bindtap="goRentDetail" hover-class="rent-menu--pressed" hover-start-time="0" hover-stay-time="120">
+        <view class="rent-menu-row">
+          <text class="rent-menu-title">出租信息</text>
+          <view class="rent-menu-right">
+            <text class="rent-menu-tip">查看</text>
+            <image class="rent-menu-arrow" src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
+          </view>
+        </view>
       </view>
     </view>
 
-    <view class="card" wx:if="{{detail.category === '房产'}}">
-      <view class="card-header">
-        <text class="card-title">出租信息</text>
-        <button class="rent-btn" bindtap="goRentDetail">查看详情</button>
-      </view>
-    </view>
 
     <view class="card note-card" wx:if="{{detail.note}}">
       <view class="card-header">

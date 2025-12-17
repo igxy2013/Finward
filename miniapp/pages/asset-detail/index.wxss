@@ -10,8 +10,13 @@
 .card-count { font-size: 24rpx; color: #6b7280; background: #F3F4F6; padding: 4rpx 12rpx; border-radius: 12rpx; margin-left: auto; }
 .card-subtitle { font-size: 22rpx; color: #6b7280; margin-left: 8rpx; }
 .card-title-wrap { display: flex; align-items: baseline; gap: 8rpx; }
-.rent-btn { margin-left: auto; margin-right: 8rpx; background: linear-gradient(135deg, #43B176, #2FA766); color: #ffffff; border: none; padding: 8rpx 18rpx; border-radius: 14rpx; font-size: 22rpx; box-shadow: 0 6rpx 14rpx rgba(67,177,118,0.25); }
-.rent-btn:active { opacity: 0.9; transform: scale(0.98); }
+.rent-menu { margin-top: 24rpx; padding: 24rpx 20rpx; background: #F9FAFB; border-radius: 16rpx; border: 1rpx solid #F3F4F6; }
+.rent-menu-row { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.rent-menu-title { font-size: 26rpx; font-weight: 500; color: #374151; }
+.rent-menu-right { display: flex; align-items: center; gap: 4rpx; }
+.rent-menu-tip { font-size: 26rpx; color: #9ca3af; }
+.rent-menu-arrow { width: 32rpx; height: 32rpx; opacity: 0.4; }
+.rent-menu--pressed { background: #F3F4F6; }
 .link-btn { margin-left: 8rpx; background: #E7F7EE; color: #10B981; border: 1rpx solid #BFE6D0; padding: 8rpx 16rpx; border-radius: 12rpx; font-size: 24rpx; }
 .link-btn { margin-left: auto; background: #E7F7EE; color: #10B981; border: 1rpx solid #BFE6D0; padding: 8rpx 16rpx; border-radius: 12rpx; font-size: 24rpx; }
 

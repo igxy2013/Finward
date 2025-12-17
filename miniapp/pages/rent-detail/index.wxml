@@ -25,7 +25,7 @@
           <view class="rental-info">
             <view class="r-row"><text class="r-label">出租方式</text><text class="r-value">{{item.frequency_label}}</text></view>
             <view class="r-row"><text class="r-label">月租</text><text class="r-value">￥{{item.monthly_rent_display}}</text></view>
-            <view class="r-row"><text class="r-label">下次收租</text><text class="r-value">{{item.next_due_date_display}}</text></view>
+            <view class="r-row" wx:if="{{item.next_due_date_display}}"><text class="r-label">下次收租</text><text class="r-value">{{item.next_due_date_display}}</text></view>
             <view class="r-row"><text class="r-label">收租日</text><text class="r-value">{{item.due_day_display}}</text></view>
             <view class="r-row"><text class="r-label">开始日期</text><text class="r-value">{{item.start_date_display}}</text></view>
             <view class="r-row" wx:if="{{item.end_date_display}}"><text class="r-label">结束日期</text><text class="r-value">{{item.end_date_display}}</text></view>
@@ -80,6 +80,10 @@
             </view>
           </view>
           <view class="item-amount">￥{{item.monthly_rent_display}}</view>
+          <view class="item-actions">
+            <image class="action-icon" src="/assets/icons/edit-line.svg" mode="aspectFit" data-id="{{item.id}}" bindtap="editTenant"></image>
+            <image class="action-icon" src="/assets/icons/delete-bin-line.svg" mode="aspectFit" data-id="{{item.id}}" bindtap="deleteTenant"></image>
+          </view>
         </view>
       </view>
     </view>

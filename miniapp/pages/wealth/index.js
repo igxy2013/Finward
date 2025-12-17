@@ -569,6 +569,43 @@ Page({
             icon: getCategoryIcon(x.category, x.type)
           }))
           .sort((a, b) => Number(String(b.amount).replace(/,/g, '')) - Number(String(a.amount).replace(/,/g, '')));
+        try {
+          const assetsForFilter = await api.listAccounts("asset");
+          const tenantsMap = Object.create(null);
+          const pairs = await Promise.all((assetsForFilter || []).map(async (acc) => {
+            try { const ts = await api.listTenants(acc.id); return { id: acc.id, tenants: Array.isArray(ts) ? ts : [] }; }
+            catch (e) { return { id: acc.id, tenants: [] }; }
+          }));
+          pairs.forEach(p => { tenantsMap[Number(p.id)] = p.tenants; });
+          const inTenancy = (dtStr, t) => {
+            try {
+              const d = new Date(String(dtStr).replace(/-/g, '/'));
+              if (isNaN(d.getTime())) return true;
+              const s = t.start_date ? new Date(String(t.start_date).replace(/-/g, '/')) : null;
+              const e = t.end_date ? new Date(String(t.end_date).replace(/-/g, '/')) : null;
+              if (s && d < s) return false;
+              if (e && d > e) return false;
+              return true;
+            } catch (e) { return true; }
+          };
+          formatted = (formatted || []).filter(it => {
+            if (it.type !== 'income') return true;
+            const cat = String(it.category || '');
+            if (cat !== '房产' && cat !== '资产收益') return true;
+            const aid = Number(it.account_id || 0);
+            if (aid && (tenantsMap[aid] || []).length > 0) return false;
+            return true;
+          });
+          formatted = (formatted || []).filter(it => {
+            if (it.type !== 'income') return true;
+            if (String(it.category || '') !== '租金收入') return true;
+            const aid = Number(it.account_id || 0);
+            const tenants = aid ? (tenantsMap[aid] || []) : [];
+            if (!tenants.length) return true;
+            const hit = tenants.some(t => inTenancy(it.date || endStr, t));
+            return hit;
+          });
+        } catch (eFilter) {}
         if (range === 'year' && (!typeFilter || typeFilter === 'income')) {
           try {
             const statsYear = await api.getFinanceStats('year', String(y));
@@ -611,6 +648,7 @@ Page({
         const existingSynthIncomeKeys = new Set((recurringSynth || []).map(x => `${x.type}:${x.category}:${x.name}`));
         (prevList || [])
           .filter(i => i && i.type === 'income' && !!i.planned && !!i.recurring_monthly)
+          .filter(i => String(i.category || '') !== '租金收入')
           .forEach(t => {
             const key = keyOf(t);
             if (!currKeysAny.has(key) && !existingSynthIncomeKeys.has(key)) {
@@ -646,6 +684,7 @@ Page({
           const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
           const buildKey = (i) => `${i.type}:${i.category}:${i.note ? i.note : (i.name ? i.name : i.category)}`;
           recMasters.filter(i => i.type === 'income').forEach(ms => {
+            if (String(ms.category || '') === '租金收入') return;
             const s = ms.recurring_start_date ? new Date(String(ms.recurring_start_date).replace(/-/g, '/')) : (ms.date ? new Date(String(ms.date).replace(/-/g, '/')) : null);
             if (!s || isNaN(s.getTime())) return;
             const e = ms.recurring_end_date ? new Date(String(ms.recurring_end_date).replace(/-/g, '/')) : null;
@@ -786,28 +825,93 @@ Page({
       } catch (e) {}
       let rents = [];
       try {
-        const [reminders, assets] = await Promise.all([
-          api.listRentReminders(90),
-          api.listAccounts("asset"),
-        ]);
-        const assetNameMap = Object.create(null);
-        (assets || []).forEach((a) => { assetNameMap[Number(a.id)] = a.name; });
-        rents = (reminders || []).map((r) => ({
-          id: `tenancy:${r.tenancy_id}`,
-          type: 'income',
-          category: '租金收入',
-          amount: this.formatNumber(r.monthly_rent),
-          date: r.next_due_date,
-          planned: true,
-          recurring_monthly: false,
-          _synthetic: 'rent',
-          tenancy_id: r.tenancy_id,
-          account_id: r.account_id,
-          account_name: assetNameMap[Number(r.account_id)] || undefined,
-          name: assetNameMap[Number(r.account_id)] ? `${assetNameMap[Number(r.account_id)]}租金` : '租金收入',
-          tenant_name: r.tenant_name, // 添加租户名称
-          icon: getCategoryIcon('租金收入', 'income')
-        }));
+        const assets = await api.listAccounts("asset");
+        const rangeStart = start ? new Date(String(start).replace(/-/g, "/")) : null;
+        const rangeEnd = end ? new Date(String(end).replace(/-/g, "/")) : null;
+        const clampDay = (yy, mm, dd) => {
+          const daysInMonth = new Date(yy, mm, 0).getDate();
+          return Math.max(1, Math.min(daysInMonth, Number(dd) || 1));
+        };
+        const freqInterval = (f) => {
+          const s = String(f || 'monthly');
+          if (s === 'quarterly') return 3;
+          if (s === 'semiannual') return 6;
+          if (s === 'annual') return 12;
+          return 1;
+        };
+        const pushRent = (acc, t, y, m, d) => {
+          const dt = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+          rents.push({
+            id: `tenancy:${t.id}:${y}${String(m).padStart(2, '0')}`,
+            type: 'income',
+            category: '租金收入',
+            amount: this.formatNumber(t.monthly_rent),
+            date: dt,
+            planned: true,
+            recurring_monthly: true,
+            _synthetic: 'rent',
+            tenancy_id: t.id,
+            account_id: acc.id,
+            account_name: acc.name,
+            name: acc.name ? `${acc.name}租金` : '租金收入',
+            tenant_name: t.tenant_name,
+            icon: getCategoryIcon('租金收入', 'income'),
+            recurring_start_date: t.start_date || '',
+            recurring_end_date: t.end_date || ''
+          });
+        };
+        const selectedYear = endDate.getFullYear();
+        const selectedMonth = endDate.getMonth() + 1;
+        for (const acc of (assets || [])) {
+          const cat = String(acc.category || '');
+          if (cat !== '房产') continue;
+          let tenants = [];
+          try { tenants = await api.listTenants(acc.id); } catch (e) { tenants = []; }
+          for (const t of (tenants || [])) {
+            const sStr = t.start_date || null;
+            const eStr = t.end_date || null;
+            if (!sStr) continue;
+            const s = new Date(String(sStr).replace(/-/g, '/'));
+            if (isNaN(s.getTime())) continue;
+            const e = eStr ? new Date(String(eStr).replace(/-/g, '/')) : null;
+            const interval = freqInterval(t.frequency);
+            const sIndex = s.getFullYear() * 12 + (s.getMonth() + 1);
+            const dueDay = Number(t.due_day || 1);
+            if (range === 'month') {
+              const monthIndex = selectedYear * 12 + selectedMonth;
+              const diff = monthIndex - sIndex;
+              if (diff < 0) continue;
+              if (diff % interval !== 0) continue;
+              const d = clampDay(selectedYear, selectedMonth, dueDay);
+              const cand = new Date(selectedYear, selectedMonth - 1, d);
+              if (cand < s) continue;
+              if (e && cand > e) continue;
+              if (rangeStart && cand < rangeStart) continue;
+              if (rangeEnd && cand > rangeEnd) continue;
+              pushRent(acc, t, selectedYear, selectedMonth, d);
+            } else if (range === 'year') {
+              const y = selectedYear;
+              for (let m = 1; m <= 12; m++) {
+                const monthIndex = y * 12 + m;
+                const diff = monthIndex - sIndex;
+                if (diff < 0) continue;
+                if (diff % interval !== 0) continue;
+                const d = clampDay(y, m, dueDay);
+                const cand = new Date(y, m - 1, d);
+                if (cand < s) continue;
+                if (e) {
+                  const eIndex = e.getFullYear() * 12 + (e.getMonth() + 1);
+                  if (monthIndex > eIndex) continue;
+                }
+                if (rangeStart && cand < rangeStart) continue;
+                if (rangeEnd && cand > rangeEnd) continue;
+                pushRent(acc, t, y, m, d);
+              }
+            } else {
+              // all: 不展开，保持与其他项一致，不在“全部”范围生成租金预算
+            }
+          }
+        }
         try {
           const y = endDate.getFullYear();
           const m = endDate.getMonth() + 1;
@@ -824,6 +928,18 @@ Page({
       let assetIncomes = [];
       try {
         const assets = await api.listAccounts("asset");
+        let tenantsByAsset = Object.create(null);
+        try {
+          const pairs = await Promise.all((assets || []).map(async (acc) => {
+            try {
+              const ts = await api.listTenants(acc.id);
+              return { id: acc.id, tenants: Array.isArray(ts) ? ts : [] };
+            } catch (e) {
+              return { id: acc.id, tenants: [] };
+            }
+          }));
+          pairs.forEach(p => { tenantsByAsset[Number(p.id)] = p.tenants; });
+        } catch (eT) {}
         
         // 创建已计算为租金收入的资产ID集合
         const rentedAssetIds = new Set();
@@ -835,7 +951,12 @@ Page({
         
         const monthIndex = endDate.getFullYear() * 12 + (endDate.getMonth() + 1);
         assets.forEach((acc) => {
+          if (acc.rental_enabled) return;
           if (rentedAssetIds.has(acc.id)) return;
+          const catRaw = String(acc.category || '');
+          if (catRaw === '房产') return;
+          const hasTenants = (tenantsByAsset[Number(acc.id)] || []).length > 0;
+          if (hasTenants) return;
           const mi = Number(acc.monthly_income || 0);
           if (!(mi > 0)) return;
           let started = true;
@@ -1605,7 +1726,7 @@ Page({
     if (rawId.startsWith('tenancy:')) {
       const item = (this.data.cashflows || []).find((x) => String(x.id) === rawId);
       if (item) {
-        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}&recurring_end_date=${encodeURIComponent(String(item.recurring_end_date || ''))}`;
+        const url = `/pages/cashflow-detail/index?synthetic=1&id=${encodeURIComponent(rawId)}&type=${encodeURIComponent(item.type || '')}&category=${encodeURIComponent(item.category || '')}&amount_display=${encodeURIComponent(String(item.amount || '0.00'))}&date=${encodeURIComponent(item.date || '')}&planned=${item.planned ? '1' : '0'}&recurring=${item.recurring_monthly ? '1' : '0'}&name=${encodeURIComponent(item.name || '')}&account_id=${encodeURIComponent(String(item.account_id || ''))}&account_name=${encodeURIComponent(String(item.account_name || ''))}&tenant_name=${encodeURIComponent(String(item.tenant_name || ''))}&synthetic_kind=${encodeURIComponent(String(item._synthetic || item.synthetic_kind || ''))}&recurring_start_date=${encodeURIComponent(String(item.recurring_start_date || ''))}&recurring_end_date=${encodeURIComponent(String(item.recurring_end_date || ''))}`;
         wx.navigateTo({ url });
         return;
       }

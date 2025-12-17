@@ -165,7 +165,8 @@ Page({
           const ed = data.invest_end_date;
           if (ed) return this.formatDate(ed);
           const sd = data.invest_start_date;
-          const term = Number(data.investment_term_months || 0);
+          // 房产类资产忽略投资期限
+          const term = (data.category === '房产') ? 0 : Number(data.investment_term_months || 0);
           if (!sd || !(term > 0)) return "";
           const s = new Date(String(sd).replace(/-/g, "/"));
           if (isNaN(s.getTime())) return "";
@@ -188,10 +189,30 @@ Page({
         change_sign,
         loading: false
       });
+      await this.loadTenants(id);
+      await this.fetchRentRecords();
       this.autoDepreciationUpdateIfNeeded();
       this.loadValueUpdates();
     } catch (error) {
       this.setData({ loading: false, error: "加载失败" });
+    }
+  },
+  async loadTenants(id) {
+    try {
+      const tenants = await api.listTenants(id);
+      const formatted = (tenants || []).map(t => ({
+        ...t,
+        monthly_rent_display: this.formatNumber(t.monthly_rent),
+        next_due_date_display: t.next_due_date ? this.formatDate(t.next_due_date) : "",
+        frequency_label: this.mapFrequency(t.frequency || 'monthly'),
+        due_day_display: t.due_day ? `每期${String(t.due_day)}日` : "",
+        start_date_display: t.start_date ? this.formatDate(t.start_date) : "",
+        end_date_display: t.end_date ? this.formatDate(t.end_date) : "",
+        reminder_display: t.reminder_enabled ? "已开启" : "已关闭"
+      }));
+      this.setData({ tenants: formatted });
+    } catch (e) {
+      // 保持原样，不打断页面渲染
     }
   },
   goRentDetail() {

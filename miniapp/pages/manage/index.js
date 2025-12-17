@@ -333,7 +333,8 @@ Page({
     }
     // 资产结束日期：如设置了投资期限则按开始日期 + 期限(月) 计算，否则保留用户设置
     const startInvest = this.data.form.invest_start_date;
-    const termInvest = Number(this.data.form.investment_term_months || 0);
+    // 房产类资产不使用投资期限，强制视为0
+    const termInvest = (this.data.form.category === '房产') ? 0 : Number(this.data.form.investment_term_months || 0);
     let investEnd = this.data.form.invest_end_date || "";
     if (startInvest && termInvest > 0) {
       const s = new Date(String(startInvest).replace(/-/g, "/"));
@@ -397,8 +398,8 @@ Page({
         loan_start_date: f.loan_start_date || null,
         loan_end_date: f.loan_end_date || null,
         annual_interest_rate: f.annual_interest_rate !== "" ? Number(f.annual_interest_rate) / 100 : null,
-        investment_term_months: f.investment_term_months !== "" ? Number(f.investment_term_months) : null,
-        monthly_income: f.monthly_income !== "" ? Number(f.monthly_income) : null,
+        investment_term_months: (f.category !== '房产' && f.investment_term_months !== "") ? Number(f.investment_term_months) : null,
+        monthly_income: (f.category !== '房产' && f.monthly_income !== "") ? Number(f.monthly_income) : null,
         invest_start_date: f.invest_start_date || null,
         invest_end_date: f.invest_end_date || null,
         depreciation_rate: f.depreciation_rate !== "" ? Number(f.depreciation_rate) / 100 : null

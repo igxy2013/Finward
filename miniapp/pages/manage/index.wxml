@@ -48,11 +48,11 @@
       <text class="label">结束日期</text>
       <view class="readonly-value">{{form.loan_end_date || '自动计算'}}</view>
     </view>
-    <view class="form-item" wx:if="{{form.type === 'asset'}}">
+    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
       <text class="label">投资期限(月)</text>
       <input type="number" placeholder="可选" data-key="investment_term_months" value="{{form.investment_term_months}}" bindinput="handleInput" />
     </view>
-    <view class="form-item" wx:if="{{form.type === 'asset'}}">
+    <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
       <text class="label">月收益</text>
       <input type="number" placeholder="可选" data-key="monthly_income" value="{{form.monthly_income}}" bindinput="handleInput" />
     </view>
@@ -85,8 +85,14 @@
         <text class="label">是否出租</text>
         <switch checked="{{form.rental_enabled}}" bindchange="handleRentalToggle"></switch>
       </view>
-      <view wx:if="{{form.rental_enabled}}" class="form-item">
-        <button size="mini" bindtap="goRentDetail" style="background-color:#10B981;color:#fff;">查看出租信息</button>
+      <view wx:if="{{form.rental_enabled}}" class="rent-menu" bindtap="goRentDetail" hover-class="rent-menu--pressed" hover-start-time="0" hover-stay-time="120">
+        <view class="rent-menu-row">
+          <text class="rent-menu-title">出租信息</text>
+          <view class="rent-menu-right">
+            <text class="rent-menu-tip">查看</text>
+            <image class="rent-menu-arrow" src="/assets/icons/arrow-right-s-line.svg" mode="aspectFit" />
+          </view>
+        </view>
       </view>
     </view>
     <view class="form-item">

@@ -47,4 +47,11 @@ input:focus, textarea:focus { border-color: #43B176; box-shadow: 0 0 0 6rpx rgba
 .rental-card { border: 1rpx solid #eef2f7; border-radius: 24rpx; padding: 20rpx; margin-top: 16rpx; }
 
 
+.rent-menu { margin-top: 16rpx; padding: 24rpx 20rpx; background: #F9FAFB; border-radius: 16rpx; border: 1rpx solid #F3F4F6; }
+.rent-menu-row { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
+.rent-menu-title { font-size: 26rpx; font-weight: 500; color: #374151; }
+.rent-menu-right { display: flex; align-items: center; gap: 4rpx; }
+.rent-menu-tip { font-size: 26rpx; color: #9ca3af; }
+.rent-menu-arrow { width: 32rpx; height: 32rpx; opacity: 0.4; }
+.rent-menu--pressed { background: #F3F4F6; }
 

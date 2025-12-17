@@ -89,8 +89,35 @@ Page({
         loading: false,
         synthetic: true
       });
+      this.updateResolvedDates();
       const syn = String(this.data.item?._synthetic || '');
       const aid = Number(this.data.item?.account_id || 0);
+      if (syn === 'rent') {
+        const rs = String(this.data.item?.recurring_start_date || this.data.display?.recurringStartDate || '').trim();
+        const reRaw = String(this.data.item?.recurring_end_date || this.data.display?.recurringEndDate || '').trim();
+        const re = reRaw ? reRaw : '至今';
+        if (rs || re) {
+          this.setData({ display: { ...this.data.display, tenancyStartDate: rs, tenancyEndDate: re, endDate: re } });
+          this.updateResolvedDates();
+        }
+        try {
+          const m = String(this.data.item?.id || '').match(/^tenancy:(\d+)/);
+          const tid = m ? Number(m[1]) : 0;
+          if (tid) {
+            this.setData({ item: { ...this.data.item, tenancy_id: tid } });
+          }
+          if (aid) {
+            const tenants = await api.listTenants(aid);
+            const t = (tenants || []).find(x => Number(x.id || 0) === tid) || null;
+            if (t) {
+              const s = t.start_date ? this.formatDateStr(t.start_date) : '';
+              const e = t.end_date ? this.formatDateStr(t.end_date) : '至今';
+              this.setData({ display: { ...this.data.display, tenancyStartDate: s, tenancyEndDate: e, endDate: e } });
+              this.updateResolvedDates();
+            }
+          }
+        } catch (eTen) {}
+      }
       if (aid && (syn === 'loan-payment' || syn === 'loan' || syn === 'asset-income')) {
         try {
           const acc = await api.getAccount(aid);
@@ -104,16 +131,49 @@ Page({
               if (sd && term > 0) endStr = this.calcEndDate(sd, term);
             }
           } else if (syn === 'asset-income') {
-            const ed = acc.invest_end_date;
-            if (ed) endStr = this.formatDateStr(ed);
-            else {
-              const sd = acc.invest_start_date;
-              const term = Number(acc.investment_term_months || 0);
-              if (sd && term > 0) endStr = this.calcEndDate(sd, term);
+            try {
+              const tenants = await api.listTenants(aid);
+              const dateStr = this.data.display?.date || '';
+              const d = new Date(String(dateStr).replace(/-/g, '/'));
+              const pickTenant = (arr) => {
+                if (!Array.isArray(arr) || arr.length === 0) return null;
+                const inRange = arr.find(t => {
+                  const s = t.start_date ? new Date(String(t.start_date).replace(/-/g, '/')) : null;
+                  const e = t.end_date ? new Date(String(t.end_date).replace(/-/g, '/')) : null;
+                  if (s && d < s) return false;
+                  if (e && d > e) return false;
+                  return true;
+                });
+                return inRange || arr[0];
+              };
+              const t = pickTenant(tenants);
+              if (t) {
+                const s = t.start_date ? this.formatDateStr(t.start_date) : '';
+                const e = t.end_date ? this.formatDateStr(t.end_date) : '至今';
+                this.setData({ display: { ...this.data.display, tenancyStartDate: s, tenancyEndDate: e, endDate: e } });
+                this.updateResolvedDates();
+              } else {
+                const ed = acc.invest_end_date;
+                if (ed) endStr = this.formatDateStr(ed);
+                else {
+                  const sd = acc.invest_start_date;
+                  const term = Number(acc.investment_term_months || 0);
+                  if (sd && term > 0) endStr = this.calcEndDate(sd, term);
+                }
+              }
+            } catch (eTen) {
+              const ed = acc.invest_end_date;
+              if (ed) endStr = this.formatDateStr(ed);
+              else {
+                const sd = acc.invest_start_date;
+                const term = Number(acc.investment_term_months || 0);
+                if (sd && term > 0) endStr = this.calcEndDate(sd, term);
+              }
             }
           }
           if (endStr) {
             this.setData({ display: { ...this.data.display, endDate: endStr } });
+            this.updateResolvedDates();
           }
         } catch (eAcc) {}
       }
@@ -194,9 +254,47 @@ Page({
         },
         loading: false
       });
+      this.updateResolvedDates();
+      if (String(item.category || '') === '租金收入') {
+        try {
+          const aid = Number(item.account_id || 0);
+          const tid = Number(item.tenancy_id || 0);
+          if (aid) {
+            const tenants = await api.listTenants(aid);
+            let t = null;
+            if (tid) {
+              t = (tenants || []).find(x => Number(x.id || 0) === tid) || null;
+            }
+            if (!t && item.tenant_name) {
+              t = (tenants || []).find(x => String(x.tenant_name || '') === String(item.tenant_name || '')) || null;
+            }
+            if (!t && Array.isArray(tenants) && tenants.length === 1) {
+              t = tenants[0];
+            }
+            if (t) {
+              const s = t.start_date ? this.formatDateStr(t.start_date) : '';
+              const e = t.end_date ? this.formatDateStr(t.end_date) : '至今';
+              this.setData({ display: { ...this.data.display, tenancyStartDate: s, tenancyEndDate: e, endDate: e } });
+              this.updateResolvedDates();
+            }
+          }
+        } catch (eRent) {}
+      }
     } catch (e) {
       this.setData({ loading: false, error: "加载失败" });
     }
+  },
+  updateResolvedDates() {
+    const disp = this.data.display || {};
+    const it = this.data.item || {};
+    let s = '';
+    let e = '';
+    if (disp.tenancyStartDate) s = disp.tenancyStartDate;
+    else if (it.recurring_monthly && disp.recurringStartDate) s = disp.recurringStartDate;
+    if (disp.tenancyEndDate) e = disp.tenancyEndDate;
+    else if (disp.endDate) e = disp.endDate;
+    else if (it.recurring_monthly && disp.recurringEndDate) e = disp.recurringEndDate;
+    this.setData({ display: { ...disp, resolvedStartDate: s, resolvedEndDate: e } });
   },
   formatNumber(value) {
     const num = Number(value);
@@ -207,9 +305,18 @@ Page({
     const t = item.type === "income" ? "arrow-up-s-line.svg" : "arrow-down-s-line-red.svg";
     return `/assets/icons/${t}`;
   },
-  edit() {
+  async edit() {
     const isSynthetic = !!this.data.synthetic;
     const it = this.data.item || {};
+    if (String(it.category || '') === '租金收入') {
+      const aid = Number(it.account_id || 0);
+      const tid = Number(it.tenancy_id || 0);
+      if (aid) {
+        const tidParam = tid ? `&tenancy_id=${tid}` : '';
+        wx.navigateTo({ url: `/pages/rent-detail/index?id=${aid}&edit=1${tidParam}` });
+        return;
+      }
+    }
     if (isSynthetic && (it._synthetic === 'recurring-expense' || it._synthetic === 'recurring-income')) {
       const base = String(it.base_id || '').trim();
       let parsedBase = base;
@@ -251,6 +358,15 @@ Page({
     if (isSynthetic && it._synthetic === 'asset-income') {
       const aid = Number(it.account_id || 0);
       if (aid) {
+        try {
+          const tenants = await api.listTenants(aid);
+          if (Array.isArray(tenants) && tenants.length > 0) {
+            const first = tenants[0] || null;
+            const tidParam = first && first.id ? `&tenancy_id=${first.id}` : '';
+            wx.navigateTo({ url: `/pages/rent-detail/index?id=${aid}&edit=1${tidParam}` });
+            return;
+          }
+        } catch (e) {}
         wx.navigateTo({ url: `/pages/asset-detail/index?id=${aid}` });
         return;
       }
