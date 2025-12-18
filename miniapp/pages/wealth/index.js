@@ -100,6 +100,9 @@ Page({
     listTitle: "预算记录",
     incomeChartData: [],
     expenseChartData: []
+    ,monthIncomeHasData: true
+    ,monthExpenseHasData: true
+    ,showDistributionCard: true
   },
   _parseCycle(note) {
     const s = String(note || '');
@@ -265,9 +268,17 @@ Page({
     let cached = null;
     try { cached = wx.getStorageSync('fw_summary_cache'); } catch (e) {}
     const prefix = (this.data.activeRange === 'year') ? '本年' : (this.data.activeRange === 'all' ? '全部' : '本月');
+    let cfUpdated = null;
+    try { cfUpdated = wx.getStorageSync('fw_cashflow_updated'); } catch (e) { cfUpdated = null; }
+    if (cfUpdated) {
+      try { wx.removeStorageSync('fw_cashflow_updated'); } catch (e) {}
+      this._cashflowUpdated = true;
+    } else {
+      this._cashflowUpdated = false;
+    }
     this.setData({ summaryReady: true, activeType: this.data.activeType || 'all', rangeLabelPrefix: prefix }, () => {
       this.fetchSummary(false);
-      this.fetchList(false);
+      this.fetchList(false, !!this._cashflowUpdated);
     });
   },
   prevMonth() {
@@ -410,6 +421,10 @@ Page({
       const netActual = actInc - actExp;
       const netActualPositive = netActual >= 0;
       const ratioDisplay = expExpNum > 0 ? `${Math.round((expIncNum / expExpNum) * 100)}%` : '—';
+      const incProg = expIncNum > 0 ? (actInc / expIncNum * 100) : 0;
+      const expProg = expExpNum > 0 ? (actExp / expExpNum * 100) : 0;
+      const budgetMarkerPos = (expExpNum > 0 && actExp > 0) ? ((expExpNum / actExp) * 100) : 0;
+      const budgetMarkerPosDisplay = Math.max(0, Math.min(100, Number(budgetMarkerPos.toFixed(1))));
       const quickSummary = {
         expectedExpense: this.formatNumber(expExpNum),
         expectedIncome: this.formatNumber(expIncNum),
@@ -419,9 +434,25 @@ Page({
         netIncomePositive: netPositive,
         netActualIncome: this.formatNumber(netActual),
         netActualPositive: netActualPositive,
-        incomeExpenseRatio: ratioDisplay
+        incomeExpenseRatio: ratioDisplay,
+        incomeProgress: Number(incProg.toFixed(1)),
+        expenseProgress: Number(expProg.toFixed(1)),
+        incomeProgressDisplay: Math.max(0, Math.min(100, Number(incProg.toFixed(1)))) ,
+        expenseProgressDisplay: Math.max(0, Math.min(100, Number(expProg.toFixed(1)))),
+        expenseOverBudget: expProg > 100,
+        expenseBudgetMarkerPosDisplay: budgetMarkerPosDisplay
       };
-      this.setData({ summary: quickSummary, summaryReady: true });
+      const useExpInc = this.data.activePage === 'final' ? actInc : expIncNum;
+      const useExpExp = this.data.activePage === 'final' ? actExp : expExpNum;
+      const monthIncomeHasData = this.data.activeRange === 'month' ? (useExpInc > 0) : true;
+      const monthExpenseHasData = this.data.activeRange === 'month' ? (useExpExp > 0) : true;
+      const showDistributionCard = this.data.activeRange === 'month' ? (monthIncomeHasData || monthExpenseHasData) : true;
+      this.setData({ summary: quickSummary, summaryReady: true, monthIncomeHasData, monthExpenseHasData, showDistributionCard }, () => {
+        if (this.data.showDistributionCard) {
+          try { this.drawIncomePie(); } catch (e) {}
+          try { this.drawExpensePie(); } catch (e) {}
+        }
+      });
       try { wx.setStorageSync('fw_summary_cache', this.data.summary); } catch (e) {}
     } catch (e) {
       // 游客模式下不显示演示数据
@@ -1254,6 +1285,10 @@ Page({
           icon: item.icon || getCategoryIcon(item.category, item.type)
         }));
       this.updateDistributionFromCombined(combinedAll, start, end);
+      if (this._cashflowUpdated && forceAll) {
+        this.updateQuickSummaryFromCombined(combinedAll);
+        this._cashflowUpdated = false;
+      }
       let combined = (forceAll || this.skipFilterOnce) ? combinedAll : combinedAll.filter((x) => activeType === 'all' || x.type === activeType);
       if (activeType !== 'all' && combined.length === 0 && combinedAll.length > 0) {
         combined = combinedAll;
@@ -1282,12 +1317,57 @@ Page({
       const incomeChartData = this.calculateCashflowDistribution(incomeItems, 'income');
       const expenseChartData = this.calculateCashflowDistribution(expenseItems, 'expense');
       this.setData({ incomeChartData, expenseChartData }, () => {
-        this.drawIncomePie();
-        this.drawExpensePie();
+      this.drawIncomePie();
+      this.drawExpensePie();
       });
     } catch (e) {
       this.setData({ incomeChartData: [], expenseChartData: [] });
     }
+  },
+  updateQuickSummaryFromCombined(allItems) {
+    try {
+      const toNum = (s) => { const n = Number(String(s).replace(/,/g, '')); return Number.isNaN(n) ? 0 : n; };
+      const plannedItems = (allItems || []).filter(i => i && i.planned === true);
+      const actualItems = (allItems || []).filter(i => i && i.planned !== true);
+      const expExpNum = plannedItems.filter(i => i.type === 'expense').reduce((sum, i) => sum + toNum(i.amount), 0);
+      const expIncNum = plannedItems.filter(i => i.type === 'income').reduce((sum, i) => sum + toNum(i.amount), 0);
+      const actExp = actualItems.filter(i => i.type === 'expense').reduce((sum, i) => sum + toNum(i.amount), 0);
+      const actInc = actualItems.filter(i => i.type === 'income').reduce((sum, i) => sum + toNum(i.amount), 0);
+      const netExpected = expIncNum - expExpNum;
+      const netActual = actInc - actExp;
+      const ratioDisplay = expExpNum > 0 ? `${Math.round((expIncNum / expExpNum) * 100)}%` : '—';
+      const incProg = expIncNum > 0 ? (actInc / expIncNum * 100) : 0;
+      const expProg = expExpNum > 0 ? (actExp / expExpNum * 100) : 0;
+      const budgetMarkerPos = (expExpNum > 0 && actExp > 0) ? ((expExpNum / actExp) * 100) : 0;
+      const quick = {
+        expectedExpense: this.formatNumber(expExpNum),
+        expectedIncome: this.formatNumber(expIncNum),
+        actualExpense: this.formatNumber(actExp),
+        actualIncome: this.formatNumber(actInc),
+        netIncome: this.formatNumber(netExpected),
+        netIncomePositive: netExpected >= 0,
+        netActualIncome: this.formatNumber(netActual),
+        netActualPositive: netActual >= 0,
+        incomeExpenseRatio: ratioDisplay,
+        incomeProgress: Number(incProg.toFixed(1)),
+        expenseProgress: Number(expProg.toFixed(1)),
+        incomeProgressDisplay: Math.max(0, Math.min(100, Number(incProg.toFixed(1)))),
+        expenseProgressDisplay: Math.max(0, Math.min(100, Number(expProg.toFixed(1)))),
+        expenseOverBudget: expProg > 100,
+        expenseBudgetMarkerPosDisplay: Math.max(0, Math.min(100, Number(budgetMarkerPos.toFixed(1))))
+      };
+      const useExpInc = this.data.activePage === 'final' ? actInc : expIncNum;
+      const useExpExp = this.data.activePage === 'final' ? actExp : expExpNum;
+      const monthIncomeHasData = this.data.activeRange === 'month' ? (useExpInc > 0) : true;
+      const monthExpenseHasData = this.data.activeRange === 'month' ? (useExpExp > 0) : true;
+      const showDistributionCard = this.data.activeRange === 'month' ? (monthIncomeHasData || monthExpenseHasData) : true;
+      this.setData({ summary: quick, monthIncomeHasData, monthExpenseHasData, showDistributionCard }, () => {
+        if (this.data.showDistributionCard) {
+          try { this.drawIncomePie(); } catch (e) {}
+          try { this.drawExpensePie(); } catch (e) {}
+        }
+      });
+    } catch (e) {}
   },
   calculateCashflowDistribution(items = [], kind = 'income') {
     const buckets = {};

@@ -1,0 +1,24 @@
+<view wx:if="{{visible}}" class="option-selector-modal">
+  <view class="mask" bindtap="close"></view>
+  <view class="panel">
+    <view class="drag-handle"></view>
+    <view class="header">
+      <text class="title">{{title || '选择'}}</text>
+      <view class="close-btn" bindtap="close">
+        <image class="close-icon" src="/assets/icons/close-line.svg" mode="aspectFit" />
+      </view>
+    </view>
+    <view class="body">
+      <view class="grid">
+        <block wx:for="{{options}}" wx:key="label">
+          <view class="opt-item {{active === item.label ? 'active' : ''}}" data-index="{{index}}" bindtap="select">
+            <view class="opt-icon">
+              <image class="opt-icon-img" src="{{item.icon}}" mode="aspectFit" />
+            </view>
+            <text class="opt-label">{{item.label}}</text>
+          </view>
+        </block>
+      </view>
+    </view>
+  </view>
+</view>

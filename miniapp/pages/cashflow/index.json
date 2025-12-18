@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "添加收支"
+  "navigationBarTitleText": "添加收支",
+  "usingComponents": {
+    "option-selector": "/components/option-selector/index"
+  }
 }

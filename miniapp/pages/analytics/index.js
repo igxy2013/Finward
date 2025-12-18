@@ -2465,7 +2465,7 @@ Page({
           const maxVal = Math.max(...allVals);
           const minVal = Math.min(...allVals);
           const range = maxVal - minVal || 1;
-          ctx1.font = '12px sans-serif';
+          ctx1.font = '10px sans-serif';
           const labelW1 = (ctx1.measureText(this.formatAxisValue(maxVal)).width || 0);
           padL = Math.max(48, Math.ceil(labelW1) + 14);
           iw1 = w1 - padL - padR; ih1 = h1 - padT - padB;
@@ -2475,23 +2475,13 @@ Page({
             const y = padT + (1 - ((arr[idx] - minVal) / range)) * ih1;
             return { x, y };
           };
-          const series = [
-            { data: assets, color: '#10b981' },
-            { data: liabilities, color: '#ef4444' },
-            { data: net, color: '#6366f1' }
-          ];
-          ctx1.strokeStyle = 'rgba(17,24,39,0.15)';
+          ctx1.strokeStyle = '#E5E7EB';
           ctx1.lineWidth = 1;
           ctx1.beginPath();
           ctx1.moveTo(padL, h1 - padB);
           ctx1.lineTo(w1 - padR, h1 - padB);
           ctx1.stroke();
-          ctx1.beginPath();
-          ctx1.moveTo(padL, padT);
-          ctx1.lineTo(padL, h1 - padB);
-          ctx1.stroke();
           const tickCount1 = 4;
-          ctx1.strokeStyle = 'rgba(17,24,39,0.08)';
           for (let i = 0; i <= tickCount1; i++) {
             const y = padT + (i / tickCount1) * ih1;
             ctx1.beginPath();
@@ -2499,50 +2489,68 @@ Page({
             ctx1.lineTo(w1 - padR, y);
             ctx1.stroke();
             const val = maxVal - (i / tickCount1) * range;
-            ctx1.fillStyle = 'rgba(17,24,39,0.6)';
-            ctx1.font = '12px sans-serif';
+            ctx1.fillStyle = '#9CA3AF';
             ctx1.textAlign = 'right';
             ctx1.textBaseline = 'middle';
-            ctx1.fillText(this.formatAxisValue(val), padL - 6, y);
+            ctx1.fillText(this.formatAxisValue(val), padL - 8, y);
           }
-          series.forEach(s => {
-            ctx1.strokeStyle = s.color;
+          const drawArea = (dataSeries, colorStart, colorEnd, strokeColor) => {
+            const pts = new Array(dataSeries.length).fill(0).map((_, i) => toXY(dataSeries, i));
+            if (pts.length === 0) return;
+            const gradient = ctx1.createLinearGradient(0, padT, 0, h1 - padB);
+            gradient.addColorStop(0, colorStart);
+            gradient.addColorStop(1, colorEnd);
+            ctx1.fillStyle = gradient;
+            ctx1.beginPath();
+            ctx1.moveTo(pts[0].x, h1 - padB);
+            ctx1.lineTo(pts[0].x, pts[0].y);
+            if (pts.length > 1) {
+              for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = i > 0 ? pts[i - 1] : pts[i];
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+                const cp1x = p1.x + (p2.x - p0.x) / 6;
+                const cp1y = p1.y + (p2.y - p0.y) / 6;
+                const cp2x = p2.x - (p3.x - p1.x) / 6;
+                const cp2y = p2.y - (p3.y - p1.y) / 6;
+                ctx1.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
+            }
+            ctx1.lineTo(pts[pts.length - 1].x, h1 - padB);
+            ctx1.closePath();
+            ctx1.fill();
+            ctx1.strokeStyle = strokeColor;
             ctx1.lineWidth = 2;
             ctx1.beginPath();
-            for (let i = 0; i < filteredPoints.length; i++) {
-              const pt = toXY(s.data, i);
-              if (i === 0) ctx1.moveTo(pt.x, pt.y); else ctx1.lineTo(pt.x, pt.y);
+            ctx1.moveTo(pts[0].x, pts[0].y);
+            if (pts.length > 1) {
+              for (let i = 0; i < pts.length - 1; i++) {
+                const p0 = i > 0 ? pts[i - 1] : pts[i];
+                const p1 = pts[i];
+                const p2 = pts[i + 1];
+                const p3 = i + 2 < pts.length ? pts[i + 2] : p2;
+                const cp1x = p1.x + (p2.x - p0.x) / 6;
+                const cp1y = p1.y + (p2.y - p0.y) / 6;
+                const cp2x = p2.x - (p3.x - p1.x) / 6;
+                const cp2y = p2.y - (p3.y - p1.y) / 6;
+                ctx1.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
             }
             ctx1.stroke();
-          });
-          // 点标记（净资产）
-          ctx1.fillStyle = '#10b981';
-          for (let i = 0; i < filteredPoints.length; i++) {
-            const pt = toXY(assets, i);
-            ctx1.beginPath();
-            ctx1.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-            ctx1.fill();
-          }
-          ctx1.fillStyle = '#ef4444';
-          for (let i = 0; i < filteredPoints.length; i++) {
-            const pt = toXY(liabilities, i);
-            ctx1.beginPath();
-            ctx1.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-            ctx1.fill();
-          }
-          ctx1.fillStyle = '#6366f1';
-          for (let i = 0; i < filteredPoints.length; i++) {
-            const pt = toXY(net, i);
-            ctx1.beginPath();
-            ctx1.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-            ctx1.fill();
-          }
-          ctx1.fillStyle = 'rgba(17,24,39,0.5)';
-          ctx1.font = '12px sans-serif';
+          };
+          const hasAssets = assets.some(v => Number(v) > 0);
+          const hasLiabilities = liabilities.some(v => Number(v) > 0);
+          const hasNet = net.some(v => Number(v) !== 0);
+          if (hasAssets) drawArea(assets, 'rgba(16,185,129,0.3)', 'rgba(16,185,129,0.0)', '#10b981');
+          if (hasLiabilities) drawArea(liabilities, 'rgba(239,68,68,0.3)', 'rgba(239,68,68,0.0)', '#ef4444');
+          if (hasNet) drawArea(net, 'rgba(99,102,241,0.3)', 'rgba(99,102,241,0.0)', '#6366f1');
+          ctx1.fillStyle = '#6B7280';
+          ctx1.font = '10px sans-serif';
           ctx1.textAlign = 'center';
           for (let i = 0; i < filteredPoints.length; i++) {
             const x = padL + (i / Math.max(filteredPoints.length - 1, 1)) * iw1;
-            ctx1.fillText(this.getMonthLabel(filteredPoints[i].month), x, h1 - 6);
+            ctx1.fillText(this.getMonthLabel(filteredPoints[i].month), x, h1 - 10);
           }
           // 选中高亮（资产图）
           const selV = typeof this._monthlyValueSelectedIdx === 'number' ? this._monthlyValueSelectedIdx : -1;
@@ -2552,126 +2560,219 @@ Page({
             const ya = toY1(assets[selV]);
             const yl = toY1(liabilities[selV]);
             const yn = toY1(net[selV]);
-            ctx1.strokeStyle = 'rgba(17,24,39,0.25)';
-            ctx1.lineWidth = 1;
             ctx1.beginPath();
             ctx1.moveTo(x, padT);
             ctx1.lineTo(x, h1 - padB);
-            ctx1.stroke();
-            const drawDot1 = (y, color) => { ctx1.fillStyle = color; ctx1.beginPath(); ctx1.arc(x, y, 4, 0, Math.PI * 2); ctx1.fill(); };
-            drawDot1(ya, '#10b981');
-            drawDot1(yl, '#ef4444');
-            drawDot1(yn, '#6366f1');
-            const boxW = 140, boxH = 78;
-            const bx = Math.min(x + 8, w1 - padR - boxW);
-            const by = padT + 8;
-            ctx1.fillStyle = 'rgba(255,255,255,0.9)';
-            ctx1.strokeStyle = 'rgba(17,24,39,0.15)';
+            ctx1.strokeStyle = '#9CA3AF';
             ctx1.lineWidth = 1;
-            ctx1.beginPath();
-            ctx1.rect(bx, by, boxW, boxH);
-            ctx1.fill();
+            ctx1.setLineDash([4, 4]);
             ctx1.stroke();
+            ctx1.setLineDash([]);
+            const drawPoint = (y, color) => {
+              ctx1.beginPath();
+              ctx1.arc(x, y, 4, 0, Math.PI * 2);
+              ctx1.fillStyle = '#FFFFFF';
+              ctx1.fill();
+              ctx1.strokeStyle = color;
+              ctx1.lineWidth = 2;
+              ctx1.stroke();
+            };
+            drawPoint(ya, '#10b981');
+            drawPoint(yl, '#ef4444');
+            drawPoint(yn, '#6366f1');
+            const boxW = 160;
+            const boxH = 78;
+            let bx = x + 10;
+            if (bx + boxW > w1 - padR) bx = x - 10 - boxW;
+            const by = padT + 10;
+            ctx1.save();
+            ctx1.shadowBlur = 8;
+            ctx1.shadowColor = 'rgba(0,0,0,0.15)';
+            ctx1.fillStyle = 'rgba(255,255,255,0.95)';
+            const r = 6;
+            ctx1.beginPath();
+            ctx1.moveTo(bx + r, by);
+            ctx1.lineTo(bx + boxW - r, by);
+            ctx1.arc(bx + boxW - r, by + r, r, -Math.PI / 2, 0);
+            ctx1.lineTo(bx + boxW, by + boxH - r);
+            ctx1.arc(bx + boxW - r, by + boxH - r, r, 0, Math.PI / 2);
+            ctx1.lineTo(bx + r, by + boxH);
+            ctx1.arc(bx + r, by + boxH - r, r, Math.PI / 2, Math.PI);
+            ctx1.lineTo(bx, by + r);
+            ctx1.arc(bx, by + r, r, Math.PI, Math.PI * 3 / 2);
+            ctx1.closePath();
+            ctx1.fill();
+            ctx1.restore();
             ctx1.fillStyle = '#374151';
             ctx1.textAlign = 'left';
             ctx1.textBaseline = 'top';
-            ctx1.fillText(this.getMonthLabel(filteredPoints[selV].month), bx + 8, by + 6);
-            ctx1.fillStyle = '#10b981';
-            ctx1.fillText(`资产 ${this.formatAxisValue(assets[selV])}`, bx + 8, by + 24);
-            ctx1.fillStyle = '#ef4444';
-            ctx1.fillText(`负债 ${this.formatAxisValue(liabilities[selV])}`, bx + 8, by + 40);
-            ctx1.fillStyle = '#6366f1';
-            ctx1.fillText(`净值 ${this.formatAxisValue(net[selV])}`, bx + 8, by + 56);
+            ctx1.font = 'bold 12px sans-serif';
+            ctx1.fillText(this.getMonthLabel(filteredPoints[selV].month), bx + 10, by + 10);
+            let currentY = by + 30;
+            const drawItem = (label, val, color) => {
+              ctx1.fillStyle = color;
+              ctx1.beginPath();
+              ctx1.arc(bx + 14, currentY + 6, 3, 0, Math.PI * 2);
+              ctx1.fill();
+              ctx1.fillStyle = '#4B5563';
+              ctx1.font = '11px sans-serif';
+              ctx1.fillText(label, bx + 24, currentY);
+              ctx1.textAlign = 'right';
+              ctx1.fillStyle = '#111827';
+              ctx1.font = 'bold 11px sans-serif';
+              ctx1.fillText(this.formatAxisValue(val), bx + boxW - 10, currentY);
+              ctx1.textAlign = 'left';
+              currentY += 20;
+            };
+            drawItem('资产', assets[selV], '#10b981');
+            drawItem('负债', liabilities[selV], '#ef4444');
+            drawItem('净值', net[selV], '#6366f1');
           }
 
           const ratios = filteredPoints.map(p => Number(p.debt_ratio || 0));
-          const maxR = Math.max(100, Math.max(...ratios));
-          const minR = Math.min(0, Math.min(...ratios));
-          const rangeR = maxR - minR || 1;
+          const baseMaxR = Math.max(...ratios);
+          const maxR = Math.max(baseMaxR, 100);
+          const minR = 0;
+          const rangeR = (maxR - minR) || 1;
           const toXY2 = (idx) => {
             const x = padL + (idx / Math.max(filteredPoints.length - 1, 1)) * iw2;
             const y = padT + (1 - ((ratios[idx] - minR) / rangeR)) * ih2;
             return { x, y };
           };
-          ctx2.strokeStyle = 'rgba(17,24,39,0.15)';
+          ctx2.strokeStyle = '#E5E7EB';
           ctx2.lineWidth = 1;
           ctx2.beginPath();
           ctx2.moveTo(padL, h2 - padB);
           ctx2.lineTo(w2 - padR, h2 - padB);
           ctx2.stroke();
-          ctx2.beginPath();
-          ctx2.moveTo(padL, padT);
-          ctx2.lineTo(padL, h2 - padB);
-          ctx2.stroke();
           const tickCount2 = 4;
-          ctx2.strokeStyle = 'rgba(17,24,39,0.08)';
           for (let i = 0; i <= tickCount2; i++) {
             const y = padT + (i / tickCount2) * ih2;
             ctx2.beginPath();
             ctx2.moveTo(padL, y);
             ctx2.lineTo(w2 - padR, y);
+            ctx2.strokeStyle = '#F3F4F6';
             ctx2.stroke();
             const val = maxR - (i / tickCount2) * rangeR;
-            ctx2.fillStyle = 'rgba(17,24,39,0.6)';
-            ctx2.font = '12px sans-serif';
+            ctx2.fillStyle = '#9CA3AF';
             ctx2.textAlign = 'right';
             ctx2.textBaseline = 'middle';
-            ctx2.fillText(`${Math.round(val)}%`, padL - 6, y);
+            ctx2.font = '10px sans-serif';
+            ctx2.fillText(`${Math.round(val)}%`, padL - 8, y);
           }
-          ctx2.strokeStyle = '#8b5cf6';
-          ctx2.lineWidth = 2;
-          ctx2.beginPath();
-          for (let i = 0; i < filteredPoints.length; i++) {
-            const pt = toXY2(i);
-            if (i === 0) ctx2.moveTo(pt.x, pt.y); else ctx2.lineTo(pt.x, pt.y);
-          }
-          ctx2.stroke();
-          // 点标记（负债率）
-          ctx2.fillStyle = '#8b5cf6';
-          for (let i = 0; i < filteredPoints.length; i++) {
-            const pt = toXY2(i);
+          const yRef = padT + (1 - ((100 - minR) / rangeR)) * ih2;
+          if (yRef >= padT && yRef <= padT + ih2) {
             ctx2.beginPath();
-            ctx2.arc(pt.x, pt.y, 3, 0, Math.PI * 2);
-            ctx2.fill();
+            ctx2.moveTo(padL, yRef);
+            ctx2.lineTo(w2 - padR, yRef);
+            ctx2.strokeStyle = 'rgba(99,102,241,0.6)';
+            ctx2.lineWidth = 1;
+            ctx2.setLineDash([6, 4]);
+            ctx2.stroke();
+            ctx2.setLineDash([]);
           }
-          ctx2.fillStyle = 'rgba(17,24,39,0.5)';
-          ctx2.font = '12px sans-serif';
+          const pts2 = new Array(filteredPoints.length).fill(0).map((_, i) => toXY2(i));
+          if (pts2.length > 0) {
+            const gradient2 = ctx2.createLinearGradient(0, padT, 0, h2 - padB);
+            gradient2.addColorStop(0, 'rgba(139, 92, 246, 0.3)');
+            gradient2.addColorStop(1, 'rgba(139, 92, 246, 0.0)');
+            ctx2.fillStyle = gradient2;
+            ctx2.beginPath();
+            ctx2.moveTo(pts2[0].x, h2 - padB);
+            ctx2.lineTo(pts2[0].x, pts2[0].y);
+            if (pts2.length > 1) {
+              for (let i = 0; i < pts2.length - 1; i++) {
+                const p0 = i > 0 ? pts2[i - 1] : pts2[i];
+                const p1 = pts2[i];
+                const p2 = pts2[i + 1];
+                const p3 = i + 2 < pts2.length ? pts2[i + 2] : p2;
+                const cp1x = p1.x + (p2.x - p0.x) / 6;
+                const cp1y = p1.y + (p2.y - p0.y) / 6;
+                const cp2x = p2.x - (p3.x - p1.x) / 6;
+                const cp2y = p2.y - (p3.y - p1.y) / 6;
+                ctx2.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
+            }
+            ctx2.lineTo(pts2[pts2.length - 1].x, h2 - padB);
+            ctx2.closePath();
+            ctx2.fill();
+            ctx2.strokeStyle = '#8B5CF6';
+            ctx2.lineWidth = 2;
+            ctx2.beginPath();
+            ctx2.moveTo(pts2[0].x, pts2[0].y);
+            if (pts2.length > 1) {
+              for (let i = 0; i < pts2.length - 1; i++) {
+                const p0 = i > 0 ? pts2[i - 1] : pts2[i];
+                const p1 = pts2[i];
+                const p2 = pts2[i + 1];
+                const p3 = i + 2 < pts2.length ? pts2[i + 2] : p2;
+                const cp1x = p1.x + (p2.x - p0.x) / 6;
+                const cp1y = p1.y + (p2.y - p0.y) / 6;
+                const cp2x = p2.x - (p3.x - p1.x) / 6;
+                const cp2y = p2.y - (p3.y - p1.y) / 6;
+                ctx2.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, p2.x, p2.y);
+              }
+            }
+            ctx2.stroke();
+          }
+          ctx2.fillStyle = '#6B7280';
+          ctx2.font = '10px sans-serif';
           ctx2.textAlign = 'center';
           for (let i = 0; i < filteredPoints.length; i++) {
             const x = padL + (i / Math.max(filteredPoints.length - 1, 1)) * iw2;
-            ctx2.fillText(this.getMonthLabel(filteredPoints[i].month), x, h2 - 6);
+            ctx2.fillText(this.getMonthLabel(filteredPoints[i].month), x, h2 - 10);
           }
           // 选中高亮（负债率图）
           const selR = typeof this._monthlyRatioSelectedIdx === 'number' ? this._monthlyRatioSelectedIdx : -1;
           if (selR >= 0 && selR < filteredPoints.length) {
             const x = padL + (selR / Math.max(filteredPoints.length - 1, 1)) * iw2;
             const y = padT + (1 - ((ratios[selR] - minR) / (rangeR || 1))) * ih2;
-            ctx2.strokeStyle = 'rgba(17,24,39,0.25)';
-            ctx2.lineWidth = 1;
             ctx2.beginPath();
             ctx2.moveTo(x, padT);
             ctx2.lineTo(x, h2 - padB);
+            ctx2.strokeStyle = '#9CA3AF';
+            ctx2.lineWidth = 1;
+            ctx2.setLineDash([4, 4]);
             ctx2.stroke();
-            ctx2.fillStyle = '#8b5cf6';
+            ctx2.setLineDash([]);
             ctx2.beginPath();
             ctx2.arc(x, y, 4, 0, Math.PI * 2);
+            ctx2.fillStyle = '#FFFFFF';
             ctx2.fill();
-            const boxW = 120, boxH = 54;
-            const bx = Math.min(x + 8, w2 - padR - boxW);
-            const by = padT + 8;
-            ctx2.fillStyle = 'rgba(255,255,255,0.9)';
-            ctx2.strokeStyle = 'rgba(17,24,39,0.15)';
-            ctx2.lineWidth = 1;
-            ctx2.beginPath();
-            ctx2.rect(bx, by, boxW, boxH);
-            ctx2.fill();
+            ctx2.strokeStyle = '#8B5CF6';
+            ctx2.lineWidth = 2;
             ctx2.stroke();
+            const boxW = 120;
+            const boxH = 54;
+            let bx = x + 10;
+            if (bx + boxW > w2 - padR) bx = x - 10 - boxW;
+            const by = padT + 10;
+            ctx2.save();
+            ctx2.shadowBlur = 8;
+            ctx2.shadowColor = 'rgba(0,0,0,0.15)';
+            ctx2.fillStyle = 'rgba(255,255,255,0.95)';
+            const r2 = 6;
+            ctx2.beginPath();
+            ctx2.moveTo(bx + r2, by);
+            ctx2.lineTo(bx + boxW - r2, by);
+            ctx2.arc(bx + boxW - r2, by + r2, r2, -Math.PI / 2, 0);
+            ctx2.lineTo(bx + boxW, by + boxH - r2);
+            ctx2.arc(bx + boxW - r2, by + boxH - r2, r2, 0, Math.PI / 2);
+            ctx2.lineTo(bx + r2, by + boxH);
+            ctx2.arc(bx + r2, by + boxH - r2, r2, Math.PI / 2, Math.PI);
+            ctx2.lineTo(bx, by + r2);
+            ctx2.arc(bx, by + r2, r2, Math.PI, Math.PI * 3 / 2);
+            ctx2.closePath();
+            ctx2.fill();
+            ctx2.restore();
             ctx2.fillStyle = '#374151';
             ctx2.textAlign = 'left';
             ctx2.textBaseline = 'top';
-            ctx2.fillText(this.getMonthLabel(filteredPoints[selR].month), bx + 8, by + 6);
-            ctx2.fillStyle = '#8b5cf6';
-            ctx2.fillText(`负债率 ${Number(ratios[selR]).toFixed(1)}%`, bx + 8, by + 24);
+            ctx2.font = 'bold 12px sans-serif';
+            ctx2.fillText(this.getMonthLabel(filteredPoints[selR].month), bx + 10, by + 8);
+            ctx2.fillStyle = '#8B5CF6';
+            ctx2.font = 'bold 14px sans-serif';
+            ctx2.fillText(`${Number(ratios[selR]).toFixed(1)}%`, bx + 10, by + 28);
           }
 
           // 交互元数据保存

@@ -15,9 +15,7 @@
     </view>
     <view class="form-item">
       <text class="label">类别*</text>
-      <picker mode="selector" range="{{categoryOptions}}" range-key="label" value="{{categoryIndex}}" bindchange="handleCategoryChange">
-        <view class="picker-value">{{categoryDisplay}}</view>
-      </picker>
+      <view class="picker-value" bindtap="openCategorySelector">{{categoryDisplay}}</view>
     </view>
     <view class="form-item">
       <text class="label">金额*</text>
@@ -62,3 +60,4 @@
     <button class="submit-btn" bindtap="submit" loading="{{submitting}}">保存</button>
   </view>
 </view>
+<option-selector visible="{{showCategorySelector}}" title="选择类别" options="{{categoryOptionsWithIcon}}" active="{{form.category}}" bind:close="closeCategorySelector" bind:select="onCategorySelected"></option-selector>

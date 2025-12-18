@@ -85,6 +85,9 @@
         <view class="stat-text">
           <text class="stat-label">收入</text>
           <text class="stat-amount income-color">{{activePage === 'final' ? summary.actualIncome : summary.expectedIncome}}</text>
+          <view class="stat-progress" wx:if="{{activePage === 'final'}}">
+            <view class="stat-progress-fill income" style="width: {{summary.incomeProgressDisplay}}%;"></view>
+          </view>
         </view>
       </view>
       <view class="stat-item expense-item {{activeType === 'expense' ? 'active' : ''}}" bindtap="applyExpenseFilter">
@@ -94,6 +97,10 @@
           <view class="stat-text">
             <text class="stat-label">支出</text>
             <text class="stat-amount expense-color">{{activePage === 'final' ? summary.actualExpense : summary.expectedExpense}}</text>
+            <view class="stat-progress" wx:if="{{activePage === 'final'}}">
+              <view class="stat-progress-fill expense" style="width: {{summary.expenseProgressDisplay}}%;"></view>
+              <view class="stat-progress-marker" wx:if="{{summary.expenseOverBudget && summary.expenseBudgetMarkerPosDisplay > 0}}" style="left: {{summary.expenseBudgetMarkerPosDisplay}}%;"></view>
+            </view>
           </view>
         </view>
       </view>
@@ -101,9 +108,9 @@
   </view>
 
   <!-- 收入/支出分布图，随上方 月/年/全 范围联动 -->
-  <view class="card distribution-card">
+  <view class="card distribution-card" wx:if="{{showDistributionCard}}">
     <!-- 收入分布：当未选择“支出”时显示（全部或收入） -->
-    <view wx:if="{{activeType !== 'expense'}}">
+    <view wx:if="{{activeType !== 'expense' && monthIncomeHasData}}">
       <view class="card-header">
         <text class="card-title">{{rangeLabelPrefix}}收入分布</text>
         <text class="card-subtitle">Income Distribution</text>
@@ -123,7 +130,7 @@
     </view>
 
     <!-- 支出分布：当未选择“收入”时显示（全部或支出） -->
-    <view wx:if="{{activeType !== 'income'}}">
+    <view wx:if="{{activeType !== 'income' && monthExpenseHasData}}">
       <view class="card-header card-header--spaced">
         <text class="card-title">{{rangeLabelPrefix}}支出分布</text>
         <text class="card-subtitle">Expense Distribution</text>
