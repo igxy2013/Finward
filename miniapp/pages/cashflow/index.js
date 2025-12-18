@@ -178,6 +178,18 @@ Page({
       }
     }
   },
+  onShow() {
+    try {
+      const ic = wx.getStorageSync('fw_income_categories');
+      const ec = wx.getStorageSync('fw_expense_categories');
+      const incomeCats = Array.isArray(ic) && ic.length ? ic.map(label => ({ label })) : this.data.incomeCategoryOptions.map(o => ({ label: o.label }));
+      const expenseCats = Array.isArray(ec) && ec.length ? ec.map(label => ({ label })) : this.data.expenseCategoryOptions.map(o => ({ label: o.label }));
+      const typeNow = this.data.form?.type || 'expense';
+      const opts = typeNow === 'income' ? incomeCats : expenseCats;
+      const withIcon = (opts || []).map(o => ({ label: o.label, icon: `/assets/icons/${getCategoryIcon(o.label, typeNow)}` }));
+      this.setData({ incomeCategoryOptions: incomeCats, expenseCategoryOptions: expenseCats, categoryOptionsWithIcon: withIcon });
+    } catch (e) {}
+  },
   async prefill(id) {
     try {
       const item = await api.getCashflow(id);

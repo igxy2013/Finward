@@ -74,7 +74,9 @@ Page({
       { label: "应付款" },
       { label: "其他" }
     ],
-    editId: null
+    editId: null,
+    showCategorySelector: false,
+    categoryOptionsWithIcon: []
     ,current_value_display: ""
     ,tenantDueDays: Array.from({ length: 31 }, (_, i) => i + 1)
     ,tenantDueDayIndex: 0
@@ -111,6 +113,18 @@ Page({
       this.setData({ editId: id, incomingTenancyId: tenancyId || null, pageTitle: "编辑账户" });
       this.prefillFromServer(id);
     }
+  },
+  onShow() {
+    try {
+      const ac = wx.getStorageSync('fw_asset_categories');
+      const lc = wx.getStorageSync('fw_liability_categories');
+      const assetCats = Array.isArray(ac) && ac.length ? ac.map(label => ({ label })) : this.data.assetCategoryOptions.map(o => ({ label: o.label }));
+      const liabCats = Array.isArray(lc) && lc.length ? lc.map(label => ({ label })) : this.data.liabilityCategoryOptions.map(o => ({ label: o.label }));
+      const isAsset = (this.data.form?.type || 'asset') === 'asset';
+      const categoryOptions = isAsset ? assetCats : liabCats;
+      this.setData({ assetCategoryOptions: assetCats, liabilityCategoryOptions: liabCats, categoryOptions });
+      this.updateCategoryOptionsWithIcon();
+    } catch (e) {}
   },
   async prefillFromServer(id) {
     try {
@@ -160,6 +174,7 @@ Page({
         categoryDisplay: categoryOptions[categoryIndex]?.label || "请选择分类",
         current_value_display: this.clipTwoDecimals(String(item.current_value != null ? item.current_value : item.amount))
       });
+      this.updateCategoryOptionsWithIcon();
       this.recomputeEndDates();
       if ((item.type || "asset") === "asset" && (item.category || "") === "房产") {
         try {
@@ -228,6 +243,7 @@ Page({
         categoryDisplay: categoryOptions[categoryIndex]?.label || "请选择分类",
         current_value_display: this.clipTwoDecimals(String(item.current_value != null ? item.current_value : item.amount))
       });
+      this.updateCategoryOptionsWithIcon();
       this.recomputeEndDates();
     }
   },
@@ -367,6 +383,22 @@ Page({
       typeLabel: value === "asset" ? "资产" : "负债",
       categoryDisplay: "请选择分类"
     });
+    this.updateCategoryOptionsWithIcon();
+  },
+  handleTypeToggle(e) {
+    const value = String(e?.currentTarget?.dataset?.value || 'asset');
+    const typeIndex = value === 'asset' ? 0 : 1;
+    const categoryOptions = value === "asset" ? this.data.assetCategoryOptions : this.data.liabilityCategoryOptions;
+    this.setData({
+      "form.type": value,
+      categoryOptions,
+      "form.category": "",
+      categoryIndex: -1,
+      typeIndex,
+      typeLabel: value === "asset" ? "资产" : "负债",
+      categoryDisplay: "请选择分类"
+    });
+    this.updateCategoryOptionsWithIcon();
   },
   handleCategoryChange(e) {
     const categoryIndex = Number(e.detail.value);
@@ -377,6 +409,57 @@ Page({
       categoryIndex,
       categoryDisplay: label || "请选择分类"
     });
+  },
+  openCategorySelector() {
+    this.setData({ showCategorySelector: true });
+  },
+  closeCategorySelector() {
+    this.setData({ showCategorySelector: false });
+  },
+  onCategorySelected(e) {
+    const idx = Number(e?.detail?.index || 0);
+    const opt = (this.data.categoryOptions || [])[idx];
+    const label = opt?.label || "";
+    this.setData({
+      "form.category": label,
+      categoryIndex: idx,
+      categoryDisplay: label || "请选择分类",
+      showCategorySelector: false
+    });
+  },
+  updateCategoryOptionsWithIcon() {
+    const opts = (this.data.categoryOptions || []).map((o) => ({ label: o.label, icon: this.getIconForLabel(String(o.label || '')) }));
+    this.setData({ categoryOptionsWithIcon: opts });
+  },
+  getIconForLabel(label) {
+    const t = (this.data.form?.type || 'asset');
+    const m = {
+      asset: {
+        "现金": "/assets/icons/wallet-3-line.svg",
+        "储蓄卡": "/assets/icons/wallet-2-line.svg",
+        "活期": "/assets/icons/time-line.svg",
+        "定期": "/assets/icons/calendar-line.svg",
+        "基金": "/assets/icons/bar-chart-2-line.svg",
+        "股票": "/assets/icons/line-chart-line.svg",
+        "理财": "/assets/icons/percent-line.svg",
+        "房产": "/assets/icons/home-4-line.svg",
+        "车辆": "/assets/icons/car-line.svg",
+        "应收款": "/assets/icons/coin-line.svg",
+        "对外投资": "/assets/icons/building-line.svg",
+        "其他": "/assets/icons/more-line.svg"
+      },
+      liability: {
+        "信用卡": "/assets/icons/wallet-2-line.svg",
+        "消费贷": "/assets/icons/shopping-bag-line.svg",
+        "房贷": "/assets/icons/home-4-line.svg",
+        "车贷": "/assets/icons/car-line.svg",
+        "借款": "/assets/icons/hand-coin-line.svg",
+        "应付款": "/assets/icons/bill-line.svg",
+        "其他": "/assets/icons/more-line.svg"
+      }
+    };
+    const dict = m[t] || m.asset;
+    return dict[label] || "/assets/icons/question-line.svg";
   },
   async submit() {
     const { name, category, amount } = this.data.form;

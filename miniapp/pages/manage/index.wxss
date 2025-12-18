@@ -55,3 +55,9 @@ input:focus, textarea:focus { border-color: #43B176; box-shadow: 0 0 0 6rpx rgba
 .rent-menu-arrow { width: 32rpx; height: 32rpx; opacity: 0.4; }
 .rent-menu--pressed { background: #F3F4F6; }
 
+/* 类型切换 Tabs 与添加收支页面对齐 */
+.toggle-tabs { display: flex; gap: 24rpx; margin-top: 8rpx; }
+.pill { flex: 1; text-align: center; padding: 24rpx 0; font-size: 30rpx; border-radius: 20rpx; background: #f1f5f9; color: #64748b; border: 2rpx solid transparent; transition: all 0.2s; font-weight: 500; }
+.pill.asset.active { background: #ecfdf5; color: #10B981; border-color: #A7F3D0; font-weight: 600; }
+.pill.liability.active { background: #fef2f2; color: #ef4444; border-color: #fca5a5; font-weight: 600; }
+

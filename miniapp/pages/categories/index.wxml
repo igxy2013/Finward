@@ -1,0 +1,42 @@
+<navbar title="分类管理"></navbar>
+<view class="page">
+  <view class="card">
+    <view class="section-header">
+      <text class="section-title">账户分类</text>
+      <view class="toggle-tabs">
+        <view class="pill {{activeAccountType === 'asset' ? 'active' : ''}}" data-value="asset" bindtap="switchAccountType">资产</view>
+        <view class="pill {{activeAccountType === 'liability' ? 'active' : ''}}" data-value="liability" bindtap="switchAccountType">负债</view>
+      </view>
+    </view>
+    <view class="list">
+      <view class="chip" wx:for="{{accountCategories}}" wx:key="label">
+        <text class="chip-text">{{item}}</text>
+        <image class="chip-delete" src="/assets/icons/delete-bin-line.svg" mode="aspectFit" data-name="{{item}}" bindtap="removeAccountCategory" />
+      </view>
+      <view class="input-row">
+        <input class="text-input" placeholder="输入新分类" value="{{newAccountCategory}}" bindinput="onNewAccountCategory" />
+        <button class="small-btn primary" bindtap="addAccountCategory">添加</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="card">
+    <view class="section-header">
+      <text class="section-title">收支分类</text>
+      <view class="toggle-tabs">
+        <view class="pill {{activeFlowType === 'income' ? 'active' : ''}}" data-value="income" bindtap="switchFlowType">收入</view>
+        <view class="pill {{activeFlowType === 'expense' ? 'active' : ''}}" data-value="expense" bindtap="switchFlowType">支出</view>
+      </view>
+    </view>
+    <view class="list">
+      <view class="chip" wx:for="{{flowCategories}}" wx:key="label">
+        <text class="chip-text">{{item}}</text>
+        <image class="chip-delete" src="/assets/icons/delete-bin-line.svg" mode="aspectFit" data-name="{{item}}" bindtap="removeFlowCategory" />
+      </view>
+      <view class="input-row">
+        <input class="text-input" placeholder="输入新分类" value="{{newFlowCategory}}" bindinput="onNewFlowCategory" />
+        <button class="small-btn primary" bindtap="addFlowCategory">添加</button>
+      </view>
+    </view>
+  </view>
+</view>

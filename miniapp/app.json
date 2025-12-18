@@ -7,6 +7,7 @@
     "pages/liability-detail/index",
     "pages/liabilities/index",
     "pages/wealth/index",
+    "pages/categories/index",
     "pages/analytics/index",
     "pages/profile/index",
     "pages/manage/index",

@@ -55,6 +55,9 @@ Page({
     } catch (e) {}
     this.setData({ financeUserId: uid, financeEmail: email, financeBaseUrl: base, showFinanceModal: true });
   },
+  openCategoryManage() {
+    wx.navigateTo({ url: '/pages/categories/index' });
+  },
   closeFinanceConfig() {
     this.setData({ showFinanceModal: false });
   },

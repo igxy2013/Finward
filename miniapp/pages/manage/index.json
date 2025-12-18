@@ -1,5 +1,8 @@
 {
-  "navigationBarTitleText": "添加账户"
+  "navigationBarTitleText": "添加账户",
+  "usingComponents": {
+    "option-selector": "/components/option-selector/index"
+  }
 }
 
 

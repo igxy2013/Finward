@@ -1,109 +1,164 @@
 <navbar title="个人中心" showBack="{{false}}"></navbar>
 <view class="page">
-  <view class="card">
-    <view class="icon-btn edit-btn" wx:if="{{isLoggedIn && !editing}}" bindtap="toggleEdit">
-      <image class="icon-btn-img" src="/assets/icons/edit-line.svg" mode="aspectFit"></image>
-    </view>
-    <view class="profile-header">
-      <view class="avatar-col">
-        <block wx:if="{{displayAvatar}}">
-          <image class="avatar" src="{{displayAvatar}}" mode="aspectFill" />
-        </block>
-        <block wx:else>
-          <view class="avatar placeholder-avatar">
-            <image class="avatar-icon" src="/assets/icons/user-3-line.svg" mode="aspectFit"></image>
-          </view>
-        </block>
-        <button class="small-btn change-avatar-btn" wx:if="{{editing}}" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">更换头像</button>
-      </view>
-      <view class="info">
-        <text class="name">{{displayName}}</text>
-        <text class="desc">管理个人资料与设置</text>
-      </view>
-    </view>
-
-    <view class="edit-form" wx:if="{{editing}}">
-      <view class="form-item">
-        <text class="label">昵称</text>
-        <input class="text-input" placeholder="输入昵称" placeholder-style="color:#9CA3AF" value="{{profile.nickname}}" bindinput="onNicknameInput" />
-      </view>
-    </view>
-
-    <view class="actions" wx:if="{{isLoggedIn && editing}}">
-        <button class="small-btn primary compact-btn" bindtap="saveProfile" loading="{{saving}}">保存</button>
-        <button class="small-btn compact-btn" bindtap="toggleEdit">取消</button>
-    </view>
-    <view class="actions" wx:if="{{!isLoggedIn}}">
-        <button class="action-btn primary" bindtap="handleAuthorize" loading="{{authorizing}}">微信快速登录</button>
-    </view>
-  </view>
-
-  <view class="card" wx:if="{{isLoggedIn}}">
-    <view class="section-header">
-      <text class="section-title">家庭成员</text>
-      <button class="small-btn" bindtap="handleCreateInvite" loading="{{inviting}}">生成邀请码</button>
-    </view>
-    
-    <view class="invite-row" wx:if="{{invite.code}}">
-      <text class="invite-code">{{invite.code}}</text>
-      <button class="small-btn" bindtap="copyInvite">复制</button>
-    </view>
-    <view class="expire" wx:if="{{invite.expiresAt}}">有效期至：{{invite.expiresAt}}</view>
-    <view class="members-list">
-      <view class="member-item" wx:for="{{members}}" wx:key="user_id">
-        <view class="member-left">
-          <block wx:if="{{item.avatar_url || (item.user_id === currentUserId && displayAvatar)}}">
-            <image class="member-avatar" src="{{item.avatar_url || (item.user_id === currentUserId ? displayAvatar : '')}}" mode="aspectFill" />
+  <!-- Profile Header Card -->
+  <view class="profile-card">
+    <view class="profile-content {{isLoggedIn ? 'logged-in' : ''}}">
+      <view class="profile-main" bindtap="{{isLoggedIn && !editing ? 'toggleEdit' : ''}}">
+        <view class="avatar-container">
+          <block wx:if="{{displayAvatar}}">
+            <image class="avatar" src="{{displayAvatar}}" mode="aspectFill" />
           </block>
           <block wx:else>
-            <view class="member-avatar placeholder">
-              <image class="member-avatar-icon" src="/assets/icons/user-3-line.svg" mode="aspectFit"></image>
+            <view class="avatar placeholder">
+              <image class="avatar-icon" src="/assets/icons/user-3-fill.svg" mode="aspectFit"></image>
             </view>
           </block>
+          <view class="edit-badge" wx:if="{{isLoggedIn && !editing}}">
+            <image class="edit-icon" src="/assets/icons/edit-line.svg" />
+          </view>
+        </view>
+        
+        <view class="user-info">
+          <text class="username">{{displayName}}</text>
+          <text class="user-desc">{{isLoggedIn ? '点击头像或此处编辑资料' : '登录体验完整功能'}}</text>
+        </view>
+      </view>
+
+      <!-- Edit Mode -->
+      <view class="edit-panel" wx:if="{{editing}}">
+        <button class="choose-avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+          <text>点击更换头像</text>
+        </button>
+        <view class="input-group">
+          <text class="input-label">昵称</text>
+          <input class="edit-input" type="nickname" value="{{profile.nickname}}" placeholder="请输入昵称" bindinput="onNicknameInput" placeholder-style="color: rgba(255,255,255,0.6);" />
+        </view>
+        <view class="edit-actions">
+          <button class="action-btn cancel" bindtap="toggleEdit">取消</button>
+          <button class="action-btn save" bindtap="saveProfile" loading="{{saving}}">保存</button>
+        </view>
+      </view>
+
+      <!-- Login Button -->
+      <view class="login-area" wx:if="{{!isLoggedIn}}">
+        <button class="login-btn" bindtap="handleAuthorize" loading="{{authorizing}}">
+          <image class="wechat-icon" src="/assets/icons/wechat-fill.svg" />
+          <text>微信一键登录</text>
+        </button>
+      </view>
+    </view>
+  </view>
+
+  <!-- Household Section -->
+  <view class="section-card" wx:if="{{isLoggedIn}}">
+    <view class="card-header">
+      <text class="card-title">我的家庭</text>
+      <view class="card-action" bindtap="handleCreateInvite" wx:if="{{!invite.code}}">
+        <image class="action-icon" src="/assets/icons/user-add-line.svg"/>
+        <text>邀请成员</text>
+      </view>
+    </view>
+
+    <!-- Invite Code Display -->
+    <view class="invite-box" wx:if="{{invite.code}}">
+      <view class="invite-content">
+        <text class="invite-label">邀请码</text>
+        <text class="invite-code">{{invite.code}}</text>
+        <text class="invite-expire">有效期至 {{invite.expiresAt}}</text>
+      </view>
+      <view class="copy-btn" bindtap="copyInvite">复制</view>
+    </view>
+
+    <!-- Member List -->
+    <view class="member-list">
+      <view class="member-item" wx:for="{{members}}" wx:key="user_id">
+        <image class="member-avatar" src="{{item.avatar_url || '/assets/icons/user-3-line.svg'}}" mode="aspectFill" />
+        <view class="member-details">
           <text class="member-name">{{item.nickname || (item.user_id === currentUserId ? displayName : ('用户' + item.user_id))}}</text>
+          <text class="member-role">{{item.role}}</text>
         </view>
-        <view class="member-right">
-          <text class="role">{{item.role}}</text>
-          <button class="small-btn danger remove-btn" wx:if="{{household && household.owner_user_id === currentUserId && item.user_id !== household.owner_user_id}}" data-user-id="{{item.user_id}}" bindtap="handleRemoveMember">移除</button>
+        <view class="member-action" 
+              wx:if="{{household && household.owner_user_id === currentUserId && item.user_id !== household.owner_user_id}}" 
+              data-user-id="{{item.user_id}}" 
+              bindtap="handleRemoveMember">
+          <image class="remove-icon" src="/assets/icons/delete-bin-line.svg" />
         </view>
       </view>
-      <view class="empty" wx:if="{{members.length === 0}}">暂无成员</view>
+      <view class="empty-state" wx:if="{{members.length === 0}}">
+        <text>暂无家庭成员</text>
+      </view>
     </view>
-    <view class="join-row">
-      <input class="join-input" placeholder="输入邀请码加入家庭" value="{{joinCode}}" bindinput="onJoinCodeInput"/>
-      <button class="small-btn primary join-btn" bindtap="handleJoin" loading="{{joining}}">加入</button>
+
+    <!-- Join Household -->
+    <view class="join-area">
+      <view class="join-input-wrapper">
+        <input class="join-input" placeholder="输入邀请码加入其它家庭" value="{{joinCode}}" bindinput="onJoinCodeInput"/>
+        <view class="join-submit {{joinCode ? 'active' : ''}}" bindtap="handleJoin">加入</view>
+      </view>
     </view>
   </view>
-  <view class="card" wx:if="{{isLoggedIn}}">
-    <view class="section-header">
-      <text class="section-title">工具</text>
+
+  <!-- Tools Menu -->
+  <view class="menu-card" wx:if="{{isLoggedIn}}">
+    <view class="menu-item" bindtap="openCategoryManage">
+      <view class="menu-icon-bg blue">
+        <image class="menu-icon" src="/assets/icons/file-list-2-line.svg" />
+      </view>
+      <text class="menu-label">分类管理</text>
+      <image class="arrow-right" src="/assets/icons/arrow-right-s-line.svg" />
     </view>
-    <view class="tools-row">
-      <button class="big-action-btn primary" bindtap="openFinanceConfig">外部API配置</button>
+    
+    <view class="menu-item" bindtap="openFinanceConfig">
+      <view class="menu-icon-bg purple">
+        <image class="menu-icon" src="/assets/icons/settings-3-line.svg" />
+      </view>
+      <text class="menu-label">外部 API 配置</text>
+      <image class="arrow-right" src="/assets/icons/arrow-right-s-line.svg" />
+    </view>
+
+     <view class="menu-item" bindtap="handleBackfill">
+      <view class="menu-icon-bg orange">
+        <image class="menu-icon" src="/assets/icons/download-cloud-2-line.svg" />
+      </view>
+      <text class="menu-label">数据迁移</text>
+      <image class="arrow-right" src="/assets/icons/arrow-right-s-line.svg" />
     </view>
   </view>
-  <view class="footer" wx:if="{{isLoggedIn}}">
-    <button class="small-btn logout-btn" bindtap="handleLogout">退出登录</button>
+
+  <!-- Logout -->
+  <view class="footer-area" wx:if="{{isLoggedIn}}">
+    <button class="logout-btn" bindtap="handleLogout">退出登录</button>
   </view>
-  <view class="finance-modal" wx:if="{{showFinanceModal}}">
-    <view class="modal-mask" bindtap="closeFinanceConfig"></view>
-    <view class="modal-body">
-      <text class="modal-title">外部API配置</text>
-      <view class="form-item">
-        <text class="label">用户ID</text>
-        <input class="text-input" placeholder="输入用户ID" value="{{financeUserId}}" bindinput="onFinanceUserIdInput" />
+
+  <!-- Finance Config Modal -->
+  <view class="modal-wrapper" wx:if="{{showFinanceModal}}">
+    <view class="modal-backdrop" bindtap="closeFinanceConfig"></view>
+    <view class="modal-content">
+      <view class="modal-header">
+        <text class="modal-title">外部 API 配置</text>
+        <view class="close-icon-area" bindtap="closeFinanceConfig">
+             <image class="close-icon" src="/assets/icons/close-line.svg" />
+        </view>
       </view>
-      <view class="form-item">
-        <text class="label">邮箱</text>
-        <input class="text-input" placeholder="输入邮箱" value="{{financeEmail}}" bindinput="onFinanceEmailInput" />
+      
+      <view class="modal-form">
+        <view class="form-field">
+          <text class="field-label">用户 ID</text>
+          <input class="field-input" placeholder="输入用户 ID" value="{{financeUserId}}" bindinput="onFinanceUserIdInput" />
+        </view>
+        <view class="form-field">
+          <text class="field-label">邮箱</text>
+          <input class="field-input" placeholder="输入邮箱" value="{{financeEmail}}" bindinput="onFinanceEmailInput" />
+        </view>
+        <view class="form-field">
+          <text class="field-label">API 地址</text>
+          <input class="field-input" placeholder="例如 https://acbim.cn" value="{{financeBaseUrl}}" bindinput="onFinanceBaseUrlInput" />
+        </view>
       </view>
-      <view class="form-item">
-        <text class="label">API地址</text>
-        <input class="text-input" placeholder="例如 https://acbim.cn" value="{{financeBaseUrl}}" bindinput="onFinanceBaseUrlInput" />
-      </view>
-      <view class="modal-actions">
-        <button class="modal-btn" bindtap="closeFinanceConfig">取消</button>
-        <button class="modal-btn primary" bindtap="saveFinanceApiConfig" loading="{{savingFinance}}">保存</button>
+
+      <view class="modal-footer">
+        <button class="modal-btn cancel" bindtap="closeFinanceConfig">取消</button>
+        <button class="modal-btn confirm" bindtap="saveFinanceApiConfig" loading="{{savingFinance}}">保存</button>
       </view>
     </view>
   </view>
