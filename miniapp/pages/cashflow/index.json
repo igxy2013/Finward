@@ -1,6 +1,7 @@
 {
   "navigationBarTitleText": "添加收支",
   "usingComponents": {
-    "option-selector": "/components/option-selector/index"
+    "option-selector": "/components/option-selector/index",
+    "numeric-keyboard": "/components/numeric-keyboard/numeric-keyboard"
   }
 }

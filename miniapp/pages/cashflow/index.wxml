@@ -19,7 +19,9 @@
     </view>
     <view class="form-item">
       <text class="label">金额*</text>
-      <input type="number" placeholder="请输入金额" data-key="amount" value="{{form.amount}}" bindinput="handleInput" />
+      <view class="picker-value" data-key="amount" bindtap="openNKeyboard" data-title="金额">
+        <text>{{form.amount || '请输入金额'}}</text>
+      </view>
     </view>
     <view class="form-item">
       <text class="label">日期*</text>
@@ -61,3 +63,4 @@
   </view>
 </view>
 <option-selector visible="{{showCategorySelector}}" title="选择类别" options="{{categoryOptionsWithIcon}}" active="{{form.category}}" bind:close="closeCategorySelector" bind:select="onCategorySelected"></option-selector>
+<numeric-keyboard visible="{{nKeyboardVisible}}" value="{{nKeyboardValue}}" maxLength="{{nKeyboardMaxLength}}" maxDecimals="{{nKeyboardMaxDecimals}}" title="{{nKeyboardTitle}}" theme="{{form.type === 'income' ? 'income' : 'expense'}}" saveDisabled="{{submitting}}" saveButtonText="{{editId ? '更新' : '记录'}}" bind:input="onNKeyboardInput" bind:confirm="onNKeyboardConfirm" bind:save="onNKeyboardSave" bind:close="onNKeyboardClose" />

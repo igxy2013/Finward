@@ -39,7 +39,13 @@ Page({
     valueUpdatesRaw: [],
     editingUpdateId: null,
     editingUpdateTs: null,
-    isDepreciating: false
+    isDepreciating: false,
+    nKeyboardVisible: false,
+    nKeyboardValue: '',
+    nKeyboardTitle: '',
+    nKeyboardMaxLength: 10,
+    nKeyboardMaxDecimals: 2,
+    nKeyboardTargetKey: ''
   },
   collectRent() {
     const { tenants = [], detail = {} } = this.data;
@@ -607,6 +613,38 @@ Page({
   handleUpdateInput(e) {
     const v = String(e.detail.value || "");
     this.setData({ updateValueInput: v });
+  },
+  openNKeyboard(e) {
+    const key = String(e.currentTarget.dataset.key || 'updateValueInput');
+    const title = String(e.currentTarget.dataset.title || '输入');
+    const current = String(this.data[key] || '');
+    const maxDecimals = 2;
+    const maxLength = 10;
+    this.setData({
+      nKeyboardVisible: true,
+      nKeyboardValue: current,
+      nKeyboardTitle: title,
+      nKeyboardMaxLength: maxLength,
+      nKeyboardMaxDecimals: maxDecimals,
+      nKeyboardTargetKey: key
+    });
+  },
+  onNKeyboardInput(e) {
+    const v = String(e.detail.value || '');
+    const key = this.data.nKeyboardTargetKey || 'updateValueInput';
+    this.setData({ nKeyboardValue: v, [key]: v });
+  },
+  onNKeyboardConfirm(e) {
+    this.setData({ nKeyboardVisible: false });
+  },
+  onNKeyboardSave(e) {
+    const v = String(e.detail.value || '');
+    const key = this.data.nKeyboardTargetKey || 'updateValueInput';
+    this.setData({ [key]: v, nKeyboardVisible: false });
+    if (typeof this.saveUpdateValue === 'function') this.saveUpdateValue();
+  },
+  onNKeyboardClose() {
+    this.setData({ nKeyboardVisible: false });
   },
   handleUpdateDateChange(e) {
     const v = String(e.detail.value || "");

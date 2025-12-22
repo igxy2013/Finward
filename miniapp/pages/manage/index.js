@@ -90,6 +90,12 @@ Page({
     ,tenantFrequencyIndex: 0
     ,tenantFrequencyLabel: "每月"
     ,pageTitle: "添加账户"
+    ,nKeyboardVisible: false
+    ,nKeyboardValue: ''
+    ,nKeyboardTitle: ''
+    ,nKeyboardMaxLength: 10
+    ,nKeyboardMaxDecimals: 2
+    ,nKeyboardTargetKey: ''
   },
   clipTwoDecimals(val) {
     const s = String(val || "");
@@ -264,6 +270,43 @@ Page({
     this.setData({ [`form.${key}`]: v });
     if (key === "amount" || key === "depreciation_rate" || key === "annual_interest_rate" || key === "monthly_payment" || key === "loan_term_months") this.recomputeCurrentValue();
     if (key === "loan_term_months") this.recomputeEndDates();
+  },
+  openNKeyboard(e) {
+    const key = String(e.currentTarget.dataset.key || 'amount');
+    const title = String(e.currentTarget.dataset.title || '输入');
+    const current = String((this.data.form || {})[key] || '');
+    const integerOnly = (key === 'loan_term_months' || key === 'investment_term_months');
+    const maxDecimals = integerOnly ? 0 : 2;
+    const maxLength = 10;
+    this.setData({
+      nKeyboardVisible: true,
+      nKeyboardValue: current,
+      nKeyboardTitle: title,
+      nKeyboardMaxLength: maxLength,
+      nKeyboardMaxDecimals: maxDecimals,
+      nKeyboardTargetKey: key
+    });
+  },
+  onNKeyboardInput(e) {
+    const v = String(e.detail.value || '');
+    const key = this.data.nKeyboardTargetKey || 'amount';
+    this.setData({ nKeyboardValue: v, [`form.${key}`]: v });
+    if (key === "amount" || key === "depreciation_rate" || key === "annual_interest_rate" || key === "monthly_payment" || key === "loan_term_months") this.recomputeCurrentValue();
+    if (key === "loan_term_months") this.recomputeEndDates();
+  },
+  onNKeyboardConfirm(e) {
+    this.setData({ nKeyboardVisible: false });
+  },
+  onNKeyboardSave(e) {
+    const v = String(e.detail.value || '');
+    const key = this.data.nKeyboardTargetKey || 'amount';
+    this.setData({ [`form.${key}`]: v, nKeyboardVisible: false });
+    if (key === "amount" || key === "depreciation_rate" || key === "annual_interest_rate" || key === "monthly_payment" || key === "loan_term_months") this.recomputeCurrentValue();
+    if (key === "loan_term_months") this.recomputeEndDates();
+    if (typeof this.submit === 'function') this.submit();
+  },
+  onNKeyboardClose() {
+    this.setData({ nKeyboardVisible: false });
   },
   handleTenantDueDayChange(e) {
     // 已移除出租详细表单，此方法不再使用

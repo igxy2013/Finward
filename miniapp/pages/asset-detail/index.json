@@ -1,3 +1,6 @@
 {
-  "navigationBarTitleText": "资产详情"
+  "navigationBarTitleText": "资产详情",
+  "usingComponents": {
+    "numeric-keyboard": "/components/numeric-keyboard/numeric-keyboard"
+  }
 }

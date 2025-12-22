@@ -52,7 +52,13 @@ Page({
     recurringOptions: ["不重复", "每月", "每季度", "每半年", "每年"],
     recurringIndex: 0,
     showCategorySelector: false,
-    categoryOptionsWithIcon: []
+    categoryOptionsWithIcon: [],
+    nKeyboardVisible: false,
+    nKeyboardValue: '',
+    nKeyboardTitle: '',
+    nKeyboardMaxLength: 10,
+    nKeyboardMaxDecimals: 2,
+    nKeyboardTargetKey: ''
   },
   handlePageSwitch(e) {
     const val = String(e.currentTarget.dataset.value || "budget");
@@ -236,6 +242,38 @@ Page({
   handleInput(e) {
     const key = e.currentTarget.dataset.key;
     this.setData({ [`form.${key}`]: e.detail.value });
+  },
+  openNKeyboard(e) {
+    const key = String(e.currentTarget.dataset.key || 'amount');
+    const title = String(e.currentTarget.dataset.title || '输入');
+    const current = String((this.data.form || {})[key] || '');
+    const maxDecimals = key === 'amount' ? 2 : 0;
+    const maxLength = 10;
+    this.setData({
+      nKeyboardVisible: true,
+      nKeyboardValue: current,
+      nKeyboardTitle: title,
+      nKeyboardMaxLength: maxLength,
+      nKeyboardMaxDecimals: maxDecimals,
+      nKeyboardTargetKey: key
+    });
+  },
+  onNKeyboardInput(e) {
+    const v = String(e.detail.value || '');
+    const key = this.data.nKeyboardTargetKey || 'amount';
+    this.setData({ nKeyboardValue: v, [`form.${key}`]: v });
+  },
+  onNKeyboardConfirm(e) {
+    this.setData({ nKeyboardVisible: false });
+  },
+  onNKeyboardSave(e) {
+    const v = String(e.detail.value || '');
+    const key = this.data.nKeyboardTargetKey || 'amount';
+    this.setData({ [`form.${key}`]: v, nKeyboardVisible: false });
+    if (typeof this.submit === 'function') this.submit();
+  },
+  onNKeyboardClose() {
+    this.setData({ nKeyboardVisible: false });
   },
   handleTypeToggle(e) {
     const value = String(e.currentTarget.dataset.value || "expense");

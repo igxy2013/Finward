@@ -1,0 +1,49 @@
+<view class="keyboard-mask {{visible ? 'visible' : ''}}" bindtap="handleMaskTap" catchtouchmove="preventTouchMove"></view>
+<view class="keyboard-container {{visible ? 'visible' : ''}} safe-area-bottom" catchtouchmove="preventTouchMove">
+  <view class="keyboard-preview" wx:if="{{showPreview}}">
+    <view class="preview-title">{{title}}</view>
+    <view class="preview-value">
+      <block wx:if="{{value && value.length}}">{{value}}</block>
+      <block wx:else>0</block>
+    </view>
+    <view class="preview-clear" wx:if="{{showClear && value && value.length}}" hover-class="preview-clear-hover" bindtap="handleClear">清空</view>
+  </view>
+  <view class="keyboard-grid">
+    <view class="number-keys">
+      <view class="key-row">
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="1">1</view>
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="2">2</view>
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="3">3</view>
+      </view>
+      <view class="key-row">
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="4">4</view>
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="5">5</view>
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="6">6</view>
+      </view>
+      <view class="key-row">
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="7">7</view>
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="8">8</view>
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="9">9</view>
+      </view>
+      <view class="key-row">
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value=".">.</view>
+        <view class="key-cell number-key" hover-class="key-hover" bindtap="handleTap" data-value="0">0</view>
+        <view class="key-cell hide-key" hover-class="key-hover" bindtap="handleHide">
+          <image class="key-icon-sm" src="/assets/icons/arrow-down-s-fill.svg" mode="aspectFit" />
+        </view>
+      </view>
+    </view>
+    
+  <view class="action-keys">
+    <view class="key-cell action-key delete-key" hover-class="action-hover" bindtap="handleDelete">
+      <text class="delete-text">←</text>
+    </view>
+    <view class="key-cell action-key done-key" hover-class="done-hover" bindtap="handleDone">
+      <text>完成</text>
+    </view>
+    <view class="key-cell action-key save-key {{theme==='income' ? 'save-income' : (theme==='expense' ? 'save-expense' : '')}} {{saveDisabled ? 'disabled' : ''}}" hover-class="done-hover" bindtap="handleSave">
+      <text>{{saveButtonText}}</text>
+    </view>
+  </view>
+  </view>
+</view>

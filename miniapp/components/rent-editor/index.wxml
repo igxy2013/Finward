@@ -6,7 +6,11 @@
     </view>
     <view class="body">
       <view class="form-item"><text class="label">租客姓名</text><input class="input" placeholder="可选" value="{{form.tenant_name}}" data-key="tenant_name" bindinput="handleInput" /></view>
-      <view class="form-item"><text class="label">月租金</text><input class="input" type="number" placeholder="可选" value="{{form.monthly_rent}}" data-key="monthly_rent" bindinput="handleInput" /></view>
+      <view class="form-item"><text class="label">月租金</text>
+        <view class="picker-value" data-key="monthly_rent" data-title="月租金" bindtap="openNKeyboard">
+          <text>{{form.monthly_rent || '可选'}}</text>
+        </view>
+      </view>
       <view class="form-item"><text class="label">收租方式</text>
         <picker class="picker-field" mode="selector" range="{{frequencyOptions}}" range-key="label" value="{{frequencyIndex}}" bindchange="handleFrequencyChange">
           <view class="picker-value">{{frequencyLabel}}</view>
@@ -37,4 +41,5 @@
       <button class="btn confirm" loading="{{saving}}" bindtap="save">保存</button>
     </view>
   </view>
+  <numeric-keyboard visible="{{nKeyboardVisible}}" value="{{nKeyboardValue}}" maxLength="{{nKeyboardMaxLength}}" maxDecimals="{{nKeyboardMaxDecimals}}" title="{{nKeyboardTitle}}" theme="income" saveDisabled="{{saving}}" saveButtonText="{{tenant && tenant.id ? '更新' : '保存'}}" bind:input="onNKeyboardInput" bind:confirm="onNKeyboardConfirm" bind:save="onNKeyboardSave" bind:close="onNKeyboardClose" />
 </view>

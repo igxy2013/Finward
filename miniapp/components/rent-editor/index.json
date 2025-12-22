@@ -1,3 +1,6 @@
 {
-  "component": true
+  "component": true,
+  "usingComponents": {
+    "numeric-keyboard": "/components/numeric-keyboard/numeric-keyboard"
+  }
 }

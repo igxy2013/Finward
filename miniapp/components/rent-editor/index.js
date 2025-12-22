@@ -31,6 +31,12 @@ Component({
     frequencyLabel: "每月",
     saving: false
     ,displayTitle: "编辑出租信息"
+    ,nKeyboardVisible: false
+    ,nKeyboardValue: ''
+    ,nKeyboardTitle: ''
+    ,nKeyboardMaxLength: 10
+    ,nKeyboardMaxDecimals: 2
+    ,nKeyboardTargetKey: ''
   },
   observers: {
     tenant(t) {
@@ -69,6 +75,38 @@ Component({
       const key = e.currentTarget.dataset.key;
       const v = e.detail.value;
       this.setData({ [`form.${key}`]: v });
+    },
+    openNKeyboard(e) {
+      const key = String(e.currentTarget.dataset.key || 'monthly_rent');
+      const title = String(e.currentTarget.dataset.title || '输入');
+      const current = String((this.data.form || {})[key] || '');
+      const maxDecimals = 2;
+      const maxLength = 10;
+      this.setData({
+        nKeyboardVisible: true,
+        nKeyboardValue: current,
+        nKeyboardTitle: title,
+        nKeyboardMaxLength: maxLength,
+        nKeyboardMaxDecimals: maxDecimals,
+        nKeyboardTargetKey: key
+      });
+    },
+    onNKeyboardInput(e) {
+      const v = String(e.detail.value || '');
+      const key = this.data.nKeyboardTargetKey || 'monthly_rent';
+      this.setData({ nKeyboardValue: v, [`form.${key}`]: v });
+    },
+    onNKeyboardConfirm(e) {
+      this.setData({ nKeyboardVisible: false });
+    },
+    onNKeyboardSave(e) {
+      const v = String(e.detail.value || '');
+      const key = this.data.nKeyboardTargetKey || 'monthly_rent';
+      this.setData({ [`form.${key}`]: v, nKeyboardVisible: false });
+      if (typeof this.save === 'function') this.save();
+    },
+    onNKeyboardClose() {
+      this.setData({ nKeyboardVisible: false });
     },
     handleFrequencyChange(e) {
       const idx = Number(e.detail.value || 0);

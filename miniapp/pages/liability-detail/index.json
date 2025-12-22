@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "负债详情",
-  "usingComponents": {}
+  "usingComponents": {
+    "numeric-keyboard": "/components/numeric-keyboard/numeric-keyboard"
+  }
 }

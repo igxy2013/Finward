@@ -19,19 +19,27 @@
     <view class="form-item">
       <text class="label">期初金额*
       </text>
-      <input type="number" placeholder="请输入金额" data-key="amount" value="{{form.amount}}" bindinput="handleInput" />
+      <view class="picker-value" data-key="amount" data-title="期初金额" bindtap="openNKeyboard">
+        <text>{{form.amount || '请输入金额'}}</text>
+      </view>
     </view>
     <view class="form-item" wx:if="{{form.type === 'liability'}}">
       <text class="label">还贷期限(月)</text>
-      <input type="number" placeholder="可选" data-key="loan_term_months" value="{{form.loan_term_months}}" bindinput="handleInput" />
+      <view class="picker-value" data-key="loan_term_months" data-title="还贷期限(月)" bindtap="openNKeyboard">
+        <text>{{form.loan_term_months || '可选'}}</text>
+      </view>
     </view>
     <view class="form-item" wx:if="{{form.type === 'liability'}}">
       <text class="label">月供</text>
-      <input type="number" placeholder="可选" data-key="monthly_payment" value="{{form.monthly_payment}}" bindinput="handleInput" />
+      <view class="picker-value" data-key="monthly_payment" data-title="月供" bindtap="openNKeyboard">
+        <text>{{form.monthly_payment || '可选'}}</text>
+      </view>
     </view>
     <view class="form-item" wx:if="{{form.type === 'liability'}}">
       <text class="label">年利率(%)</text>
-      <input type="number" placeholder="如 5 表示 5%" data-key="annual_interest_rate" value="{{form.annual_interest_rate}}" bindinput="handleInput" />
+      <view class="picker-value" data-key="annual_interest_rate" data-title="年利率(%)" bindtap="openNKeyboard">
+        <text>{{form.annual_interest_rate || '如 5 表示 5%'}}</text>
+      </view>
     </view>
     <view class="form-item" wx:if="{{form.type === 'liability'}}">
       <text class="label">开始日期</text>
@@ -45,11 +53,15 @@
     </view>
     <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
       <text class="label">投资期限(月)</text>
-      <input type="number" placeholder="可选" data-key="investment_term_months" value="{{form.investment_term_months}}" bindinput="handleInput" />
+      <view class="picker-value" data-key="investment_term_months" data-title="投资期限(月)" bindtap="openNKeyboard">
+        <text>{{form.investment_term_months || '可选'}}</text>
+      </view>
     </view>
     <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
       <text class="label">月收益</text>
-      <input type="number" placeholder="可选" data-key="monthly_income" value="{{form.monthly_income}}" bindinput="handleInput" />
+      <view class="picker-value" data-key="monthly_income" data-title="月收益" bindtap="openNKeyboard">
+        <text>{{form.monthly_income || '可选'}}</text>
+      </view>
     </view>
     <view class="form-item" wx:if="{{form.type === 'asset'}}">
       <text class="label">开始日期</text>
@@ -65,7 +77,9 @@
     </view>
     <view class="form-item" wx:if="{{form.type === 'asset' && form.category !== '房产'}}">
       <text class="label">折旧率(年%)</text>
-      <input type="number" placeholder="如 10 表示 10%/年" data-key="depreciation_rate" value="{{form.depreciation_rate}}" bindinput="handleInput" />
+      <view class="picker-value" data-key="depreciation_rate" data-title="折旧率(年%)" bindtap="openNKeyboard">
+        <text>{{form.depreciation_rate || '如 10 表示 10%/年'}}</text>
+      </view>
     </view>
     <view class="form-item" wx:if="{{form.type === 'asset'}}">
       <text class="label">资产现值</text>
@@ -97,4 +111,5 @@
     <button bindtap="submit" loading="{{submitting}}" style="background-color: #43B176; color: #ffffff;">保存</button>
   </view>
   <option-selector visible="{{showCategorySelector}}" title="选择分类" options="{{categoryOptionsWithIcon}}" active="{{form.category}}" bind:close="closeCategorySelector" bind:select="onCategorySelected"></option-selector>
+  <numeric-keyboard visible="{{nKeyboardVisible}}" value="{{nKeyboardValue}}" maxLength="{{nKeyboardMaxLength}}" maxDecimals="{{nKeyboardMaxDecimals}}" title="{{nKeyboardTitle}}" theme="{{form.type === 'income' ? 'income' : 'expense'}}" saveDisabled="{{submitting}}" saveButtonText="{{editId ? '更新' : '保存'}}" bind:input="onNKeyboardInput" bind:confirm="onNKeyboardConfirm" bind:save="onNKeyboardSave" bind:close="onNKeyboardClose" />
 </view>
