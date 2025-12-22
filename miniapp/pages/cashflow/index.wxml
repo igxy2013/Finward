@@ -18,16 +18,16 @@
       <view class="picker-value" bindtap="openCategorySelector">{{categoryDisplay}}</view>
     </view>
     <view class="form-item">
-      <text class="label">金额*</text>
-      <view class="picker-value" data-key="amount" bindtap="openNKeyboard" data-title="金额">
-        <text>{{form.amount || '请输入金额'}}</text>
-      </view>
-    </view>
-    <view class="form-item">
       <text class="label">日期*</text>
       <picker mode="date" value="{{form.date}}" bindchange="handleDateChange">
         <view class="picker-value">{{form.date}}</view>
       </picker>
+    </view>
+    <view class="form-item">
+      <text class="label">金额*</text>
+      <view class="picker-value" data-key="amount" bindtap="openNKeyboard" data-title="金额">
+        <text>{{form.amount || '请输入金额'}}</text>
+      </view>
     </view>
     <view class="form-item" wx:if="{{activePage === 'budget'}}">
       <text class="label">重复</text>
