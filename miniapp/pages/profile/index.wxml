@@ -13,6 +13,8 @@
               <image class="avatar-icon" src="/assets/icons/user-3-fill.svg" mode="aspectFit"></image>
             </view>
           </block>
+          <button wx:if="{{editing}}" class="avatar-overlay-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar"></button>
+          <view wx:if="{{editing}}" class="avatar-hint"><text>更换头像</text></view>
           <view class="edit-badge" wx:if="{{isLoggedIn && !editing}}">
             <image class="edit-icon" src="/assets/icons/edit-line.svg" />
           </view>
@@ -26,9 +28,6 @@
 
       <!-- Edit Mode -->
       <view class="edit-panel" wx:if="{{editing}}">
-        <button class="choose-avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-          <text>点击更换头像</text>
-        </button>
         <view class="input-group">
           <text class="input-label">昵称</text>
           <input class="edit-input" type="nickname" value="{{profile.nickname}}" placeholder="请输入昵称" bindinput="onNicknameInput" placeholder-style="color: rgba(255,255,255,0.6);" />
