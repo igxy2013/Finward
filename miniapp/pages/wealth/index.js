@@ -409,13 +409,11 @@ Page({
       let actInc = Number(res2.actual_income || 0);
       let expExpNum = Number(res2.expected_expense || 0);
       let expIncNum = Number(res2.expected_income || 0);
-      if (range !== 'month') {
-        try {
-          const agg = await api.aggregatePlanned(start, end, range);
-          expExpNum = Number(agg?.expense_total || 0);
-          expIncNum = Number(agg?.income_total || 0);
-        } catch (eAgg) {}
-      }
+      try {
+        const agg = await api.aggregatePlanned(start, end, range);
+        expExpNum = Number(agg?.expense_total || expExpNum || 0);
+        expIncNum = Number(agg?.income_total || expIncNum || 0);
+      } catch (eAgg) {}
       const netExpected = expIncNum - expExpNum;
       const netPositive = netExpected >= 0;
       const netActual = actInc - actExp;
